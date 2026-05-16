@@ -1,0 +1,33 @@
+{
+  "entities": {
+    "Location": {
+      "title": "Location",
+      "description": "A tourist location shared by a user.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "description": "The name of the location." },
+        "description": { "type": "string", "description": "A detailed description of the location." },
+        "imageUrl": { "type": "string", "description": "URL of the location's image." },
+        "continent": { 
+          "type": "string", 
+          "enum": ["Africa", "Asia", "Europe", "North America", "South America", "Oceania", "Antarctica"],
+          "description": "The continent where the location is situated." 
+        },
+        "country": { "type": "string", "description": "The country where the location is situated." },
+        "userId": { "type": "string", "description": "The UID of the user who added the location." },
+        "userName": { "type": "string", "description": "The name of the user who added the location." },
+        "lat": { "type": "number", "description": "Latitude of the location." },
+        "lng": { "type": "number", "description": "Longitude of the location." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "When the location was created." },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "When the location was last updated." }
+      },
+      "required": ["name", "description", "imageUrl", "continent", "userId", "userName", "createdAt", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "locations": {
+      "schema": "Location",
+      "description": "Collection of community-shared tourist locations."
+    }
+  }
+}

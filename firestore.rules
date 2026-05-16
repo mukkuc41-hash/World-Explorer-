@@ -1,0 +1,76 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Default deny everything
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Global Helpers ---
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // --- Validation Helpers ---
+    function isValidLocation(data) {
+      return data.keys().hasAll(['name', 'description', 'imageUrl', 'continent', 'country', 'userId', 'userName', 'lat', 'lng', 'createdAt', 'updatedAt'])
+        && data.keys().size() == 11
+        && data.name is string && data.name.size() > 0 && data.name.size() <= 200
+        && data.description is string && data.description.size() > 0 && data.description.size() <= 5000
+        && data.imageUrl is string && data.imageUrl.size() > 0 && data.imageUrl.size() <= 2000
+        && data.continent in ["Africa", "Asia", "Europe", "North America", "South America", "Oceania", "Antarctica"]
+        && data.country is string && data.country.size() > 0 && data.country.size() <= 100
+        && data.userId == request.auth.uid
+        && data.userName is string && data.userName.size() <= 100
+        && data.lat is number
+        && data.lng is number
+        && data.createdAt == request.time
+        && data.updatedAt == request.time;
+    }
+
+    // --- Collection: locations ---
+    match /locations/{locationId} {
+      allow read: if true; // Publicly viewable
+
+      allow create: if isSignedIn() 
+        && isValidId(locationId)
+        && isValidLocation(incoming());
+
+      allow update: if isSignedIn()
+        && isValidId(locationId)
+        && isOwner(existing().userId)
+        && incoming().userId == existing().userId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          // Action: Edit Content
+          (incoming().diff(existing()).affectedKeys().hasOnly(['name', 'description', 'imageUrl', 'continent', 'country', 'updatedAt', 'userName']))
+        )
+        && incoming().name is string && incoming().name.size() <= 200
+        && incoming().description is string && incoming().description.size() <= 5000
+        && incoming().imageUrl is string && incoming().imageUrl.size() <= 2000
+        && incoming().continent in ["Africa", "Asia", "Europe", "North America", "South America", "Oceania", "Antarctica"]
+        && incoming().country is string && incoming().country.size() <= 100;
+
+      allow delete: if isSignedIn()
+        && isValidId(locationId)
+        && isOwner(existing().userId);
+    }
+  }
+}
