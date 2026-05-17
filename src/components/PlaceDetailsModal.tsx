@@ -60,8 +60,14 @@ export default function PlaceDetailsModal({ placeName, isOpen, onClose, details,
             </div>
 
             {/* Content Side */}
-            <div className="md:w-1/2 p-8 md:p-16 overflow-y-auto bg-white flex flex-col">
-               <div className="flex items-center justify-between mb-12">
+            <div className="md:w-1/2 p-8 md:p-16 overflow-y-auto bg-white flex flex-col relative">
+               {/* Discovery Background Layer */}
+               <div 
+                 className="absolute inset-0 opacity-[0.03] pointer-events-none bg-cover bg-center"
+                 style={{ backgroundImage: 'url("/src/assets/images/discovery_detail_bg_1779013628944.png")' }}
+               />
+               <div className="relative z-10 flex flex-col flex-1">
+                 <div className="flex items-center justify-between mb-12">
                   <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest opacity-20">
                      <MapPin className="w-3 h-3" /> Hidden Gem
                   </div>
@@ -100,14 +106,28 @@ export default function PlaceDetailsModal({ placeName, isOpen, onClose, details,
                      <button className="flex items-center gap-2 px-6 py-3 rounded-full bg-[#141414] text-white text-xs font-bold hover:scale-105 transition-all">
                         Plan Visit
                      </button>
-                     <button className="p-3 rounded-full border border-[#141414]/5 hover:bg-[#f8f8f5] transition-all">
-                        <Share2 className="w-5 h-5" />
+                     <button 
+                       onClick={() => {
+                         const title = placeName;
+                         const text = `Check out ${placeName} on World Explorer!`;
+                         const url = window.location.href;
+                         if (navigator.share) {
+                           navigator.share({ title, text, url }).catch(e => console.error(e));
+                         } else {
+                           window.open(`https://wa.me/?text=${encodeURIComponent(text + ' ' + url)}`, '_blank');
+                         }
+                       }}
+                       className="p-3 rounded-full border border-[#141414]/5 rgb-bg animate-rgb text-white transition-all group"
+                       title="Share Discovery"
+                     >
+                        <Share2 className="w-5 h-5 group-hover:scale-110 transition-transform" />
                      </button>
                   </div>
                   <button className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-[#00af87]">
                      <Heart className="w-4 h-4" /> Save to Archive
                   </button>
                </div>
+              </div>
             </div>
           </motion.div>
         </div>

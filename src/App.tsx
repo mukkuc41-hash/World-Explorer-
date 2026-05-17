@@ -5,9 +5,9 @@
 
 import { useState, useEffect } from 'react';
 import { onAuthStateChanged, User } from 'firebase/auth';
-import { auth } from './lib/firebase.ts';
+import { auth, signInWithGoogle, logout } from './lib/firebase.ts';
 import { motion, AnimatePresence } from 'motion/react';
-import { MapPin, Plus, Compass, LogOut, ChevronLeft, Search, Map as MapIcon, LayoutGrid, Menu, X, ChevronRight, Globe } from 'lucide-react';
+import { MapPin, Plus, Compass, LogOut, ChevronLeft, Search, Map as MapIcon, LayoutGrid, Menu, X, ChevronRight, Globe, Share2, Link } from 'lucide-react';
 import Header from './components/Header.tsx';
 import SidebarNav from './components/SidebarNav.tsx';
 import LocationList from './components/LocationList.tsx';
@@ -17,6 +17,8 @@ import GoogleMapsSplash from './components/GoogleMapsSplash.tsx';
 import DiscoveryHero from './components/DiscoveryHero.tsx';
 import AIAssistant from './components/AIAssistant.tsx';
 import PlaceDetailsModal from './components/PlaceDetailsModal.tsx';
+
+import InteractiveBackground from './components/InteractiveBackground.tsx';
 
 export type Continent = "Africa" | "Asia" | "Europe" | "North America" | "South America" | "Oceania" | "Antarctica";
 
@@ -71,6 +73,7 @@ export default function App() {
   const [viewMode, setViewMode] = useState<'list' | 'map'>('list');
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
 
   const [selectedPlace, setSelectedPlace] = useState<string | null>(null);
   const [placeDetails, setPlaceDetails] = useState<{ description: string; imageUrl: string } | null>(null);
@@ -117,11 +120,26 @@ export default function App() {
     }
   };
 
+  const handleShare = async (title: string, text: string, url: string = window.location.href) => {
+    if (navigator.share) {
+      try {
+        await navigator.share({ title, text, url });
+      } catch (err) {
+        if ((err as Error).name !== 'AbortError') {
+          console.error('Share failed:', err);
+        }
+      }
+    } else {
+      window.open(`https://wa.me/?text=${encodeURIComponent(text + ' ' + url)}`, '_blank');
+    }
+  };
+
   const handleSelection = (continent: Continent | null, country: string | null, state: string | null, showFavorites: boolean = false) => {
     setSelectedContinent(continent);
     setSelectedCountry(country);
     setSelectedState(state);
     setShowFavoritesOnly(showFavorites);
+    setSearchQuery(''); // Clear search when navigating categories
     
     // Close sidebar on mobile after selection
     if (window.innerWidth < 768) {
@@ -160,6 +178,7 @@ export default function App() {
             country={null} 
             state={null} 
             showFavoritesOnly={true} 
+            searchQuery={searchQuery}
           />
         </div>
       );
@@ -187,18 +206,24 @@ export default function App() {
               </button>
             )}
             <button
-               onClick={() => setIsAddModalOpen(true)}
-               disabled={!user}
-               className="bg-white border border-[#141414]/10 px-8 py-4 rounded-full text-sm uppercase tracking-widest font-bold hover:bg-[#f5f5f0] transition-colors disabled:opacity-50"
+               onClick={() => user ? setIsAddModalOpen(true) : signInWithGoogle()}
+               className="bg-white border border-[#141414]/10 px-8 py-4 rounded-full text-sm uppercase tracking-widest font-bold hover:bg-[#f5f5f0] transition-colors flex items-center gap-2"
             >
-              Share a Discovery
+              {user ? 'Share a Discovery' : 'Link Google to Share'}
+            </button>
+            <button
+               onClick={() => handleShare('World Explorer', 'Explore the world with World Explorer! Architecture, heritage, and hidden gems.')}
+               className="rgb-bg animate-rgb text-white p-4 rounded-full shadow-lg transition-all flex items-center justify-center group"
+               title="Share App"
+            >
+              <Share2 className="w-5 h-5 group-hover:scale-110 transition-transform" />
             </button>
           </div>
 
           <AnimatePresence mode="wait">
             {viewMode === 'map' && hasMapsKey ? (
               <motion.div key="global-map" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                <WorldView continent={null} country={null} state={null} />
+                <WorldView continent={null} country={null} state={null} searchQuery={searchQuery} />
               </motion.div>
             ) : (
               <motion.div 
@@ -265,6 +290,8 @@ export default function App() {
                     ))}
                   </div>
                 </div>
+
+
               </motion.div>
             )}
           </AnimatePresence>
@@ -298,11 +325,20 @@ export default function App() {
               </button>
             )}
             <button
-               onClick={() => setIsAddModalOpen(true)}
-               disabled={!user}
-               className="bg-[#5A5A40] text-white px-8 py-4 rounded-full flex items-center gap-2 hover:bg-[#4a4a30] transition-colors disabled:opacity-50 shadow-xl shadow-[#5A5A40]/30 font-bold uppercase text-xs tracking-widest"
+               onClick={() => user ? setIsAddModalOpen(true) : signInWithGoogle()}
+               className="bg-[#5A5A40] text-white px-8 py-4 rounded-full flex items-center gap-2 hover:bg-[#4a4a30] transition-colors shadow-xl shadow-[#5A5A40]/30 font-bold uppercase text-xs tracking-widest"
             >
-              <Plus className="w-4 h-4" /> Add Location
+              <Plus className="w-4 h-4" /> {user ? 'Add Location' : 'Connect Google'}
+            </button>
+            <button
+               onClick={() => handleShare(
+                 `Discovering ${selectedState || selectedCountry || selectedContinent || 'Places'}`,
+                 `I'm exploring amazing places in ${selectedState || selectedCountry || selectedContinent || 'World Explorer'}!`
+               )}
+               className="rgb-bg animate-rgb text-white p-4 rounded-full shadow-lg transition-all flex items-center justify-center group"
+               title="Share Context"
+            >
+               <Share2 className="w-5 h-5 group-hover:scale-110 transition-transform" />
             </button>
           </div>
         </div>
@@ -314,20 +350,20 @@ export default function App() {
         <AnimatePresence mode="wait">
           {viewMode === 'map' && hasMapsKey ? (
             <motion.div key="filtered-map" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-              <WorldView continent={selectedContinent} country={selectedCountry} state={selectedState} />
+              <WorldView continent={selectedContinent} country={selectedCountry} state={selectedState} searchQuery={searchQuery} />
             </motion.div>
           ) : (
             <motion.div key="filtered-list" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
               {selectedState ? (
-                <LocationList continent={selectedContinent} country={selectedCountry} state={selectedState} />
+                <LocationList continent={selectedContinent} country={selectedCountry} state={selectedState} searchQuery={searchQuery} />
               ) : selectedCountry ? (
                 <div className="space-y-6">
                   {/* LocationList handles the filtering of countries even if state is null now based on previous edits */}
-                  <LocationList continent={selectedContinent} country={selectedCountry} state={null} />
+                  <LocationList continent={selectedContinent} country={selectedCountry} state={null} searchQuery={searchQuery} />
                 </div>
               ) : (
                 <div className="space-y-6">
-                  <LocationList continent={selectedContinent} country={null} state={null} />
+                  <LocationList continent={selectedContinent} country={null} state={null} searchQuery={searchQuery} />
                </div>
               )}
             </motion.div>
@@ -339,7 +375,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[#f5f5f0] font-sans text-[#141414]">
-      <Header user={user} />
+      <Header user={user} searchQuery={searchQuery} onSearchChange={setSearchQuery} />
       
       <div className="max-w-[1600px] mx-auto flex flex-col md:flex-row min-h-[calc(100-80px)]">
         {/* Mobile Nav Toggle */}
@@ -411,6 +447,7 @@ export default function App() {
         details={placeDetails}
         loading={loadingDetails}
       />
+      <InteractiveBackground />
     </div>
   );
 }

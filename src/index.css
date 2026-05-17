@@ -4,11 +4,24 @@
 @theme {
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
   --font-serif: "Playfair Display", serif;
+  
+  --animate-rgb: rgb-rainbow 5s linear infinite;
+  
+  @keyframes rgb-rainbow {
+    0% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+  }
+}
+
+@utility rgb-bg {
+  background: linear-gradient(90deg, #ff0000, #00ff00, #0000ff, #ff0000);
+  background-size: 300% 100%;
 }
 
 @layer base {
   body {
-    @apply antialiased;
+    @apply antialiased bg-[#f5f5f0];
   }
 }
 

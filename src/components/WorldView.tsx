@@ -12,9 +12,10 @@ interface WorldViewProps {
   continent: string | null;
   country: string | null;
   state: string | null;
+  searchQuery?: string;
 }
 
-export default function WorldView({ continent, country, state }: WorldViewProps) {
+export default function WorldView({ continent, country, state, searchQuery }: WorldViewProps) {
   const [locations, setLocations] = useState<LocationData[]>([]);
   const [selectedLocation, setSelectedLocation] = useState<LocationData | null>(null);
 
@@ -36,6 +37,17 @@ export default function WorldView({ continent, country, state }: WorldViewProps)
       if (state) {
         locs = locs.filter(l => l.state === state);
       }
+
+      // Search filter
+      if (searchQuery) {
+        const queryLower = searchQuery.toLowerCase();
+        locs = locs.filter(l => 
+          l.name.toLowerCase().includes(queryLower) ||
+          l.country.toLowerCase().includes(queryLower) ||
+          l.continent.toLowerCase().includes(queryLower) ||
+          (l.state && l.state.toLowerCase().includes(queryLower))
+        );
+      }
       
       setLocations(locs);
     }, (error) => {
@@ -43,7 +55,7 @@ export default function WorldView({ continent, country, state }: WorldViewProps)
     });
 
     return () => unsubscribe();
-  }, [continent, country, state]);
+  }, [continent, country, state, searchQuery]);
 
   const mapCenter = ((state || country) && locations.length > 0) 
     ? { lat: locations[0].lat, lng: locations[0].lng } 

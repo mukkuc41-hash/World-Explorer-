@@ -4,13 +4,14 @@ import { db, handleFirestoreError, OperationType, auth } from '../lib/firebase.t
 import { Continent } from '../App.tsx';
 import LocationCard from './LocationCard.tsx';
 import { motion, AnimatePresence } from 'motion/react';
-import { MapPinOff, Heart } from 'lucide-react';
+import { MapPinOff, Heart, Search } from 'lucide-react';
 
 interface LocationListProps {
   continent: Continent | null;
   country: string | null;
   state: string | null;
   showFavoritesOnly?: boolean;
+  searchQuery?: string;
 }
 
 export interface LocationData {
@@ -29,7 +30,7 @@ export interface LocationData {
   updatedAt: any;
 }
 
-export default function LocationList({ continent, country, state, showFavoritesOnly }: LocationListProps) {
+export default function LocationList({ continent, country, state, showFavoritesOnly, searchQuery }: LocationListProps) {
   const [locations, setLocations] = useState<LocationData[]>([]);
   const [userFavorites, setUserFavorites] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
@@ -58,12 +59,17 @@ export default function LocationList({ continent, country, state, showFavoritesO
   }, [auth.currentUser]);
 
   useEffect(() => {
-    if (!continent && !showFavoritesOnly) return;
+    // If no continent and not showing favorites and no search query, we don't know what to show
+    if (!continent && !showFavoritesOnly && !searchQuery) return;
 
     setLoading(true);
     let q;
     
-    if (showFavoritesOnly) {
+    // If searching, we fetch everything related to the current context or everything if no context
+    if (searchQuery) {
+        // Fetch all locations to filter in memory for robust search
+        q = query(collection(db, 'locations'), orderBy('createdAt', 'desc'));
+    } else if (showFavoritesOnly) {
       q = query(collection(db, 'locations'), orderBy('createdAt', 'desc'));
     } else {
       q = query(
@@ -87,8 +93,25 @@ export default function LocationList({ continent, country, state, showFavoritesO
         ...doc.data()
       })) as LocationData[];
 
+      // Filter by favorites if needed
       if (showFavoritesOnly) {
         locs = locs.filter(loc => userFavorites.has(loc.id));
+      }
+
+      // Filter by search query if present
+      if (searchQuery) {
+        const queryLower = searchQuery.toLowerCase();
+        locs = locs.filter(loc => 
+          loc.name.toLowerCase().includes(queryLower) ||
+          loc.country.toLowerCase().includes(queryLower) ||
+          loc.continent.toLowerCase().includes(queryLower) ||
+          (loc.state && loc.state.toLowerCase().includes(queryLower))
+        );
+
+        // Also enforce existing category filters if searching within a category
+        if (continent) locs = locs.filter(loc => loc.continent === continent);
+        if (country) locs = locs.filter(loc => loc.country === country);
+        if (state) locs = locs.filter(loc => loc.state === state);
       }
 
       setLocations(locs);
@@ -99,7 +122,7 @@ export default function LocationList({ continent, country, state, showFavoritesO
     });
 
     return () => unsubscribe();
-  }, [continent, country, state, showFavoritesOnly, userFavorites]);
+  }, [continent, country, state, showFavoritesOnly, userFavorites, searchQuery]);
 
   if (loading) {
     return (
@@ -116,7 +139,13 @@ export default function LocationList({ continent, country, state, showFavoritesO
         animate={{ opacity: 1 }}
         className="flex flex-col items-center justify-center py-40 text-center"
       >
-        {showFavoritesOnly ? (
+        {searchQuery ? (
+          <>
+            <Search className="w-16 h-16 opacity-10 mb-6" />
+            <h3 className="text-2xl font-serif italic mb-2">No results found</h3>
+            <p className="text-[#141414]/40">We couldn't find any matches for "{searchQuery}".</p>
+          </>
+        ) : showFavoritesOnly ? (
           <>
             <Heart className="w-16 h-16 opacity-10 mb-6" />
             <h3 className="text-2xl font-serif italic mb-2">No favorites yet</h3>
