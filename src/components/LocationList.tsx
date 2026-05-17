@@ -4,7 +4,7 @@ import { db, handleFirestoreError, OperationType, auth } from '../lib/firebase.t
 import { Continent } from '../App.tsx';
 import LocationCard from './LocationCard.tsx';
 import { motion, AnimatePresence } from 'motion/react';
-import { MapPinOff, Heart, Search, Calendar, Archive } from 'lucide-react';
+import { MapPinOff, Heart, Search, Calendar, Bookmark, Trash2 } from 'lucide-react';
 
 interface LocationListProps {
   continent: Continent | null;
@@ -13,6 +13,7 @@ interface LocationListProps {
   showFavoritesOnly?: boolean;
   showTourOnly?: boolean;
   showArchiveOnly?: boolean;
+  showTrashOnly?: boolean;
   searchQuery?: string;
   onSelect?: (location: LocationData) => void;
 }
@@ -29,11 +30,13 @@ export interface LocationData {
   userName: string;
   lat: number;
   lng: number;
+  isDeleted?: boolean;
+  deletedAt?: any;
   createdAt: any;
   updatedAt: any;
 }
 
-export default function LocationList({ continent, country, state, showFavoritesOnly, showTourOnly, showArchiveOnly, searchQuery, onSelect }: LocationListProps) {
+export default function LocationList({ continent, country, state, showFavoritesOnly, showTourOnly, showArchiveOnly, showTrashOnly, searchQuery, onSelect }: LocationListProps) {
   const [locations, setLocations] = useState<LocationData[]>([]);
   const [userFavorites, setUserFavorites] = useState<Set<string>>(new Set());
   const [userTour, setUserTour] = useState<Set<string>>(new Set());
@@ -111,7 +114,7 @@ export default function LocationList({ continent, country, state, showFavoritesO
 
   useEffect(() => {
     // If no continent and not showing special collections and no search query, we don't know what to show
-    if (!continent && !showFavoritesOnly && !showTourOnly && !showArchiveOnly && !searchQuery) return;
+    if (!continent && !showFavoritesOnly && !showTourOnly && !showArchiveOnly && !showTrashOnly && !searchQuery) return;
 
     setLoading(true);
     let q;
@@ -120,7 +123,7 @@ export default function LocationList({ continent, country, state, showFavoritesO
     if (searchQuery) {
         // Fetch all locations to filter in memory for robust search
         q = query(collection(db, 'locations'), orderBy('createdAt', 'desc'));
-    } else if (showFavoritesOnly || showTourOnly || showArchiveOnly) {
+    } else if (showFavoritesOnly || showTourOnly || showArchiveOnly || showTrashOnly) {
       q = query(collection(db, 'locations'), orderBy('createdAt', 'desc'));
     } else {
       q = query(
@@ -143,6 +146,13 @@ export default function LocationList({ continent, country, state, showFavoritesO
         id: doc.id,
         ...doc.data()
       })) as LocationData[];
+
+      // Filter by isDeleted
+      if (showTrashOnly) {
+        locs = locs.filter(loc => loc.isDeleted === true);
+      } else {
+        locs = locs.filter(loc => !loc.isDeleted);
+      }
 
       // Filter by favorites if needed
       if (showFavoritesOnly) {
@@ -183,7 +193,7 @@ export default function LocationList({ continent, country, state, showFavoritesO
     });
 
     return () => unsubscribe();
-  }, [continent, country, state, showFavoritesOnly, showTourOnly, showArchiveOnly, userFavorites, userTour, userArchive, searchQuery]);
+  }, [continent, country, state, showFavoritesOnly, showTourOnly, showArchiveOnly, showTrashOnly, userFavorites, userTour, userArchive, searchQuery]);
 
   if (loading) {
     return (
@@ -220,9 +230,15 @@ export default function LocationList({ continent, country, state, showFavoritesO
           </>
         ) : showArchiveOnly ? (
           <>
-            <Archive className="w-16 h-16 opacity-10 mb-6" />
+            <Bookmark className="w-16 h-16 opacity-10 mb-6" />
             <h3 className="text-2xl font-serif italic mb-2">Archive empty</h3>
             <p className="text-[#141414]/40">Your archived gems will appear here.</p>
+          </>
+        ) : showTrashOnly ? (
+          <>
+            <Trash2 className="w-16 h-16 opacity-10 mb-6" />
+            <h3 className="text-2xl font-serif italic mb-2">Trash is empty</h3>
+            <p className="text-[#141414]/40">Deleted discoveries will stay here for 30 days.</p>
           </>
         ) : (
           <>

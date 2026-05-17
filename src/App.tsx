@@ -15,9 +15,7 @@ import AddLocationModal from './components/AddLocationModal.tsx';
 import WorldView from './components/WorldView.tsx';
 import GoogleMapsSplash from './components/GoogleMapsSplash.tsx';
 import DiscoveryHero from './components/DiscoveryHero.tsx';
-import AIAssistant from './components/AIAssistant.tsx';
 import PlaceDetailsModal from './components/PlaceDetailsModal.tsx';
-
 import InteractiveBackground from './components/InteractiveBackground.tsx';
 
 export type Continent = "Africa" | "Asia" | "Europe" | "North America" | "South America" | "Oceania" | "Antarctica";
@@ -75,6 +73,7 @@ export default function App() {
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
   const [showTourOnly, setShowTourOnly] = useState(false);
   const [showArchiveOnly, setShowArchiveOnly] = useState(false);
+  const [showTrashOnly, setShowTrashOnly] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
   const [selectedPlace, setSelectedPlace] = useState<string | null>(null);
@@ -137,13 +136,14 @@ export default function App() {
     }
   };
 
-  const handleSelection = (continent: Continent | null, country: string | null, state: string | null, showFavorites: boolean = false, showTour: boolean = false, showArchive: boolean = false) => {
+  const handleSelection = (continent: Continent | null, country: string | null, state: string | null, showFavorites: boolean = false, showTour: boolean = false, showArchive: boolean = false, showTrash: boolean = false) => {
     setSelectedContinent(continent);
     setSelectedCountry(country);
     setSelectedState(state);
     setShowFavoritesOnly(showFavorites);
     setShowTourOnly(showTour);
     setShowArchiveOnly(showArchive);
+    setShowTrashOnly(showTrash);
     setSearchQuery(''); // Clear search when navigating categories
     
     // Close sidebar on mobile after selection
@@ -231,6 +231,30 @@ export default function App() {
             country={null} 
             state={null} 
             showArchiveOnly={true} 
+            searchQuery={searchQuery}
+            onSelect={setSelectedLocationData}
+          />
+        </div>
+      );
+    }
+
+    if (showTrashOnly) {
+      return (
+        <div className="space-y-12">
+          <div className="max-w-3xl">
+            <h1 className="font-serif italic text-6xl md:text-9xl mb-6 tracking-tighter leading-[0.8] text-red-500">
+              Trash <br /> <span className="text-[#141414]/40 italic">Bin</span>
+            </h1>
+            <p className="text-xl opacity-60 leading-relaxed">
+              Items here are scheduled for deletion. You can restore them if you changed your mind.
+            </p>
+          </div>
+
+          <LocationList 
+            continent={null} 
+            country={null} 
+            state={null} 
+            showTrashOnly={true} 
             searchQuery={searchQuery}
             onSelect={setSelectedLocationData}
           />
@@ -476,6 +500,7 @@ export default function App() {
             showFavoritesOnly={showFavoritesOnly}
             showTourOnly={showTourOnly}
             showArchiveOnly={showArchiveOnly}
+            showTrashOnly={showTrashOnly}
             onSelect={handleSelection}
           />
         </aside>
@@ -484,7 +509,7 @@ export default function App() {
         <main className="flex-1 px-6 md:px-16 py-12">
           <AnimatePresence mode="wait">
             <motion.div
-              key={`${selectedContinent}-${selectedCountry}-${selectedState}-${viewMode}-${showFavoritesOnly}-${showTourOnly}-${showArchiveOnly}`}
+              key={`${selectedContinent}-${selectedCountry}-${selectedState}-${viewMode}-${showFavoritesOnly}-${showTourOnly}-${showArchiveOnly}-${showTrashOnly}`}
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -20 }}
@@ -512,7 +537,7 @@ export default function App() {
         </div>
       </footer>
 
-      <AIAssistant />
+
       
       <PlaceDetailsModal 
         isOpen={!!selectedPlace || !!selectedLocationData}
@@ -528,6 +553,7 @@ export default function App() {
         loading={loadingDetails}
         locationId={selectedLocationData?.id}
         userId={selectedLocationData?.userId}
+        isDeleted={selectedLocationData?.isDeleted}
       />
       <InteractiveBackground />
     </div>

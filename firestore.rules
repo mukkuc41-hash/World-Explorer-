@@ -66,14 +66,15 @@ service cloud.firestore {
 
       allow update: if isVerified()
         && isValidId(locationId)
-        && isOwner(existing().userId)
+        && (isOwner(existing().userId) || isAdmin())
         && incoming().userId == existing().userId
         && incoming().createdAt == existing().createdAt
         && incoming().updatedAt == request.time
         && (
-          // Action: Edit Content
-          (incoming().diff(existing()).affectedKeys().hasOnly(['name', 'description', 'imageUrl', 'continent', 'country', 'state', 'updatedAt', 'userName']))
+          // Action: Edit Content or Soft Delete
+          (incoming().diff(existing()).affectedKeys().hasOnly(['name', 'description', 'imageUrl', 'continent', 'country', 'state', 'updatedAt', 'userName', 'isDeleted', 'deletedAt']))
         )
+        && (incoming().isDeleted is bool || !incoming().keys().contains('isDeleted'))
         && incoming().name is string && incoming().name.size() <= 200
         && incoming().description is string && incoming().description.size() <= 5000
         && incoming().imageUrl is string && incoming().imageUrl.size() <= 2000

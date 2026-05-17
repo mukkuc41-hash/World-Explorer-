@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Sparkles, MapPin, Loader2, Share2, Heart, Trash2, CalendarCheck, Calendar, Archive } from 'lucide-react';
+import { X, Sparkles, MapPin, Loader2, Share2, Heart, Trash2, CalendarCheck, Calendar, Bookmark } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { auth, db, handleFirestoreError, OperationType } from '../lib/firebase.ts';
-import { doc, deleteDoc, setDoc, query, collection, where, onSnapshot, serverTimestamp } from 'firebase/firestore';
+import { doc, updateDoc, deleteDoc, setDoc, query, collection, where, onSnapshot, serverTimestamp } from 'firebase/firestore';
 import ReviewSection from './ReviewSection.tsx';
 
 interface PlaceDetailsModalProps {
@@ -17,9 +17,10 @@ interface PlaceDetailsModalProps {
   loading: boolean;
   locationId?: string;
   userId?: string;
+  isDeleted?: boolean;
 }
 
-export default function PlaceDetailsModal({ placeName, isOpen, onClose, details, loading, locationId, userId }: PlaceDetailsModalProps) {
+export default function PlaceDetailsModal({ placeName, isOpen, onClose, details, loading, locationId, userId, isDeleted }: PlaceDetailsModalProps) {
   const user = auth.currentUser;
   const isOwner = user?.uid === userId;
   const isAdmin = user?.email === 'mukkuc41@gmail.com';
@@ -109,12 +110,29 @@ export default function PlaceDetailsModal({ placeName, isOpen, onClose, details,
     }
   };
 
+  const handleRestore = async () => {
+    if (!locationId) return;
+    try {
+      await updateDoc(doc(db, 'locations', locationId), {
+        isDeleted: false,
+        updatedAt: serverTimestamp()
+      });
+      onClose();
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, `locations/${locationId}`);
+    }
+  };
+
   const handleDelete = async () => {
     if (!locationId) return;
-    if (!window.confirm("Are you sure you want to delete this discovery?")) return;
+    if (!window.confirm("Are you sure you want to delete this discovery? It will be moved to the Trash for 30 days.")) return;
 
     try {
-      await deleteDoc(doc(db, 'locations', locationId));
+      await updateDoc(doc(db, 'locations', locationId), {
+        isDeleted: true,
+        deletedAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      });
       onClose();
     } catch (error) {
       handleFirestoreError(error, OperationType.DELETE, `locations/${locationId}`);
@@ -241,12 +259,21 @@ export default function PlaceDetailsModal({ placeName, isOpen, onClose, details,
                        </>
                      )}
                      {(isOwner || isAdmin) && locationId && (
-                       <button 
-                         onClick={handleDelete}
-                         className="flex items-center gap-2 px-6 py-3 rounded-full bg-[#ef4444] text-white text-xs font-bold hover:scale-105 transition-all"
-                       >
-                         <Trash2 className="w-4 h-4" /> Delete Discovery
-                       </button>
+                       isDeleted ? (
+                         <button 
+                           onClick={handleRestore}
+                           className="flex items-center gap-2 px-6 py-3 rounded-full bg-[#00af87] text-white text-xs font-bold hover:scale-105 transition-all"
+                         >
+                           <CalendarCheck className="w-4 h-4" /> Restore Discovery
+                         </button>
+                       ) : (
+                         <button 
+                           onClick={handleDelete}
+                           className="flex items-center gap-2 px-6 py-3 rounded-full bg-[#ef4444] text-white text-xs font-bold hover:scale-105 transition-all"
+                         >
+                           <Trash2 className="w-4 h-4" /> Delete Discovery
+                         </button>
+                       )
                      )}
                   </div>
                   {user && (
@@ -254,7 +281,7 @@ export default function PlaceDetailsModal({ placeName, isOpen, onClose, details,
                       onClick={toggleArchive}
                       className={`flex items-center gap-2 text-[10px] font-black uppercase tracking-widest transition-all ${isArchived ? 'text-[#141414]' : 'text-[#00af87] hover:opacity-70'}`}
                     >
-                       <Archive className={`w-4 h-4 ${isArchived ? 'fill-current' : ''}`} />
+                       <Bookmark className={`w-4 h-4 ${isArchived ? 'fill-current' : ''}`} />
                        {isArchived ? 'In Archive' : 'Save to Archive'}
                     </button>
                   )}
