@@ -4,7 +4,7 @@ import { collection, onSnapshot, query } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase.ts';
 import { LocationData } from './LocationList.tsx';
 import { motion, AnimatePresence } from 'motion/react';
-import { Map as MapIcon, Layers, Navigation } from 'lucide-react';
+import { Map as MapIcon, Layers, Navigation, MapPin } from 'lucide-react';
 
 const API_KEY = process.env.GOOGLE_MAPS_PLATFORM_KEY || '';
 
@@ -13,9 +13,10 @@ interface WorldViewProps {
   country: string | null;
   state: string | null;
   searchQuery?: string;
+  onSelect?: (location: LocationData) => void;
 }
 
-export default function WorldView({ continent, country, state, searchQuery }: WorldViewProps) {
+export default function WorldView({ continent, country, state, searchQuery, onSelect }: WorldViewProps) {
   const [locations, setLocations] = useState<LocationData[]>([]);
   const [selectedLocation, setSelectedLocation] = useState<LocationData | null>(null);
 
@@ -103,6 +104,12 @@ export default function WorldView({ continent, country, state, searchQuery }: Wo
                   onClick={() => window.open(`https://www.google.com/maps/dir/?api=1&destination=${selectedLocation.lat},${selectedLocation.lng}`, '_blank')}
                 >
                   <Navigation className="w-3 h-3" /> Directions
+                </button>
+                <button 
+                  className="w-full mt-2 bg-[#f5f5f0] text-[#141414] py-2 rounded-full text-[10px] font-bold uppercase tracking-widest flex items-center justify-center gap-2 border border-[#141414]/5 hover:bg-[#141414] hover:text-white transition-all"
+                  onClick={() => onSelect && onSelect(selectedLocation)}
+                >
+                  <MapPin className="w-3 h-3" /> View Details
                 </button>
               </div>
             </InfoWindow>

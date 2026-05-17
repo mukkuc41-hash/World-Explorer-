@@ -3,19 +3,21 @@ import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase.ts';
 import { Continent } from '../App.tsx';
 import { motion, AnimatePresence } from 'motion/react';
-import { ChevronRight, ChevronDown, Globe, MapPin, Map, Compass, Heart } from 'lucide-react';
+import { ChevronRight, ChevronDown, Globe, MapPin, Map, Compass, Heart, Calendar, Archive } from 'lucide-react';
 
 interface SidebarNavProps {
   selectedContinent: Continent | null;
   selectedCountry: string | null;
   selectedState: string | null;
   showFavoritesOnly?: boolean;
-  onSelect: (continent: Continent | null, country: string | null, state: string | null, showFavorites?: boolean) => void;
+  showTourOnly?: boolean;
+  showArchiveOnly?: boolean;
+  onSelect: (continent: Continent | null, country: string | null, state: string | null, showFavorites?: boolean, showTour?: boolean, showArchive?: boolean) => void;
 }
 
 const CONTINENTS: Continent[] = ["Africa", "Asia", "Europe", "North America", "South America", "Oceania", "Antarctica"];
 
-export default function SidebarNav({ selectedContinent, selectedCountry, selectedState, showFavoritesOnly, onSelect }: SidebarNavProps) {
+export default function SidebarNav({ selectedContinent, selectedCountry, selectedState, showFavoritesOnly, showTourOnly, showArchiveOnly, onSelect }: SidebarNavProps) {
   const [countries, setCountries] = useState<string[]>([]);
   const [states, setStates] = useState<string[]>([]);
   const [loadingCountries, setLoadingCountries] = useState(false);
@@ -134,6 +136,30 @@ export default function SidebarNav({ selectedContinent, selectedCountry, selecte
         >
           <Heart className={`w-4 h-4 ${showFavoritesOnly ? 'fill-current' : ''}`} />
           <span className="text-sm font-bold">Saved Places</span>
+        </button>
+
+        <button 
+          onClick={() => {
+            onSelect(null, null, null, false, true);
+            setExpandedContinent(null);
+            setExpandedCountry(null);
+          }}
+          className={`flex items-center gap-3 w-full p-3 rounded-2xl transition-all mt-1 ${showTourOnly ? 'bg-[#00af87] text-white shadow-lg shadow-[#00af87]/30' : 'hover:bg-white/50 text-[#141414]/60'}`}
+        >
+          <Calendar className="w-4 h-4" />
+          <span className="text-sm font-bold">Next Tour</span>
+        </button>
+
+        <button 
+          onClick={() => {
+            onSelect(null, null, null, false, false, true);
+            setExpandedContinent(null);
+            setExpandedCountry(null);
+          }}
+          className={`flex items-center gap-3 w-full p-3 rounded-2xl transition-all mt-1 ${showArchiveOnly ? 'bg-[#141414] text-white shadow-lg' : 'hover:bg-white/50 text-[#141414]/60'}`}
+        >
+          <Archive className="w-4 h-4" />
+          <span className="text-sm font-bold">Archived</span>
         </button>
       </div>
 

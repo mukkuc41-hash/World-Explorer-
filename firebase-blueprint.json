@@ -24,6 +24,20 @@
       },
       "required": ["name", "description", "imageUrl", "continent", "userId", "userName", "createdAt", "updatedAt"]
     },
+    "Review": {
+      "title": "Review",
+      "description": "A user's review for a location.",
+      "type": "object",
+      "properties": {
+        "locationId": { "type": "string", "description": "The ID of the location being reviewed." },
+        "userId": { "type": "string", "description": "The UID of the reviewer." },
+        "userName": { "type": "string", "description": "The name of the reviewer." },
+        "rating": { "type": "number", "description": "Rating from 1 to 5." },
+        "comment": { "type": "string", "description": "The review text." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "When the review was created." }
+      },
+      "required": ["locationId", "userId", "userName", "rating", "comment", "createdAt"]
+    },
     "Favorite": {
       "title": "Favorite",
       "description": "A user's marked favorite location.",
@@ -34,6 +48,28 @@
         "createdAt": { "type": "string", "format": "date-time", "description": "When the favorite was created." }
       },
       "required": ["userId", "locationId", "createdAt"]
+    },
+    "PlannedVisit": {
+      "title": "Planned Visit",
+      "description": "A location planned for a future tour.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "The UID of the user planning the visit." },
+        "locationId": { "type": "string", "description": "The ID of the location to visit." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "When the visit was planned." }
+      },
+      "required": ["userId", "locationId", "createdAt"]
+    },
+    "Archive": {
+      "title": "Archive",
+      "description": "A location saved to the user's personal archive.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "The UID of the user archiving the item." },
+        "locationId": { "type": "string", "description": "The ID of the archived location." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "When it was archived." }
+      },
+      "required": ["userId", "locationId", "createdAt"]
     }
   },
   "firestore": {
@@ -41,9 +77,21 @@
       "schema": "Location",
       "description": "Collection of community-shared tourist locations."
     },
+    "reviews": {
+      "schema": "Review",
+      "description": "User reviews and ratings for locations."
+    },
     "favorites": {
       "schema": "Favorite",
       "description": "Collection of user-to-location favorite mappings."
+    },
+    "tours": {
+      "schema": "PlannedVisit",
+      "description": "Locations saved to a user's 'Next Tour' itinerary."
+    },
+    "archives": {
+      "schema": "Archive",
+      "description": "User-specific archived discoveries."
     }
   }
 }

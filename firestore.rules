@@ -11,8 +11,19 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    function isVerified() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
     function isOwner(userId) {
-      return isSignedIn() && request.auth.uid == userId;
+      return isVerified() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isVerified() && (
+        request.auth.token.email == 'mukkuc41@gmail.com' ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
     }
 
     function isValidId(id) {
@@ -49,11 +60,11 @@ service cloud.firestore {
     match /locations/{locationId} {
       allow read: if true; // Publicly viewable
 
-      allow create: if isSignedIn() 
+      allow create: if isVerified() 
         && isValidId(locationId)
         && isValidLocation(incoming());
 
-      allow update: if isSignedIn()
+      allow update: if isVerified()
         && isValidId(locationId)
         && isOwner(existing().userId)
         && incoming().userId == existing().userId
@@ -70,23 +81,65 @@ service cloud.firestore {
         && incoming().country is string && incoming().country.size() <= 100
         && incoming().state is string && incoming().state.size() <= 100;
 
-      allow delete: if isSignedIn()
+      allow delete: if isVerified()
         && isValidId(locationId)
-        && isOwner(existing().userId);
+        && (isOwner(existing().userId) || isAdmin());
     }
 
     // --- Collection: favorites ---
     match /favorites/{favoriteId} {
       allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
       
-      allow create: if isSignedIn() 
+      allow create: if isVerified() 
         && isValidId(favoriteId)
         && request.resource.data.userId == request.auth.uid
         && request.resource.data.locationId is string
         && request.resource.data.createdAt == request.time;
       
-      allow delete: if isSignedIn() 
-        && isOwner(existing().userId);
+      allow delete: if isVerified()
+        && (isOwner(existing().userId) || isAdmin());
+    }
+
+    // --- Collection: reviews ---
+    match /reviews/{reviewId} {
+      allow read: if true;
+      
+      allow create: if isVerified()
+        && isValidId(reviewId)
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.rating >= 1 && request.resource.data.rating <= 5;
+        
+      allow delete: if isVerified()
+        && (isOwner(existing().userId) || isAdmin());
+    }
+
+    // --- Collection: tours (Planned Visits) ---
+    match /tours/{tourId} {
+      allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
+      
+      allow create: if isVerified()
+        && isValidId(tourId)
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.locationId is string
+        && request.resource.data.createdAt == request.time;
+      
+      allow delete: if isVerified()
+        && (isOwner(existing().userId) || isAdmin());
+    }
+
+    // --- Collection: archives ---
+    match /archives/{archiveId} {
+      allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
+      
+      allow create: if isVerified()
+        && isValidId(archiveId)
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.locationId is string
+        && request.resource.data.createdAt == request.time;
+      
+      allow delete: if isVerified()
+        && (isOwner(existing().userId) || isAdmin());
     }
   }
 }

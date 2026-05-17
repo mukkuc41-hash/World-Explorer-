@@ -4,14 +4,17 @@ import { db, handleFirestoreError, OperationType, auth } from '../lib/firebase.t
 import { Continent } from '../App.tsx';
 import LocationCard from './LocationCard.tsx';
 import { motion, AnimatePresence } from 'motion/react';
-import { MapPinOff, Heart, Search } from 'lucide-react';
+import { MapPinOff, Heart, Search, Calendar, Archive } from 'lucide-react';
 
 interface LocationListProps {
   continent: Continent | null;
   country: string | null;
   state: string | null;
   showFavoritesOnly?: boolean;
+  showTourOnly?: boolean;
+  showArchiveOnly?: boolean;
   searchQuery?: string;
+  onSelect?: (location: LocationData) => void;
 }
 
 export interface LocationData {
@@ -30,9 +33,11 @@ export interface LocationData {
   updatedAt: any;
 }
 
-export default function LocationList({ continent, country, state, showFavoritesOnly, searchQuery }: LocationListProps) {
+export default function LocationList({ continent, country, state, showFavoritesOnly, showTourOnly, showArchiveOnly, searchQuery, onSelect }: LocationListProps) {
   const [locations, setLocations] = useState<LocationData[]>([]);
   const [userFavorites, setUserFavorites] = useState<Set<string>>(new Set());
+  const [userTour, setUserTour] = useState<Set<string>>(new Set());
+  const [userArchive, setUserArchive] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
 
   // Fetch favorites
@@ -58,9 +63,55 @@ export default function LocationList({ continent, country, state, showFavoritesO
     return () => unsubscribe();
   }, [auth.currentUser]);
 
+  // Fetch tours
   useEffect(() => {
-    // If no continent and not showing favorites and no search query, we don't know what to show
-    if (!continent && !showFavoritesOnly && !searchQuery) return;
+    const user = auth.currentUser;
+    if (!user) {
+      setUserTour(new Set());
+      return;
+    }
+
+    const q = query(
+      collection(db, 'tours'),
+      where('userId', '==', user.uid)
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const tour = new Set(snapshot.docs.map(doc => doc.data().locationId));
+      setUserTour(tour);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'tours');
+    });
+
+    return () => unsubscribe();
+  }, [auth.currentUser]);
+
+  // Fetch archives
+  useEffect(() => {
+    const user = auth.currentUser;
+    if (!user) {
+      setUserArchive(new Set());
+      return;
+    }
+
+    const q = query(
+      collection(db, 'archives'),
+      where('userId', '==', user.uid)
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const arch = new Set(snapshot.docs.map(doc => doc.data().locationId));
+      setUserArchive(arch);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'archives');
+    });
+
+    return () => unsubscribe();
+  }, [auth.currentUser]);
+
+  useEffect(() => {
+    // If no continent and not showing special collections and no search query, we don't know what to show
+    if (!continent && !showFavoritesOnly && !showTourOnly && !showArchiveOnly && !searchQuery) return;
 
     setLoading(true);
     let q;
@@ -69,7 +120,7 @@ export default function LocationList({ continent, country, state, showFavoritesO
     if (searchQuery) {
         // Fetch all locations to filter in memory for robust search
         q = query(collection(db, 'locations'), orderBy('createdAt', 'desc'));
-    } else if (showFavoritesOnly) {
+    } else if (showFavoritesOnly || showTourOnly || showArchiveOnly) {
       q = query(collection(db, 'locations'), orderBy('createdAt', 'desc'));
     } else {
       q = query(
@@ -98,6 +149,16 @@ export default function LocationList({ continent, country, state, showFavoritesO
         locs = locs.filter(loc => userFavorites.has(loc.id));
       }
 
+      // Filter by tour if needed
+      if (showTourOnly) {
+        locs = locs.filter(loc => userTour.has(loc.id));
+      }
+
+      // Filter by archive if needed
+      if (showArchiveOnly) {
+        locs = locs.filter(loc => userArchive.has(loc.id));
+      }
+
       // Filter by search query if present
       if (searchQuery) {
         const queryLower = searchQuery.toLowerCase();
@@ -122,7 +183,7 @@ export default function LocationList({ continent, country, state, showFavoritesO
     });
 
     return () => unsubscribe();
-  }, [continent, country, state, showFavoritesOnly, userFavorites, searchQuery]);
+  }, [continent, country, state, showFavoritesOnly, showTourOnly, showArchiveOnly, userFavorites, userTour, userArchive, searchQuery]);
 
   if (loading) {
     return (
@@ -151,6 +212,18 @@ export default function LocationList({ continent, country, state, showFavoritesO
             <h3 className="text-2xl font-serif italic mb-2">No favorites yet</h3>
             <p className="text-[#141414]/40">Your marked locations will appear here.</p>
           </>
+        ) : showTourOnly ? (
+          <>
+            <Calendar className="w-16 h-16 opacity-10 mb-6" />
+            <h3 className="text-2xl font-serif italic mb-2">Itinerary empty</h3>
+            <p className="text-[#141414]/40">Plan your next tour by clicking "Plan Visit" on any discovery.</p>
+          </>
+        ) : showArchiveOnly ? (
+          <>
+            <Archive className="w-16 h-16 opacity-10 mb-6" />
+            <h3 className="text-2xl font-serif italic mb-2">Archive empty</h3>
+            <p className="text-[#141414]/40">Your archived gems will appear here.</p>
+          </>
         ) : (
           <>
             <MapPinOff className="w-16 h-16 opacity-10 mb-6" />
@@ -171,6 +244,7 @@ export default function LocationList({ continent, country, state, showFavoritesO
             location={loc} 
             index={index} 
             isFavorite={userFavorites.has(loc.id)}
+            onSelect={onSelect}
           />
         ))}
       </AnimatePresence>

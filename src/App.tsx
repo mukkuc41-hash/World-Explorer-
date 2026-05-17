@@ -73,9 +73,12 @@ export default function App() {
   const [viewMode, setViewMode] = useState<'list' | 'map'>('list');
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
+  const [showTourOnly, setShowTourOnly] = useState(false);
+  const [showArchiveOnly, setShowArchiveOnly] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
   const [selectedPlace, setSelectedPlace] = useState<string | null>(null);
+  const [selectedLocationData, setSelectedLocationData] = useState<any | null>(null);
   const [placeDetails, setPlaceDetails] = useState<{ description: string; imageUrl: string } | null>(null);
   const [loadingDetails, setLoadingDetails] = useState(false);
 
@@ -134,11 +137,13 @@ export default function App() {
     }
   };
 
-  const handleSelection = (continent: Continent | null, country: string | null, state: string | null, showFavorites: boolean = false) => {
+  const handleSelection = (continent: Continent | null, country: string | null, state: string | null, showFavorites: boolean = false, showTour: boolean = false, showArchive: boolean = false) => {
     setSelectedContinent(continent);
     setSelectedCountry(country);
     setSelectedState(state);
     setShowFavoritesOnly(showFavorites);
+    setShowTourOnly(showTour);
+    setShowArchiveOnly(showArchive);
     setSearchQuery(''); // Clear search when navigating categories
     
     // Close sidebar on mobile after selection
@@ -179,6 +184,55 @@ export default function App() {
             state={null} 
             showFavoritesOnly={true} 
             searchQuery={searchQuery}
+            onSelect={setSelectedLocationData}
+          />
+        </div>
+      );
+    }
+
+    if (showTourOnly) {
+      return (
+        <div className="space-y-12">
+          <div className="max-w-3xl">
+            <h1 className="font-serif italic text-6xl md:text-9xl mb-6 tracking-tighter leading-[0.8]">
+              Next <br /> <span className="text-[#00af87]">Tour</span>
+            </h1>
+            <p className="text-xl opacity-60 leading-relaxed">
+              Your upcoming itinerary. These are the locations you've marked for your next exploration.
+            </p>
+          </div>
+
+          <LocationList 
+            continent={null} 
+            country={null} 
+            state={null} 
+            showTourOnly={true} 
+            searchQuery={searchQuery}
+            onSelect={setSelectedLocationData}
+          />
+        </div>
+      );
+    }
+
+    if (showArchiveOnly) {
+      return (
+        <div className="space-y-12">
+          <div className="max-w-3xl">
+            <h1 className="font-serif italic text-6xl md:text-9xl mb-6 tracking-tighter leading-[0.8]">
+              Locked <br /> <span className="text-[#141414]/40 italic">Archives</span>
+            </h1>
+            <p className="text-xl opacity-60 leading-relaxed">
+              Your personal discovery vault. Explore the places you've archived for safe keeping.
+            </p>
+          </div>
+
+          <LocationList 
+            continent={null} 
+            country={null} 
+            state={null} 
+            showArchiveOnly={true} 
+            searchQuery={searchQuery}
+            onSelect={setSelectedLocationData}
           />
         </div>
       );
@@ -223,7 +277,7 @@ export default function App() {
           <AnimatePresence mode="wait">
             {viewMode === 'map' && hasMapsKey ? (
               <motion.div key="global-map" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                <WorldView continent={null} country={null} state={null} searchQuery={searchQuery} />
+                <WorldView continent={null} country={null} state={null} searchQuery={searchQuery} onSelect={setSelectedLocationData} />
               </motion.div>
             ) : (
               <motion.div 
@@ -350,20 +404,38 @@ export default function App() {
         <AnimatePresence mode="wait">
           {viewMode === 'map' && hasMapsKey ? (
             <motion.div key="filtered-map" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-              <WorldView continent={selectedContinent} country={selectedCountry} state={selectedState} searchQuery={searchQuery} />
+              <WorldView continent={selectedContinent} country={selectedCountry} state={selectedState} searchQuery={searchQuery} onSelect={setSelectedLocationData} />
             </motion.div>
           ) : (
             <motion.div key="filtered-list" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
               {selectedState ? (
-                <LocationList continent={selectedContinent} country={selectedCountry} state={selectedState} searchQuery={searchQuery} />
+                <LocationList 
+                  continent={selectedContinent} 
+                  country={selectedCountry} 
+                  state={selectedState} 
+                  searchQuery={searchQuery} 
+                  onSelect={setSelectedLocationData}
+                />
               ) : selectedCountry ? (
                 <div className="space-y-6">
                   {/* LocationList handles the filtering of countries even if state is null now based on previous edits */}
-                  <LocationList continent={selectedContinent} country={selectedCountry} state={null} searchQuery={searchQuery} />
+                  <LocationList 
+                    continent={selectedContinent} 
+                    country={selectedCountry} 
+                    state={null} 
+                    searchQuery={searchQuery} 
+                    onSelect={setSelectedLocationData}
+                  />
                 </div>
               ) : (
                 <div className="space-y-6">
-                  <LocationList continent={selectedContinent} country={null} state={null} searchQuery={searchQuery} />
+                  <LocationList 
+                    continent={selectedContinent} 
+                    country={null} 
+                    state={null} 
+                    searchQuery={searchQuery} 
+                    onSelect={setSelectedLocationData}
+                  />
                </div>
               )}
             </motion.div>
@@ -402,6 +474,8 @@ export default function App() {
             selectedCountry={selectedCountry}
             selectedState={selectedState}
             showFavoritesOnly={showFavoritesOnly}
+            showTourOnly={showTourOnly}
+            showArchiveOnly={showArchiveOnly}
             onSelect={handleSelection}
           />
         </aside>
@@ -410,7 +484,7 @@ export default function App() {
         <main className="flex-1 px-6 md:px-16 py-12">
           <AnimatePresence mode="wait">
             <motion.div
-              key={`${selectedContinent}-${selectedCountry}-${selectedState}-${viewMode}-${showFavoritesOnly}`}
+              key={`${selectedContinent}-${selectedCountry}-${selectedState}-${viewMode}-${showFavoritesOnly}-${showTourOnly}-${showArchiveOnly}`}
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -20 }}
@@ -441,11 +515,19 @@ export default function App() {
       <AIAssistant />
       
       <PlaceDetailsModal 
-        isOpen={!!selectedPlace}
-        placeName={selectedPlace || ""}
-        onClose={() => setSelectedPlace(null)}
-        details={placeDetails}
+        isOpen={!!selectedPlace || !!selectedLocationData}
+        placeName={selectedPlace || selectedLocationData?.name || ""}
+        onClose={() => {
+          setSelectedPlace(null);
+          setSelectedLocationData(null);
+        }}
+        details={selectedLocationData ? { 
+          description: selectedLocationData.description, 
+          imageUrl: selectedLocationData.imageUrl 
+        } : placeDetails}
         loading={loadingDetails}
+        locationId={selectedLocationData?.id}
+        userId={selectedLocationData?.userId}
       />
       <InteractiveBackground />
     </div>

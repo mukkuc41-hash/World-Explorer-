@@ -1,6 +1,6 @@
 import { LocationData } from './LocationList.tsx';
 import { motion } from 'motion/react';
-import { MapPin, User, Calendar, Heart, Star, Award, Clock } from 'lucide-react';
+import { MapPin, User, Calendar, Heart, Star, Award, Clock, Trash2 } from 'lucide-react';
 import { auth, db, handleFirestoreError, OperationType } from '../lib/firebase.ts';
 import { doc, setDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
 
@@ -8,9 +8,29 @@ interface LocationCardProps {
   location: LocationData;
   index: number;
   isFavorite: boolean;
+  onSelect?: (location: LocationData) => void;
 }
 
-export default function LocationCard({ location, index, isFavorite }: LocationCardProps) {
+export default function LocationCard({ location, index, isFavorite, onSelect }: LocationCardProps) {
+  const user = auth.currentUser;
+  const isOwner = user?.uid === location.userId;
+  const isAdmin = user?.email === 'mukkuc41@gmail.com';
+
+  const handleClick = () => {
+    if (onSelect) onSelect(location);
+  };
+
+  const handleDelete = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!window.confirm("Are you sure you want to delete this discovery? This action cannot be undone.")) return;
+
+    try {
+      await deleteDoc(doc(db, 'locations', location.id));
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, `locations/${location.id}`);
+    }
+  };
+
   const toggleFavorite = async (e: React.MouseEvent) => {
     e.stopPropagation();
     const user = auth.currentUser;
@@ -43,9 +63,9 @@ export default function LocationCard({ location, index, isFavorite }: LocationCa
     return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).format(date);
   };
 
-  // Simulated data for TripAdvisor look
-  const rating = 4.5 + (Math.random() * 0.5);
-  const reviewsCount = Math.floor(Math.random() * 500) + 50;
+  // Deleting simulated reviews to prefer real ones if available
+  // const rating = 4.5 + (Math.random() * 0.5);
+  // const reviewsCount = Math.floor(Math.random() * 500) + 50;
 
   return (
     <motion.div
@@ -54,7 +74,8 @@ export default function LocationCard({ location, index, isFavorite }: LocationCa
       animate={{ opacity: 1, scale: 1 }}
       exit={{ opacity: 0, scale: 0.9 }}
       transition={{ delay: index * 0.05 }}
-      className="group bg-white rounded-[32px] overflow-hidden shadow-sm hover:shadow-2xl transition-all duration-500 border border-[#141414]/5"
+      onClick={handleClick}
+      className="group bg-white rounded-[32px] overflow-hidden shadow-sm hover:shadow-2xl transition-all duration-500 border border-[#141414]/5 cursor-pointer"
     >
       <div className="relative h-64 overflow-hidden">
         <img 
@@ -74,12 +95,25 @@ export default function LocationCard({ location, index, isFavorite }: LocationCa
           </span>
         </div>
 
-        <button 
-          onClick={toggleFavorite}
-          className={`absolute top-4 right-4 p-3 rounded-full backdrop-blur-md transition-all shadow-sm ${isFavorite ? 'bg-[#ef4444] text-white' : 'bg-white/90 text-[#141414]/40 hover:text-[#ef4444] hover:scale-110'}`}
-        >
-          <Heart className={`w-4 h-4 ${isFavorite ? 'fill-current' : ''}`} />
-        </button>
+        <div className="absolute top-4 right-4 flex gap-2">
+          {(isOwner || isAdmin) && (
+            <button 
+              onClick={handleDelete}
+              className="p-3 rounded-full backdrop-blur-md bg-white/90 text-[#141414]/40 hover:bg-[#ef4444] hover:text-white transition-all shadow-sm group/delete"
+              title="Delete Discovery"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+          )}
+          {user && (
+            <button 
+              onClick={toggleFavorite}
+              className={`p-3 rounded-full backdrop-blur-md transition-all shadow-sm ${isFavorite ? 'bg-[#ef4444] text-white' : 'bg-white/90 text-[#141414]/40 hover:text-[#ef4444] hover:scale-110'}`}
+            >
+              <Heart className={`w-4 h-4 ${isFavorite ? 'fill-current' : ''}`} />
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="p-8">

@@ -1,6 +1,10 @@
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Sparkles, MapPin, Loader2, Share2, Heart } from 'lucide-react';
+import { X, Sparkles, MapPin, Loader2, Share2, Heart, Trash2, CalendarCheck, Calendar, Archive } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
+import { auth, db, handleFirestoreError, OperationType } from '../lib/firebase.ts';
+import { doc, deleteDoc, setDoc, query, collection, where, onSnapshot, serverTimestamp } from 'firebase/firestore';
+import ReviewSection from './ReviewSection.tsx';
 
 interface PlaceDetailsModalProps {
   placeName: string;
@@ -11,9 +15,112 @@ interface PlaceDetailsModalProps {
     imageUrl: string;
   } | null;
   loading: boolean;
+  locationId?: string;
+  userId?: string;
 }
 
-export default function PlaceDetailsModal({ placeName, isOpen, onClose, details, loading }: PlaceDetailsModalProps) {
+export default function PlaceDetailsModal({ placeName, isOpen, onClose, details, loading, locationId, userId }: PlaceDetailsModalProps) {
+  const user = auth.currentUser;
+  const isOwner = user?.uid === userId;
+  const isAdmin = user?.email === 'mukkuc41@gmail.com';
+
+  const [isPlanned, setIsPlanned] = useState(false);
+  const [planningInfo, setPlanningInfo] = useState<any>(null);
+  const [isArchived, setIsArchived] = useState(false);
+  const [archiveInfo, setArchiveInfo] = useState<any>(null);
+
+  useEffect(() => {
+    if (!locationId || !user) return;
+
+    const q = query(
+      collection(db, 'tours'),
+      where('userId', '==', user.uid),
+      where('locationId', '==', locationId)
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      setIsPlanned(!snapshot.empty);
+      if (!snapshot.empty) {
+        setPlanningInfo({ id: snapshot.docs[0].id, ...snapshot.docs[0].data() });
+      } else {
+        setPlanningInfo(null);
+      }
+    });
+
+    return () => unsubscribe();
+  }, [locationId, user]);
+
+  useEffect(() => {
+    if (!locationId || !user) return;
+
+    const q = query(
+      collection(db, 'archives'),
+      where('userId', '==', user.uid),
+      where('locationId', '==', locationId)
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      setIsArchived(!snapshot.empty);
+      if (!snapshot.empty) {
+        setArchiveInfo({ id: snapshot.docs[0].id, ...snapshot.docs[0].data() });
+      } else {
+        setArchiveInfo(null);
+      }
+    });
+
+    return () => unsubscribe();
+  }, [locationId, user]);
+
+  const toggleTour = async () => {
+    if (!user || !locationId) return;
+
+    try {
+      if (isPlanned && planningInfo) {
+        await deleteDoc(doc(db, 'tours', planningInfo.id));
+      } else {
+        const planId = `${user.uid}_${locationId}`;
+        await setDoc(doc(db, 'tours', planId), {
+          userId: user.uid,
+          locationId,
+          createdAt: serverTimestamp()
+        });
+      }
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, 'tours');
+    }
+  };
+
+  const toggleArchive = async () => {
+    if (!user || !locationId) return;
+
+    try {
+      if (isArchived && archiveInfo) {
+        await deleteDoc(doc(db, 'archives', archiveInfo.id));
+      } else {
+        const archId = `${user.uid}_${locationId}`;
+        await setDoc(doc(db, 'archives', archId), {
+          userId: user.uid,
+          locationId,
+          createdAt: serverTimestamp()
+        });
+      }
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, 'archives');
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!locationId) return;
+    if (!window.confirm("Are you sure you want to delete this discovery?")) return;
+
+    try {
+      await deleteDoc(doc(db, 'locations', locationId));
+      onClose();
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, `locations/${locationId}`);
+    }
+  };
+
   return (
     <AnimatePresence>
       {isOpen && (
@@ -91,41 +198,66 @@ export default function PlaceDetailsModal({ placeName, isOpen, onClose, details,
                       </div>
                    </div>
                  ) : details ? (
-                   <div className="prose prose-sm max-w-none">
-                     <div className="markdown-body text-xl md:text-2xl font-serif italic leading-relaxed text-[#141414]/80">
-                        <ReactMarkdown>
-                          {details.description}
-                        </ReactMarkdown>
-                     </div>
-                   </div>
+                   <>
+                    <div className="prose prose-sm max-w-none">
+                      <div className="markdown-body text-xl md:text-2xl font-serif italic leading-relaxed text-[#141414]/80">
+                         <ReactMarkdown>
+                           {details.description}
+                         </ReactMarkdown>
+                      </div>
+                    </div>
+                    {locationId && <ReviewSection locationId={locationId} />}
+                   </>
                  ) : null}
                </div>
 
                <div className="mt-12 pt-12 border-t border-[#141414]/5 flex items-center justify-between">
                   <div className="flex gap-4">
-                     <button className="flex items-center gap-2 px-6 py-3 rounded-full bg-[#141414] text-white text-xs font-bold hover:scale-105 transition-all">
-                        Plan Visit
-                     </button>
-                     <button 
-                       onClick={() => {
-                         const title = placeName;
-                         const text = `Check out ${placeName} on World Explorer!`;
-                         const url = window.location.href;
-                         if (navigator.share) {
-                           navigator.share({ title, text, url }).catch(e => console.error(e));
-                         } else {
-                           window.open(`https://wa.me/?text=${encodeURIComponent(text + ' ' + url)}`, '_blank');
-                         }
-                       }}
-                       className="p-3 rounded-full border border-[#141414]/5 rgb-bg animate-rgb text-white transition-all group"
-                       title="Share Discovery"
-                     >
-                        <Share2 className="w-5 h-5 group-hover:scale-110 transition-transform" />
-                     </button>
+                     {user && (
+                       <>
+                         <button 
+                           onClick={toggleTour}
+                           className={`flex items-center gap-2 px-6 py-3 rounded-full text-xs font-bold transition-all hover:scale-105 shadow-xl ${isPlanned ? 'bg-[#00af87] text-white' : 'bg-[#141414] text-white'}`}
+                         >
+                            {isPlanned ? <CalendarCheck className="w-4 h-4" /> : <Calendar className="w-4 h-4" />}
+                            {isPlanned ? 'Planned for Tour' : 'Plan Visit'}
+                         </button>
+                         <button 
+                           onClick={() => {
+                             const title = placeName;
+                             const text = `Check out ${placeName} on World Explorer!`;
+                             const url = window.location.href;
+                             if (navigator.share) {
+                               navigator.share({ title, text, url }).catch(e => console.error(e));
+                             } else {
+                               window.open(`https://wa.me/?text=${encodeURIComponent(text + ' ' + url)}`, '_blank');
+                             }
+                           }}
+                           className="p-3 rounded-full border border-[#141414]/5 rgb-bg animate-rgb text-white transition-all group"
+                           title="Share Discovery"
+                         >
+                            <Share2 className="w-5 h-5 group-hover:scale-110 transition-transform" />
+                         </button>
+                       </>
+                     )}
+                     {(isOwner || isAdmin) && locationId && (
+                       <button 
+                         onClick={handleDelete}
+                         className="flex items-center gap-2 px-6 py-3 rounded-full bg-[#ef4444] text-white text-xs font-bold hover:scale-105 transition-all"
+                       >
+                         <Trash2 className="w-4 h-4" /> Delete Discovery
+                       </button>
+                     )}
                   </div>
-                  <button className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-[#00af87]">
-                     <Heart className="w-4 h-4" /> Save to Archive
-                  </button>
+                  {user && (
+                    <button 
+                      onClick={toggleArchive}
+                      className={`flex items-center gap-2 text-[10px] font-black uppercase tracking-widest transition-all ${isArchived ? 'text-[#141414]' : 'text-[#00af87] hover:opacity-70'}`}
+                    >
+                       <Archive className={`w-4 h-4 ${isArchived ? 'fill-current' : ''}`} />
+                       {isArchived ? 'In Archive' : 'Save to Archive'}
+                    </button>
+                  )}
                </div>
               </div>
             </div>
