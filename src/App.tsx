@@ -14,6 +14,8 @@ import LocationList from './components/LocationList.tsx';
 import AddLocationModal from './components/AddLocationModal.tsx';
 import WorldView from './components/WorldView.tsx';
 import GoogleMapsSplash from './components/GoogleMapsSplash.tsx';
+import DiscoveryHero from './components/DiscoveryHero.tsx';
+import AIAssistant from './components/AIAssistant.tsx';
 
 export type Continent = "Africa" | "Asia" | "Europe" | "North America" | "South America" | "Oceania" | "Antarctica";
 
@@ -198,17 +200,28 @@ export default function App() {
     }
 
     return (
-      <div className="space-y-12">
-        <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-8">
+      <div className="space-y-4">
+        {/* Breadcrumbs for easier navigation */}
+        <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.2em] font-black opacity-30 mb-8 px-1">
+          {selectedContinent} 
+          {selectedCountry && <><ChevronRight className="w-3 h-3" /> {selectedCountry}</>}
+          {selectedState && <><ChevronRight className="w-3 h-3" /> {selectedState}</>}
+        </div>
+
+        <DiscoveryHero 
+          locationName={selectedState || selectedCountry || selectedContinent || ""} 
+          imageUrl={selectedContinent ? CONTINENT_DATA.find(c => c.name === selectedContinent)?.image : undefined}
+          description={selectedContinent ? CONTINENT_DATA.find(c => c.name === selectedContinent)?.description : undefined}
+        />
+
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-8 pt-8">
           <div>
-            <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.2em] font-black opacity-30 mb-4 px-1">
-              {selectedContinent} 
-              {selectedCountry && <><ChevronRight className="w-3 h-3" /> {selectedCountry}</>}
-              {selectedState && <><ChevronRight className="w-3 h-3" /> {selectedState}</>}
-            </div>
             <h2 className="font-serif italic text-6xl md:text-8xl tracking-tighter leading-[0.9] capitalize">
-              {selectedState || selectedCountry || selectedContinent}
+              Explore {selectedState || selectedCountry || selectedContinent}
             </h2>
+            <p className="text-xl opacity-40 mt-4 max-w-xl leading-relaxed italic">
+              See the best tours, hidden spots, and community favorites in this region.
+            </p>
           </div>
 
           <div className="flex items-center gap-4">
@@ -230,6 +243,17 @@ export default function App() {
           </div>
         </div>
 
+        <div className="flex items-center justify-between border-b border-[#141414]/5 pb-4 mt-12 mb-8">
+           <div className="flex gap-8 text-sm font-bold uppercase tracking-widest opacity-40">
+              <button className="text-[#141414] border-b-2 border-[#141414] pb-4">Top Rated</button>
+              <button className="hover:opacity-100 transition-opacity">Recent</button>
+              <button className="hover:opacity-100 transition-opacity">Map View</button>
+           </div>
+           <button className="text-xs font-black uppercase tracking-widest text-[#5A5A40] bg-[#5A5A40]/10 px-6 py-2.5 rounded-full hover:bg-[#5A5A40]/20 transition-all">
+              See all tours
+           </button>
+        </div>
+
         <AnimatePresence mode="wait">
           {viewMode === 'map' && hasMapsKey ? (
             <motion.div key="filtered-map" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
@@ -241,23 +265,11 @@ export default function App() {
                 <LocationList continent={selectedContinent} country={selectedCountry} state={selectedState} />
               ) : selectedCountry ? (
                 <div className="space-y-6">
-                  <div className="bg-white/50 rounded-[40px] border border-[#141414]/5 p-12 text-center">
-                    <Compass className="w-16 h-16 mx-auto opacity-10 mb-6 text-[#5A5A40]" />
-                    <h3 className="text-3xl font-serif italic mb-4">Explore {selectedCountry}</h3>
-                    <p className="text-lg opacity-40 max-w-md mx-auto leading-relaxed mb-8">
-                      We've found multiple regions to explore. Select one from the mini menu to see specific locations.
-                    </p>
-                  </div>
-                  {/* We could potentially list the states here too if we fetched them, but for now the sidebar is the primary nav */}
+                  {/* LocationList handles the filtering of countries even if state is null now based on previous edits */}
                   <LocationList continent={selectedContinent} country={selectedCountry} state={null} />
                 </div>
               ) : (
-                <div className="text-center py-20 bg-white/50 rounded-[40px] border border-[#141414]/5 px-6">
-                  <Globe className="w-16 h-16 mx-auto opacity-10 mb-6 text-[#5A5A40]" />
-                  <h3 className="text-3xl font-serif italic mb-4">Vast Landscapes</h3>
-                  <p className="text-lg opacity-40 max-w-md mx-auto leading-relaxed mb-8">
-                    Explore <span className="font-bold opacity-100">{selectedContinent}</span> by selecting a country and region from the sidebar menu, or browse the latest spots below.
-                  </p>
+                <div className="space-y-6">
                   <LocationList continent={selectedContinent} country={null} state={null} />
                </div>
               )}
@@ -332,6 +344,8 @@ export default function App() {
           <div>Built with passion for travelers</div>
         </div>
       </footer>
+
+      <AIAssistant />
     </div>
   );
 }

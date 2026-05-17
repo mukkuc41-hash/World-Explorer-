@@ -1,6 +1,7 @@
 import express from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
+import { GoogleGenAI } from "@google/genai";
 
 async function startServer() {
   const app = express();
@@ -8,9 +9,39 @@ async function startServer() {
 
   app.use(express.json());
 
+  const ai = new GoogleGenAI({ 
+    apiKey: process.env.GEMINI_API_KEY,
+    httpOptions: {
+      headers: {
+        'User-Agent': 'aistudio-build',
+      }
+    }
+  });
+
   // API routes
   app.get("/api/health", (req, res) => {
     res.json({ status: "ok" });
+  });
+
+  app.post("/api/chat", async (req, res) => {
+    try {
+      const { message, history } = req.body;
+      const model = "gemini-3-flash-preview";
+      
+      const chat = ai.chats.create({
+        model,
+        config: {
+          systemInstruction: "You are a travel assistant for 'World Explorer', a community travel platform. Help users find amazing places, plan trips, and understand architectural styles. Be professional, inspiring, and concise. Mention that you are powered by Gemini.",
+        },
+        history: history || [],
+      });
+
+      const response = await chat.sendMessage({ message });
+      res.json({ text: response.text });
+    } catch (error: any) {
+      console.error("Gemini Error:", error);
+      res.status(500).json({ error: error.message || "Failed to get response from AI" });
+    }
   });
 
   // Vite middleware for development

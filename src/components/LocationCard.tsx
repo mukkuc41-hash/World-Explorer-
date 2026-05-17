@@ -1,6 +1,6 @@
 import { LocationData } from './LocationList.tsx';
 import { motion } from 'motion/react';
-import { MapPin, User, Calendar, Heart } from 'lucide-react';
+import { MapPin, User, Calendar, Heart, Star, Award, Clock } from 'lucide-react';
 import { auth, db, handleFirestoreError, OperationType } from '../lib/firebase.ts';
 import { doc, setDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
 
@@ -43,6 +43,10 @@ export default function LocationCard({ location, index, isFavorite }: LocationCa
     return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).format(date);
   };
 
+  // Simulated data for TripAdvisor look
+  const rating = 4.5 + (Math.random() * 0.5);
+  const reviewsCount = Math.floor(Math.random() * 500) + 50;
+
   return (
     <motion.div
       layout
@@ -50,7 +54,7 @@ export default function LocationCard({ location, index, isFavorite }: LocationCa
       animate={{ opacity: 1, scale: 1 }}
       exit={{ opacity: 0, scale: 0.9 }}
       transition={{ delay: index * 0.05 }}
-      className="group bg-white rounded-3xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-500 border border-[#141414]/5"
+      className="group bg-white rounded-[32px] overflow-hidden shadow-sm hover:shadow-2xl transition-all duration-500 border border-[#141414]/5"
     >
       <div className="relative h-64 overflow-hidden">
         <img 
@@ -62,41 +66,65 @@ export default function LocationCard({ location, index, isFavorite }: LocationCa
           }}
           referrerPolicy="no-referrer"
         />
-        <div className="absolute top-4 left-4">
-          <span className="bg-white/90 backdrop-blur-md px-4 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-widest flex items-center gap-1.5 shadow-sm">
+        
+        {/* Badges */}
+        <div className="absolute top-4 left-4 flex flex-col gap-2">
+          <span className="bg-white/90 backdrop-blur-md px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 shadow-sm">
             <MapPin className="w-3 h-3 text-[#5A5A40]" /> {location.continent}
           </span>
+          {index % 3 === 0 && (
+            <span className="bg-[#00af87] text-white px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 shadow-sm">
+              <Award className="w-3 h-3" /> Top Rated
+            </span>
+          )}
         </div>
+
         <button 
           onClick={toggleFavorite}
-          className={`absolute top-4 right-4 p-3 rounded-full backdrop-blur-md transition-all shadow-sm ${isFavorite ? 'bg-[#5A5A40] text-white' : 'bg-white/90 text-[#141414]/40 hover:text-[#5A5A40] hover:scale-110'}`}
+          className={`absolute top-4 right-4 p-3 rounded-full backdrop-blur-md transition-all shadow-sm ${isFavorite ? 'bg-[#ef4444] text-white' : 'bg-white/90 text-[#141414]/40 hover:text-[#ef4444] hover:scale-110'}`}
         >
           <Heart className={`w-4 h-4 ${isFavorite ? 'fill-current' : ''}`} />
         </button>
+
+        <div className="absolute bottom-4 left-4">
+          <div className="bg-black/40 backdrop-blur-sm text-white px-3 py-1 rounded-lg text-[10px] font-bold flex items-center gap-1.5">
+            <Clock className="w-3 h-3" /> 2-3 hours
+          </div>
+        </div>
       </div>
 
       <div className="p-8">
-        <h3 className="font-serif italic text-3xl tracking-tighter mb-4 group-hover:text-[#5A5A40] transition-colors">
+        <div className="flex items-center gap-2 mb-3">
+          <div className="flex text-[#00af87]">
+            {[...Array(5)].map((_, i) => (
+              <Star key={i} className={`w-3.5 h-3.5 ${i < Math.floor(rating) ? 'fill-current' : 'opacity-30'}`} />
+            ))}
+          </div>
+          <span className="text-xs font-bold opacity-40">{reviewsCount} reviews</span>
+        </div>
+
+        <h3 className="font-serif italic text-3xl tracking-tighter mb-4 group-hover:text-[#5A5A40] transition-colors leading-none">
           {location.name}
         </h3>
-        <p className="text-[#141414]/60 line-clamp-3 text-sm leading-relaxed mb-8">
+        
+        <p className="text-[#141414]/60 line-clamp-2 text-sm leading-relaxed mb-6 h-10">
           {location.description}
         </p>
 
         <div className="flex items-center justify-between pt-6 border-t border-[#141414]/5">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-full bg-[#f5f5f0] flex items-center justify-center border border-[#141414]/5 font-bold text-xs uppercase opacity-60">
+            <div className="w-8 h-8 rounded-full bg-[#f5f5f0] flex items-center justify-center border border-[#141414]/5 font-black text-[10px] uppercase opacity-60">
               {location.userName.charAt(0)}
             </div>
             <div className="flex flex-col">
-              <span className="text-[10px] uppercase tracking-widest opacity-40 leading-none">Shared by</span>
-              <span className="text-xs font-medium">{location.userName}</span>
+              <span className="text-[10px] uppercase tracking-widest opacity-20 leading-none mb-1">Explorer</span>
+              <span className="text-xs font-bold text-[#141414]/80">{location.userName}</span>
             </div>
           </div>
           
-          <div className="text-right">
-            <span className="text-[10px] uppercase tracking-widest opacity-40 block leading-none">Added on</span>
-            <span className="text-xs font-medium text-[#141414]/60">{formatDate(location.createdAt)}</span>
+          <div className="flex flex-col items-end">
+            <span className="text-[8px] uppercase tracking-widest opacity-20 leading-none mb-1">From</span>
+            <span className="text-lg font-black text-[#141414]">Free</span>
           </div>
         </div>
       </div>
