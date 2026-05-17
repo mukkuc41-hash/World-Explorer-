@@ -10,41 +10,55 @@ const API_KEY = process.env.GOOGLE_MAPS_PLATFORM_KEY || '';
 
 interface WorldViewProps {
   continent: string | null;
+  country: string | null;
+  state: string | null;
 }
 
-export default function WorldView({ continent }: WorldViewProps) {
+export default function WorldView({ continent, country, state }: WorldViewProps) {
   const [locations, setLocations] = useState<LocationData[]>([]);
   const [selectedLocation, setSelectedLocation] = useState<LocationData | null>(null);
 
   useEffect(() => {
     const q = query(collection(db, 'locations'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const locs = snapshot.docs.map(doc => ({
+      let locs = snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
       })) as LocationData[];
       
-      // Filter by continent if selected
+      // Filter hierarchy
       if (continent) {
-        setLocations(locs.filter(l => l.continent === continent));
-      } else {
-        setLocations(locs);
+        locs = locs.filter(l => l.continent === continent);
       }
+      if (country) {
+        locs = locs.filter(l => l.country === country);
+      }
+      if (state) {
+        locs = locs.filter(l => l.state === state);
+      }
+      
+      setLocations(locs);
     }, (error) => {
       handleFirestoreError(error, OperationType.LIST, 'locations');
     });
 
     return () => unsubscribe();
-  }, [continent]);
+  }, [continent, country, state]);
 
-  const mapCenter = continentCenter(continent);
+  const mapCenter = ((state || country) && locations.length > 0) 
+    ? { lat: locations[0].lat, lng: locations[0].lng } 
+    : continentCenter(continent);
+  
+  const zoom = state ? 11 : country ? 6 : continent ? 4 : 2;
 
   return (
     <div className="relative w-full h-[600px] rounded-[40px] overflow-hidden shadow-2xl border border-[#141414]/10">
       <APIProvider apiKey={API_KEY} version="weekly">
         <Map
           defaultCenter={mapCenter}
-          defaultZoom={continent ? 4 : 2}
+          defaultZoom={zoom}
+          center={mapCenter}
+          zoom={zoom}
           mapId="WORLD_EXPLORER_MAP"
           gestureHandling="greedy"
           disableDefaultUI={true}

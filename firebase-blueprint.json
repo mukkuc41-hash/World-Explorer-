@@ -14,6 +14,7 @@
           "description": "The continent where the location is situated." 
         },
         "country": { "type": "string", "description": "The country where the location is situated." },
+        "state": { "type": "string", "description": "The state or region where the location is situated." },
         "userId": { "type": "string", "description": "The UID of the user who added the location." },
         "userName": { "type": "string", "description": "The name of the user who added the location." },
         "lat": { "type": "number", "description": "Latitude of the location." },
@@ -22,12 +23,27 @@
         "updatedAt": { "type": "string", "format": "date-time", "description": "When the location was last updated." }
       },
       "required": ["name", "description", "imageUrl", "continent", "userId", "userName", "createdAt", "updatedAt"]
+    },
+    "Favorite": {
+      "title": "Favorite",
+      "description": "A user's marked favorite location.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "The UID of the user who favorited the location." },
+        "locationId": { "type": "string", "description": "The ID of the favorited location." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "When the favorite was created." }
+      },
+      "required": ["userId", "locationId", "createdAt"]
     }
   },
   "firestore": {
     "locations": {
       "schema": "Location",
       "description": "Collection of community-shared tourist locations."
+    },
+    "favorites": {
+      "schema": "Favorite",
+      "description": "Collection of user-to-location favorite mappings."
     }
   }
 }

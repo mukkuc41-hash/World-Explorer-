@@ -1,13 +1,42 @@
 import { LocationData } from './LocationList.tsx';
 import { motion } from 'motion/react';
-import { MapPin, User, Calendar } from 'lucide-react';
+import { MapPin, User, Calendar, Heart } from 'lucide-react';
+import { auth, db, handleFirestoreError, OperationType } from '../lib/firebase.ts';
+import { doc, setDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
 
 interface LocationCardProps {
   location: LocationData;
   index: number;
+  isFavorite: boolean;
 }
 
-export default function LocationCard({ location, index }: LocationCardProps) {
+export default function LocationCard({ location, index, isFavorite }: LocationCardProps) {
+  const toggleFavorite = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const user = auth.currentUser;
+    if (!user) {
+      alert("Please sign in to favorite locations");
+      return;
+    }
+
+    const favId = `${user.uid}_${location.id}`;
+    const favRef = doc(db, 'favorites', favId);
+
+    try {
+      if (isFavorite) {
+        await deleteDoc(favRef);
+      } else {
+        await setDoc(favRef, {
+          userId: user.uid,
+          locationId: location.id,
+          createdAt: serverTimestamp()
+        });
+      }
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, `favorites/${favId}`);
+    }
+  };
+
   const formatDate = (timestamp: any) => {
     if (!timestamp) return '';
     const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
@@ -38,6 +67,12 @@ export default function LocationCard({ location, index }: LocationCardProps) {
             <MapPin className="w-3 h-3 text-[#5A5A40]" /> {location.continent}
           </span>
         </div>
+        <button 
+          onClick={toggleFavorite}
+          className={`absolute top-4 right-4 p-3 rounded-full backdrop-blur-md transition-all shadow-sm ${isFavorite ? 'bg-[#5A5A40] text-white' : 'bg-white/90 text-[#141414]/40 hover:text-[#5A5A40] hover:scale-110'}`}
+        >
+          <Heart className={`w-4 h-4 ${isFavorite ? 'fill-current' : ''}`} />
+        </button>
       </div>
 
       <div className="p-8">

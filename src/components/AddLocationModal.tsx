@@ -19,6 +19,7 @@ export default function AddLocationModal({ isOpen, onClose, continent, user }: A
   const [description, setDescription] = useState('');
   const [imageUrl, setImageUrl] = useState('');
   const [country, setCountry] = useState('');
+  const [state, setState] = useState('');
   const [coords, setCoords] = useState<{ lat: number, lng: number } | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -31,6 +32,16 @@ export default function AddLocationModal({ isOpen, onClose, continent, user }: A
       const countryComp = place.address_components?.find(c => c.types.includes('country'));
       if (countryComp) {
         setCountry(countryComp.long_name);
+      }
+
+      // Extract state/administrative_area_level_1 from address components
+      const stateComp = place.address_components?.find(c => c.types.includes('administrative_area_level_1'));
+      if (stateComp) {
+        setState(stateComp.long_name);
+      } else {
+        // Fallback for places that might not have traditional states
+        const cityComp = place.address_components?.find(c => c.types.includes('locality'));
+        if (cityComp) setState(cityComp.long_name);
       }
 
       setCoords({
@@ -61,6 +72,7 @@ export default function AddLocationModal({ isOpen, onClose, continent, user }: A
         imageUrl: imageUrl.trim() || `https://picsum.photos/seed/${locationId}/800/600`,
         continent: continent,
         country: country.trim() || 'Unknown',
+        state: state.trim() || 'Unknown',
         userId: user.uid,
         userName: user.displayName || 'Anonymous Explorer',
         lat: coords.lat,
@@ -74,6 +86,7 @@ export default function AddLocationModal({ isOpen, onClose, continent, user }: A
       setDescription('');
       setImageUrl('');
       setCountry('');
+      setState('');
       setCoords(null);
       onClose();
     } catch (err: any) {
