@@ -43,65 +43,6 @@ export default function DiscoveryHero({ locationName, imageUrl, description }: D
         </div>
       </div>
 
-      {/* Quick Discovery Links */}
-      <div className="flex flex-wrap gap-4 text-sm font-medium">
-        <span className="text-[#141414]/40 uppercase tracking-widest text-[10px] font-bold w-full mb-2">Check out must-see sights:</span>
-        {['Amber Palace', 'Hawa Mahal', 'Historic Sites', 'Nature & Wildlife Areas', 'Local Markets'].map((tag) => (
-          <button key={tag} className="underline decoration-2 transition-colors hover:text-[#5A5A40] underline-offset-4">
-            {tag}
-          </button>
-        ))}
-      </div>
-
-      {/* TripAdvisor-style Search Section */}
-      <motion.div 
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
-        className="bg-[#00af87] rounded-[40px] p-8 md:p-12 shadow-xl shadow-[#00af87]/20"
-      >
-        <div className="flex flex-col gap-8">
-          <div>
-            <span className="inline-flex items-center gap-2 bg-[#141414] text-white text-[10px] font-black uppercase tracking-widest px-3 py-1.5 rounded-lg mb-4">
-              New
-            </span>
-            <h2 className="text-3xl md:text-4xl font-bold text-[#141414] tracking-tight">
-              Find unique experiences
-            </h2>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="relative group lg:col-span-1">
-              <div className="absolute inset-y-0 left-6 flex items-center pointer-events-none text-[#141414]/40 group-focus-within:text-[#141414]">
-                <Calendar className="w-5 h-5" />
-              </div>
-              <input 
-                type="text" 
-                value={date}
-                onChange={(e) => setDate(e.target.value)}
-                className="w-full bg-white/90 border-none rounded-3xl py-5 pl-14 pr-6 text-lg font-bold text-[#141414] focus:ring-4 focus:ring-white/20 transition-all outline-none"
-                placeholder="Date"
-              />
-            </div>
-
-            <div className="relative group lg:col-span-1">
-              <div className="absolute inset-y-0 left-6 flex items-center pointer-events-none text-[#141414]/40 group-focus-within:text-[#141414]">
-                <Users className="w-5 h-5" />
-              </div>
-              <input 
-                type="text" 
-                value={guests}
-                onChange={(e) => setGuests(e.target.value)}
-                className="w-full bg-white/90 border-none rounded-3xl py-5 pl-14 pr-6 text-lg font-bold text-[#141414] focus:ring-4 focus:ring-white/20 transition-all outline-none"
-                placeholder="Guests"
-              />
-            </div>
-
-            <button className="lg:col-span-2 bg-[#141414] text-white rounded-3xl py-5 text-xl font-bold hover:bg-[#141414]/90 transition-all shadow-lg active:scale-[0.98]">
-              Search
-            </button>
-          </div>
-        </div>
-      </motion.div>
     </div>
   );
 }

@@ -16,6 +16,7 @@ import WorldView from './components/WorldView.tsx';
 import GoogleMapsSplash from './components/GoogleMapsSplash.tsx';
 import DiscoveryHero from './components/DiscoveryHero.tsx';
 import AIAssistant from './components/AIAssistant.tsx';
+import PlaceDetailsModal from './components/PlaceDetailsModal.tsx';
 
 export type Continent = "Africa" | "Asia" | "Europe" | "North America" | "South America" | "Oceania" | "Antarctica";
 
@@ -71,6 +72,10 @@ export default function App() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
 
+  const [selectedPlace, setSelectedPlace] = useState<string | null>(null);
+  const [placeDetails, setPlaceDetails] = useState<{ description: string; imageUrl: string } | null>(null);
+  const [loadingDetails, setLoadingDetails] = useState(false);
+
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       setUser(user);
@@ -78,6 +83,39 @@ export default function App() {
     });
     return () => unsubscribe();
   }, []);
+
+  const handleSuggestionClick = async (placeName: string, initialImage?: string) => {
+    setSelectedPlace(placeName);
+    setLoadingDetails(true);
+    // Preserve initial image while generating description
+    if (initialImage) {
+      setPlaceDetails({ description: '', imageUrl: initialImage });
+    } else {
+      setPlaceDetails(null);
+    }
+
+    try {
+      const response = await fetch('/api/generate-details', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ place: placeName }),
+      });
+
+      if (!response.ok) throw new Error('Failed to generate');
+
+      const data = await response.json();
+      const keywords = encodeURIComponent(data.imageKeywords || placeName);
+      
+      setPlaceDetails({
+        description: data.description,
+        imageUrl: initialImage || `https://images.unsplash.com/photo-1548013146-72479768b0fd?auto=format&fit=crop&q=80&w=800&keywords=${keywords}`
+      });
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setLoadingDetails(false);
+    }
+  };
 
   const handleSelection = (continent: Continent | null, country: string | null, state: string | null, showFavorites: boolean = false) => {
     setSelectedContinent(continent);
@@ -166,32 +204,67 @@ export default function App() {
               <motion.div 
                 key="continent-grid" 
                 initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
-                className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
+                className="space-y-16"
               >
-                {CONTINENT_DATA.map((continent, i) => (
-                  <motion.button 
-                    key={continent.name} 
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: i * 0.1 }}
-                    onClick={() => handleSelection(continent.name, null, null)}
-                    className="group relative h-[300px] overflow-hidden rounded-[40px] shadow-sm transition-all hover:shadow-xl hover:-translate-y-2 text-left"
-                  >
-                    <img 
-                      src={continent.image} 
-                      alt={continent.name}
-                      className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-[#141414]/90 via-[#141414]/20 to-transparent" />
-                    <div className="absolute bottom-0 left-0 p-8 w-full">
-                      <div className="flex items-center gap-2 text-white/50 text-[10px] uppercase tracking-widest font-bold mb-2">
-                        <Compass className="w-3 h-3" /> Explore Region
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {CONTINENT_DATA.map((continent, i) => (
+                    <motion.button 
+                      key={continent.name} 
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: i * 0.1 }}
+                      onClick={() => handleSelection(continent.name, null, null)}
+                      className="group relative h-[300px] overflow-hidden rounded-[40px] shadow-sm transition-all hover:shadow-xl hover:-translate-y-2 text-left"
+                    >
+                      <img 
+                        src={continent.image} 
+                        alt={continent.name}
+                        className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+                      />
+                      <div className="absolute inset-0 bg-gradient-to-t from-[#141414]/90 via-[#141414]/20 to-transparent" />
+                      <div className="absolute bottom-0 left-0 p-8 w-full">
+                        <div className="flex items-center gap-2 text-white/50 text-[10px] uppercase tracking-widest font-bold mb-2">
+                          <Compass className="w-3 h-3" /> Explore Region
+                        </div>
+                        <h3 className="text-3xl font-serif italic text-white mb-1 tracking-tight">{continent.name}</h3>
+                        <p className="text-white/60 text-xs leading-relaxed max-w-[200px]">{continent.description}</p>
                       </div>
-                      <h3 className="text-3xl font-serif italic text-white mb-1 tracking-tight">{continent.name}</h3>
-                      <p className="text-white/60 text-xs leading-relaxed max-w-[200px]">{continent.description}</p>
+                    </motion.button>
+                  ))}
+                </div>
+
+                <div className="pt-12 border-t border-[#141414]/5">
+                  <div className="flex items-center justify-between mb-8">
+                    <h3 className="text-4xl font-serif italic tracking-tight">Trending <span className="text-[#00af87]">Suggestions</span></h3>
+                    <div className="flex gap-2">
+                       {['Adventurous', 'Cultural', 'Relaxing'].map(cat => (
+                         <button key={cat} className="px-5 py-2.5 rounded-full bg-[#f8f8f5] border border-[#141414]/5 text-[10px] font-black uppercase tracking-widest hover:bg-[#141414] hover:text-white transition-all shadow-sm">
+                           {cat}
+                         </button>
+                       ))}
                     </div>
-                  </motion.button>
-                ))}
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                    {[
+                      { title: "Taj Mahal, Agra", type: "Heritage", img: "/images/taj_mahal.png" },
+                      { title: "Hawa Mahal, Jaipur", type: "Heritage", img: "/images/hawa_mahal.png" },
+                      { title: "Varanasi Ghats", type: "Spiritual", img: "/images/varanasi.png" },
+                      { title: "Kerala Backwaters", type: "Nature", img: "/images/kerala.png" }
+                    ].map((item, i) => (
+                      <motion.div 
+                        key={i} 
+                        onClick={() => handleSuggestionClick(item.title, item.img)}
+                        className="group cursor-pointer active:scale-95 transition-all"
+                      >
+                        <div className="relative h-48 rounded-[32px] overflow-hidden mb-4 shadow-sm group-hover:shadow-lg transition-all">
+                          <img src={item.img} className="w-full h-full object-cover transition-transform group-hover:scale-110" />
+                          <div className="absolute top-4 left-4 bg-white/90 backdrop-blur-sm px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest">{item.type}</div>
+                        </div>
+                        <h4 className="font-serif italic text-xl group-hover:text-[#00af87] transition-colors">{item.title}</h4>
+                      </motion.div>
+                    ))}
+                  </div>
+                </div>
               </motion.div>
             )}
           </AnimatePresence>
@@ -214,16 +287,7 @@ export default function App() {
           description={selectedContinent ? CONTINENT_DATA.find(c => c.name === selectedContinent)?.description : undefined}
         />
 
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-8 pt-8">
-          <div>
-            <h2 className="font-serif italic text-6xl md:text-8xl tracking-tighter leading-[0.9] capitalize">
-              Explore {selectedState || selectedCountry || selectedContinent}
-            </h2>
-            <p className="text-xl opacity-40 mt-4 max-w-xl leading-relaxed italic">
-              See the best tours, hidden spots, and community favorites in this region.
-            </p>
-          </div>
-
+        <div className="flex items-center justify-end gap-4 pt-8">
           <div className="flex items-center gap-4">
             {hasMapsKey && (
               <button
@@ -243,15 +307,8 @@ export default function App() {
           </div>
         </div>
 
-        <div className="flex items-center justify-between border-b border-[#141414]/5 pb-4 mt-12 mb-8">
-           <div className="flex gap-8 text-sm font-bold uppercase tracking-widest opacity-40">
-              <button className="text-[#141414] border-b-2 border-[#141414] pb-4">Top Rated</button>
-              <button className="hover:opacity-100 transition-opacity">Recent</button>
-              <button className="hover:opacity-100 transition-opacity">Map View</button>
-           </div>
-           <button className="text-xs font-black uppercase tracking-widest text-[#5A5A40] bg-[#5A5A40]/10 px-6 py-2.5 rounded-full hover:bg-[#5A5A40]/20 transition-all">
-              See all tours
-           </button>
+        <div className="mt-12 mb-8">
+          {/* Spacing for content */}
         </div>
 
         <AnimatePresence mode="wait">
@@ -346,6 +403,14 @@ export default function App() {
       </footer>
 
       <AIAssistant />
+      
+      <PlaceDetailsModal 
+        isOpen={!!selectedPlace}
+        placeName={selectedPlace || ""}
+        onClose={() => setSelectedPlace(null)}
+        details={placeDetails}
+        loading={loadingDetails}
+      />
     </div>
   );
 }

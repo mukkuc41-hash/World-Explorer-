@@ -72,11 +72,6 @@ export default function LocationCard({ location, index, isFavorite }: LocationCa
           <span className="bg-white/90 backdrop-blur-md px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 shadow-sm">
             <MapPin className="w-3 h-3 text-[#5A5A40]" /> {location.continent}
           </span>
-          {index % 3 === 0 && (
-            <span className="bg-[#00af87] text-white px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 shadow-sm">
-              <Award className="w-3 h-3" /> Top Rated
-            </span>
-          )}
         </div>
 
         <button 
@@ -85,29 +80,14 @@ export default function LocationCard({ location, index, isFavorite }: LocationCa
         >
           <Heart className={`w-4 h-4 ${isFavorite ? 'fill-current' : ''}`} />
         </button>
-
-        <div className="absolute bottom-4 left-4">
-          <div className="bg-black/40 backdrop-blur-sm text-white px-3 py-1 rounded-lg text-[10px] font-bold flex items-center gap-1.5">
-            <Clock className="w-3 h-3" /> 2-3 hours
-          </div>
-        </div>
       </div>
 
       <div className="p-8">
-        <div className="flex items-center gap-2 mb-3">
-          <div className="flex text-[#00af87]">
-            {[...Array(5)].map((_, i) => (
-              <Star key={i} className={`w-3.5 h-3.5 ${i < Math.floor(rating) ? 'fill-current' : 'opacity-30'}`} />
-            ))}
-          </div>
-          <span className="text-xs font-bold opacity-40">{reviewsCount} reviews</span>
-        </div>
-
         <h3 className="font-serif italic text-3xl tracking-tighter mb-4 group-hover:text-[#5A5A40] transition-colors leading-none">
           {location.name}
         </h3>
         
-        <p className="text-[#141414]/60 line-clamp-2 text-sm leading-relaxed mb-6 h-10">
+        <p className="text-[#141414]/60 line-clamp-3 text-sm leading-relaxed mb-8">
           {location.description}
         </p>
 
@@ -123,8 +103,8 @@ export default function LocationCard({ location, index, isFavorite }: LocationCa
           </div>
           
           <div className="flex flex-col items-end">
-            <span className="text-[8px] uppercase tracking-widest opacity-20 leading-none mb-1">From</span>
-            <span className="text-lg font-black text-[#141414]">Free</span>
+            <span className="text-[10px] uppercase tracking-widest opacity-20 leading-none mb-1">Added on</span>
+            <span className="text-xs font-bold text-[#141414]/60">{formatDate(location.createdAt)}</span>
           </div>
         </div>
       </div>

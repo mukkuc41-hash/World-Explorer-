@@ -104,9 +104,28 @@ export default function AIAssistant() {
                     <Bot className="w-10 h-10" />
                   </div>
                   <h4 className="text-xl font-serif italic mb-2">Hello there!</h4>
-                  <p className="text-sm opacity-40 leading-relaxed">
+                  <p className="text-sm opacity-40 leading-relaxed mb-6">
                     I'm your World Explorer AI. Ask me about Jaipur, architectural styles, or for travel recommendations anywhere in the world!
                   </p>
+                  <div className="flex flex-wrap gap-2 justify-center">
+                    {[
+                      "Tell me about Jaipur",
+                      "Best beaches in Goa?",
+                      "Himalayan hidden gems",
+                      "Trip to Taj Mahal tips"
+                    ].map((suggestion) => (
+                      <button
+                        key={suggestion}
+                        onClick={() => {
+                          setInput(suggestion);
+                          // Auto-send could be nice but let's just fill the input for user control
+                        }}
+                        className="px-4 py-2 bg-white border border-[#141414]/5 rounded-xl text-xs font-bold hover:bg-[#00af87] hover:text-white transition-all shadow-sm"
+                      >
+                        {suggestion}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               )}
               {messages.map((msg, i) => (
