@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Bot, Send, User, Sparkles, MapPin, Search, Plus, Globe, ExternalLink, Loader2 } from 'lucide-react';
+import { X, Send, User, Sparkles, Loader2, ExternalLink } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 
 interface Message {
@@ -9,17 +9,17 @@ interface Message {
   links?: { title: string, uri: string }[];
 }
 
-interface TravelerGuideProps {
+interface SelfAssistBotProps {
   isOpen: boolean;
   onClose: () => void;
   onAction: (action: string) => void;
 }
 
-export default function TravelerGuide({ isOpen, onClose, onAction }: TravelerGuideProps) {
+export default function SelfAssistBot({ isOpen, onClose, onAction }: SelfAssistBotProps) {
   const [messages, setMessages] = useState<Message[]>([
     { 
       role: 'assistant', 
-      text: "Hello! I'm your **Traveler Guide**. I specialize in **Detailed Place Analysis**: I can research travel destinations, perform **Real-time Fact Checking** with Google Search, and provide comprehensive insights. \n\nPlease note: I'm dedicated strictly to place-related research. I do not handle profile information or sensitive personal data to maintain your **privacy**." 
+      text: "Hello! I'm your **Self Assist Bot**. I'm here to help you navigate World Explorer with **Interactive Help** and **UI Actions**. \n\nPlease note: I'm specialized in app features and general location info. I cannot handle sensitive personal data, credentials, or profile-related tasks to ensure your **privacy**." 
     }
   ]);
   const [input, setInput] = useState('');
@@ -47,7 +47,7 @@ export default function TravelerGuide({ isOpen, onClose, onAction }: TravelerGui
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           message: userMessage,
-          botType: 'traveler-guide',
+          botType: 'self-assist',
           history: messages.map(m => ({
             role: m.role === 'user' ? 'user' : 'model',
             parts: [{ text: m.text }]
@@ -66,7 +66,6 @@ export default function TravelerGuide({ isOpen, onClose, onAction }: TravelerGui
           links: data.links
         }]);
 
-        // Handle triggered UI actions
         if (data.actions && data.actions.length > 0) {
           data.actions.forEach((action: string) => onAction(action));
         }
@@ -91,11 +90,11 @@ export default function TravelerGuide({ isOpen, onClose, onAction }: TravelerGui
             {/* Header - Dark Style */}
             <div className="p-6 bg-[#141414] text-white flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-[#00af87] flex items-center justify-center shadow-lg">
-                   <Bot className="w-5 h-5 text-white" />
+                <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center shadow-lg border border-white/20 overflow-hidden">
+                   <img src="https://ais-pre-mmqor7qunwcb2mdgsi7wcu-75557326522.asia-southeast1.run.app/api/artifacts/4f3f0196-1875-4c0d-b4db-5452d3c90772" alt="Bot" className="w-full h-full object-cover" />
                 </div>
                 <div>
-                  <h2 className="font-serif italic text-xl tracking-tight leading-none">Travel Guide</h2>
+                  <h2 className="font-serif italic text-xl tracking-tight leading-none">Self Assist</h2>
                   <div className="flex items-center gap-1.5 mt-1">
                     <span className="w-1.5 h-1.5 bg-[#00af87] rounded-full animate-pulse" />
                     <p className="text-[8px] uppercase tracking-[0.2em] font-black opacity-50">AI Assistant</p>
@@ -124,33 +123,14 @@ export default function TravelerGuide({ isOpen, onClose, onAction }: TravelerGui
                 >
                   <div className={`flex gap-2 max-w-[85%] ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
                     {msg.role === 'assistant' && (
-                      <div className="w-7 h-7 rounded-full bg-[#00af87] flex-shrink-0 flex items-center justify-center">
-                        <Bot className="w-4 h-4 text-white" />
+                      <div className="w-7 h-7 rounded-full bg-white flex-shrink-0 flex items-center justify-center overflow-hidden shadow-sm border border-[#141414]/5">
+                        <img src="https://ais-pre-mmqor7qunwcb2mdgsi7wcu-75557326522.asia-southeast1.run.app/api/artifacts/4f3f0196-1875-4c0d-b4db-5452d3c90772" alt="Bot" className="w-full h-full object-cover" />
                       </div>
                     )}
-                    <div className="space-y-3">
-                      <div className={`p-4 rounded-[20px] text-sm leading-relaxed shadow-sm ${msg.role === 'user' ? 'bg-[#141414] text-white rounded-tr-none' : 'bg-white text-[#141414] rounded-tl-none border border-[#141414]/5'}`}>
-                        <div className="prose prose-xs prose-stone max-w-none">
-                          <ReactMarkdown>{msg.text}</ReactMarkdown>
-                        </div>
+                    <div className={`p-4 rounded-[20px] text-sm leading-relaxed shadow-sm ${msg.role === 'user' ? 'bg-[#141414] text-white rounded-tr-none' : 'bg-white text-[#141414] rounded-tl-none border border-[#141414]/5'}`}>
+                      <div className="prose prose-xs prose-stone max-w-none">
+                        <ReactMarkdown>{msg.text}</ReactMarkdown>
                       </div>
-                      
-                      {msg.links && msg.links.length > 0 && (
-                        <div className="flex flex-wrap gap-2">
-                          {msg.links.map((link, li) => (
-                            <a 
-                              key={li}
-                              href={link.uri}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center gap-2 px-3 py-1.5 bg-white border border-[#141414]/5 rounded-full text-[9px] font-bold uppercase tracking-widest hover:bg-[#141414] hover:text-white transition-all shadow-sm"
-                            >
-                              <ExternalLink className="w-3 h-3" />
-                              Source
-                            </a>
-                          ))}
-                        </div>
-                      )}
                     </div>
                   </div>
                 </motion.div>

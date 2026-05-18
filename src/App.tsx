@@ -7,7 +7,7 @@ import { useState, useEffect } from 'react';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { auth, signInWithGoogle, logout } from './lib/firebase.ts';
 import { motion, AnimatePresence } from 'motion/react';
-import { MapPin, Plus, Compass, LogOut, ChevronLeft, Search, Map as MapIcon, LayoutGrid, Menu, X, ChevronRight, Globe, Share2, Link, Heart, Calendar, Bookmark, Trash2 } from 'lucide-react';
+import { MapPin, Plus, Compass, LogOut, ChevronLeft, Search, Map as MapIcon, LayoutGrid, Menu, X, ChevronRight, Globe, Share2, Link, Heart, Calendar, Bookmark, Trash2, Bot } from 'lucide-react';
 import Header from './components/Header.tsx';
 import SidebarNav from './components/SidebarNav.tsx';
 import LocationList from './components/LocationList.tsx';
@@ -18,8 +18,9 @@ import SplashLoader from './components/SplashLoader.tsx';
 import DiscoveryHero from './components/DiscoveryHero.tsx';
 import PlaceDetailsModal from './components/PlaceDetailsModal.tsx';
 import InteractiveBackground from './components/InteractiveBackground.tsx';
-import TravelerGuide from './components/TravelerGuide.tsx';
 import UserProfileModal from './components/UserProfileModal.tsx';
+import TravelerGuide from './components/TravelerGuide.tsx';
+import SelfAssistBot from './components/SelfAssistBot.tsx';
 
 export type Continent = "Africa" | "Asia" | "Europe" | "North America" | "South America" | "Oceania" | "Antarctica";
 
@@ -71,6 +72,8 @@ export default function App() {
   const [selectedState, setSelectedState] = useState<string | null>(null);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [isSelfAssistOpen, setIsSelfAssistOpen] = useState(false);
+  const [isTravelerGuideOpen, setIsTravelerGuideOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [viewMode, setViewMode] = useState<'list' | 'map'>('list');
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -174,6 +177,24 @@ export default function App() {
     // Close sidebar on mobile after selection
     if (window.innerWidth < 768) {
       setIsSidebarOpen(false);
+    }
+  };
+
+  const handleAssistantAction = (action: string) => {
+    switch (action) {
+      case 'open_add_location':
+        user ? setIsAddModalOpen(true) : signInWithGoogle();
+        break;
+      case 'open_search':
+        const searchInput = document.querySelector('header input') as HTMLInputElement;
+        if (searchInput) searchInput.focus();
+        break;
+      case 'view_favorites':
+        handleSelection(null, null, null, true);
+        break;
+      case 'view_world':
+        handleSelection(null, null, null);
+        break;
     }
   };
 
@@ -586,7 +607,42 @@ export default function App() {
         </aside>
 
         {/* Main Dynamic Content Area */}
-        <main className="flex-1 px-6 md:px-16 py-12">
+        <main className="flex-1 px-6 md:px-16 py-12 pb-32">
+          {/* Self Assist Bot - Interactive Bar */}
+          <motion.div 
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            onClick={() => setIsSelfAssistOpen(true)}
+            className="w-full bg-red-500 h-12 md:h-16 mb-12 rounded-[20px] flex items-center justify-center cursor-pointer hover:bg-red-600 transition-all group relative overflow-hidden shadow-xl shadow-red-500/20"
+          >
+            <div className="absolute inset-0 border-2 border-white/30 m-1.5 rounded-[14px] pointer-events-none" />
+            <div className="flex items-center gap-3 text-white font-black uppercase tracking-[0.2em] text-[9px] md:text-[11px] relative z-10">
+              <div className="w-10 h-10 rounded-xl overflow-hidden border-2 border-white/20 bg-white shadow-lg p-0.5">
+                <img src="https://ais-pre-mmqor7qunwcb2mdgsi7wcu-75557326522.asia-southeast1.run.app/api/artifacts/4f3f0196-1875-4c0d-b4db-5452d3c90772" alt="Bot" className="w-full h-full object-cover" />
+              </div>
+              <span className="group-hover:scale-105 transition-transform">Access Self Assist Bot</span>
+              <div className="w-2 h-2 bg-white/40 rounded-full animate-pulse ml-2" />
+            </div>
+          </motion.div>
+
+          {/* Floating Action Button for Traveler Guide Bot */}
+          <div className="fixed bottom-6 right-6 z-[100]">
+            <button 
+              onClick={() => setIsTravelerGuideOpen(true)}
+              className="group relative flex items-center justify-center w-14 h-14 bg-[#141414] rounded-full shadow-2xl hover:scale-110 active:scale-95 transition-all border border-white/10"
+              title="Traveler Guide Bot"
+            >
+              <Bot className="w-6 h-6 text-white" />
+              <motion.div 
+                animate={{ scale: [1, 1.2, 1] }}
+                transition={{ duration: 2, repeat: Infinity }}
+                className="absolute -top-1 -right-1 w-4 h-4 bg-[#00af87] rounded-full border-2 border-white flex items-center justify-center"
+              >
+                <div className="w-1 h-1 bg-white rounded-full" />
+              </motion.div>
+            </button>
+          </div>
+
           <AnimatePresence mode="wait">
             <motion.div
               key={`${selectedContinent}-${selectedCountry}-${selectedState}-${viewMode}-${showFavoritesOnly}-${showTourOnly}-${showArchiveOnly}-${showTrashOnly}`}
@@ -618,8 +674,6 @@ export default function App() {
       </footer>
 
 
-      <TravelerGuide />
-      
       <PlaceDetailsModal 
         isOpen={!!selectedPlace || !!selectedLocationData}
         placeName={selectedPlace || selectedLocationData?.name || ""}
@@ -641,6 +695,16 @@ export default function App() {
         isOpen={isProfileOpen} 
         onClose={() => setIsProfileOpen(false)} 
         user={user} 
+      />
+      <SelfAssistBot 
+        isOpen={isSelfAssistOpen} 
+        onClose={() => setIsSelfAssistOpen(false)} 
+        onAction={handleAssistantAction}
+      />
+      <TravelerGuide 
+        isOpen={isTravelerGuideOpen} 
+        onClose={() => setIsTravelerGuideOpen(false)} 
+        onAction={handleAssistantAction}
       />
     </div>
   );

@@ -12,12 +12,19 @@ let db: any = null;
 function getDb() {
   if (!db) {
     try {
-      const appAdmin = getApps().length === 0 
-        ? initializeApp({ projectId: firebaseConfig.projectId })
-        : getApp();
+      // Primary: Use zero-config initialization which is best for Cloud Run environment
+      const appAdmin = getApps().length === 0 ? initializeApp() : getApp();
       db = getFirestore(appAdmin, firebaseConfig.firestoreDatabaseId);
     } catch (error) {
-      console.error("Firebase Admin initialization failed:", error);
+      console.warn("Zero-config Firebase initialization failed, trying with explicit projectId:", error);
+      try {
+        const appAdmin = getApps().length === 0 
+          ? initializeApp({ projectId: firebaseConfig.projectId })
+          : getApp();
+        db = getFirestore(appAdmin, firebaseConfig.firestoreDatabaseId);
+      } catch (innerError) {
+        console.error("Firebase Admin initialization totally failed:", innerError);
+      }
     }
   }
   return db;
@@ -26,11 +33,12 @@ function getDb() {
 async function seedDatabase() {
   const firestore = getDb();
   if (!firestore) {
-    console.error("Cannot seed: Firestore not initialized");
+    console.warn("Skipping seed: Firestore not initialized");
     return;
   }
 
   try {
+    console.log(`Starting database seed for project: ${firebaseConfig.projectId}, database: ${firebaseConfig.firestoreDatabaseId}`);
     const seeds = [
       {
         id: 'taj-mahal',
@@ -120,9 +128,11 @@ async function startServer() {
         return res.status(500).json({ error: "Gemini API key is missing on the server." });
       }
 
-      const { message, history } = req.body;
+      const { message, history, botType } = req.body;
       const firestore = getDb();
       
+      const isSelfAssist = botType === 'self-assist';
+
       const tools = [
         { googleSearch: {} },
         {
@@ -171,6 +181,21 @@ async function startServer() {
                 },
                 required: ["locationId"]
               }
+            },
+            {
+              name: "trigger_ui_action",
+              description: "Trigger specific UI components or actions in the web application interface.",
+              parameters: {
+                type: "OBJECT",
+                properties: {
+                  action: { 
+                    type: "STRING", 
+                    enum: ["open_add_location", "open_search", "view_favorites", "view_world"],
+                    description: "The specific UI component or view to open for the user."
+                  }
+                },
+                required: ["action"]
+              }
             }
           ]
         }
@@ -182,23 +207,47 @@ async function startServer() {
         { role: 'user', parts: [{ text: message }] }
       ];
 
+      const privacyConstraint = "PRIVACY & SECURITY: Strictly no handling of credentials, passwords, or encrypted information. Maintain absolute user privacy. No profile-related work or personal data management.";
+
+      const systemInstructions = isSelfAssist 
+        ? `You are 'Self Assist Bot', the intelligent interface guide for World Explorer.
+           Key Features & Duties:
+           1. INTERACTIVE HELP: Explain how to use the app in a conversational way. 
+           2. UI ACTIONS: Use 'trigger_ui_action' to assist users with app features. If they ask "How do I add a place?", trigger 'open_add_location' while explaining the steps.
+           3. REAL-TIME FACT CHECKING: Use 'googleSearch' grounding to answer travel-related questions or fact-check destinations in real-time.
+           4. MULTI-TOOL LOGIC: You can check local records via 'search_locations' or the web via search to provide comprehensive help.
+           
+           Limitations:
+           - You are ONLY for help with this application and travel places.
+           - ${privacyConstraint}
+           
+           Tone: Extremely helpful, instructional, and 'Powered by Gemini and Google Search'.`
+        : `You are 'Traveler Guide', the ultimate AI research assistant for travel destinations.
+           Key Features & Duties:
+           1. DETAILED PLACE ANALYSIS: Provide in-depth information and analysis about travel destinations ONLY. Your expertise is strictly limited to places.
+           2. REAL-TIME RESEARCH & FACT CHECKING: Use 'googleSearch' grounding for absolute accuracy on destination details, current events, and travel tips.
+           3. MULTI-TOOL DESTINATION ANALYSIS: Combine 'search_locations' (local archive), 'get_location_reviews' (community sentiment), and 'googleSearch' (web facts).
+           4. COMMUNITY ADVOCATE: Encourage users to use 'add_location' for new discoveries based on your research.
+           
+           Limitations:
+           - You are ONLY for detailed information analysis of PLACES.
+           - ${privacyConstraint}
+           
+           Tone: Sophisticated, deeply knowledgeable, authoritative on places. 'Powered by Gemini and Google Search'.`;
+
       let response = await ai.models.generateContent({
         model: "gemini-3-flash-preview",
         contents,
         config: {
           tools: tools as any,
           toolConfig: { includeServerSideToolInvocations: true } as any,
-          systemInstruction: `You are 'Traveler Guide', a sophisticated AI curator.
-          Workflow:
-          1. Always use 'search_locations' (local) and 'googleSearch' (web) for place queries.
-          2. Use 'get_location_reviews' to gauge community sentiment.
-          3. If missing locally, mention it's a hidden gem, provide research-based info, and offer to 'add_location'.
-          4. Use 'add_location' for new valid discoveries with rich details.
-          5. Tone: Sophisticated, curious, 'Powered by Gemini'.`
+          systemInstruction: systemInstructions
         } as any
       } as any);
 
       let iterations = 0;
+      const triggeredActions: string[] = [];
+      
       while (response.functionCalls && iterations < 5) {
         iterations++;
         const toolResults: any[] = [];
@@ -210,7 +259,17 @@ async function startServer() {
 
         for (const call of response.functionCalls) {
           try {
-            if (call.name === "search_locations") {
+            if (call.name === "trigger_ui_action") {
+              const { action } = call.args as any;
+              triggeredActions.push(action);
+              toolResults.push({
+                functionResponse: {
+                  name: call.name,
+                  response: { success: true, note: `UI action '${action}' triggered.` },
+                  id: call.id
+                }
+              });
+            } else if (call.name === "search_locations") {
               const firestore = getDb();
               if (!firestore) {
                 console.warn("Firestore not available for search_locations");
@@ -324,7 +383,8 @@ async function startServer() {
 
       res.json({ 
         text: response.text,
-        links: groundingLinks
+        links: groundingLinks,
+        actions: triggeredActions
       });
     } catch (error: any) {
       console.error("Gemini Error:", error);

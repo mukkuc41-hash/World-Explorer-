@@ -1,6 +1,6 @@
 import { User } from 'firebase/auth';
 import { signInWithGoogle, logout } from '../lib/firebase.ts';
-import { LogIn, LogOut, Compass, Search } from 'lucide-react';
+import { LogIn, LogOut, Compass, Search, HelpCircle } from 'lucide-react';
 import { motion } from 'motion/react';
 
 interface HeaderProps {
@@ -10,7 +10,12 @@ interface HeaderProps {
   onProfileClick: () => void;
 }
 
-export default function Header({ user, searchQuery, onSearchChange, onProfileClick }: HeaderProps) {
+export default function Header({ 
+  user, 
+  searchQuery, 
+  onSearchChange, 
+  onProfileClick 
+}: HeaderProps) {
   return (
     <header className="px-6 py-6 border-b border-[#141414]/10 sticky top-0 bg-[#f5f5f0]/80 backdrop-blur-md z-50">
       <div className="max-w-7xl mx-auto flex justify-between items-center gap-4">
@@ -35,12 +40,12 @@ export default function Header({ user, searchQuery, onSearchChange, onProfileCli
           />
         </div>
 
-        <div className="flex items-center gap-6 shrink-0">
+        <div className="flex items-center gap-4 shrink-0">
           {user ? (
             <div className="flex items-center gap-4">
-              <div className="hidden md:flex flex-col items-end">
-                <span className="text-xs uppercase tracking-widest opacity-40 font-bold">Authenticated</span>
-                <span className="text-sm font-medium">{user.displayName}</span>
+              <div className="hidden lg:flex flex-col items-end">
+                <span className="text-[10px] uppercase tracking-widest opacity-40 font-black">Logged In</span>
+                <span className="text-sm font-serif italic">{user.displayName}</span>
               </div>
               <img 
                 src={user.photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.uid}`} 
@@ -62,7 +67,7 @@ export default function Header({ user, searchQuery, onSearchChange, onProfileCli
               onClick={signInWithGoogle}
               className="flex items-center gap-2 px-6 py-2 rounded-full border border-[#141414]/20 hover:border-[#141414] hover:bg-[#141414] hover:text-white transition-all text-sm uppercase tracking-widest font-bold"
             >
-              <LogIn className="w-4 h-4" /> Sign In with Google
+              <LogIn className="w-4 h-4" /> Sign In
             </button>
           )}
         </div>
