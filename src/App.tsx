@@ -7,16 +7,19 @@ import { useState, useEffect } from 'react';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { auth, signInWithGoogle, logout } from './lib/firebase.ts';
 import { motion, AnimatePresence } from 'motion/react';
-import { MapPin, Plus, Compass, LogOut, ChevronLeft, Search, Map as MapIcon, LayoutGrid, Menu, X, ChevronRight, Globe, Share2, Link } from 'lucide-react';
+import { MapPin, Plus, Compass, LogOut, ChevronLeft, Search, Map as MapIcon, LayoutGrid, Menu, X, ChevronRight, Globe, Share2, Link, Heart, Calendar, Bookmark, Trash2 } from 'lucide-react';
 import Header from './components/Header.tsx';
 import SidebarNav from './components/SidebarNav.tsx';
 import LocationList from './components/LocationList.tsx';
 import AddLocationModal from './components/AddLocationModal.tsx';
 import WorldView from './components/WorldView.tsx';
 import GoogleMapsSplash from './components/GoogleMapsSplash.tsx';
+import SplashLoader from './components/SplashLoader.tsx';
 import DiscoveryHero from './components/DiscoveryHero.tsx';
 import PlaceDetailsModal from './components/PlaceDetailsModal.tsx';
 import InteractiveBackground from './components/InteractiveBackground.tsx';
+import TravelerGuide from './components/TravelerGuide.tsx';
+import UserProfileModal from './components/UserProfileModal.tsx';
 
 export type Continent = "Africa" | "Asia" | "Europe" | "North America" | "South America" | "Oceania" | "Antarctica";
 
@@ -67,6 +70,7 @@ export default function App() {
   const [selectedCountry, setSelectedCountry] = useState<string | null>(null);
   const [selectedState, setSelectedState] = useState<string | null>(null);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [viewMode, setViewMode] = useState<'list' | 'map'>('list');
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -82,11 +86,18 @@ export default function App() {
   const [loadingDetails, setLoadingDetails] = useState(false);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      setUser(user);
+    const minLoadTime = new Promise(resolve => setTimeout(resolve, 2000));
+    const authPromise = new Promise(resolve => {
+      const unsubscribe = onAuthStateChanged(auth, (user) => {
+        setUser(user);
+        resolve(null);
+        unsubscribe();
+      });
+    });
+
+    Promise.all([minLoadTime, authPromise]).then(() => {
       setIsLoading(false);
     });
-    return () => unsubscribe();
   }, []);
 
   const handleSuggestionClick = async (placeName: string, initialImage?: string) => {
@@ -106,17 +117,31 @@ export default function App() {
         body: JSON.stringify({ place: placeName }),
       });
 
-      if (!response.ok) throw new Error('Failed to generate');
+      const contentType = response.headers.get("content-type");
+      if (contentType && contentType.includes("application/json")) {
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.error || 'Failed to generate');
+        }
 
-      const data = await response.json();
-      const keywords = encodeURIComponent(data.imageKeywords || placeName);
-      
+        const keywords = encodeURIComponent(data.imageKeywords || placeName);
+        setPlaceDetails({
+          description: data.description,
+          imageUrl: initialImage || `https://images.unsplash.com/photo-1548013146-72479768b0fd?auto=format&fit=crop&q=80&w=800&keywords=${keywords}`
+        });
+      } else {
+        throw new Error("Unexpected server response");
+      }
+    } catch (error: any) {
+      console.error("Detail generation error:", error);
+      let errorMessage = "The Traveler Guide is currently overwhelmed with requests. Please try again in a moment.";
+      if (error.name === 'TypeError' && error.message === 'Failed to fetch') {
+        errorMessage = "Unable to connect to the guide server. Please verify your connection.";
+      }
       setPlaceDetails({
-        description: data.description,
-        imageUrl: initialImage || `https://images.unsplash.com/photo-1548013146-72479768b0fd?auto=format&fit=crop&q=80&w=800&keywords=${keywords}`
+        description: errorMessage,
+        imageUrl: initialImage || "https://images.unsplash.com/photo-1548013146-72479768b0fd?auto=format&fit=crop&q=80&w=800"
       });
-    } catch (error) {
-      console.error(error);
     } finally {
       setLoadingDetails(false);
     }
@@ -153,16 +178,7 @@ export default function App() {
   };
 
   if (isLoading) {
-    return (
-      <div className="min-h-screen bg-[#f5f5f0] flex items-center justify-center">
-        <motion.div
-          animate={{ scale: [1, 1.2, 1] }}
-          transition={{ repeat: Infinity, duration: 1.5 }}
-        >
-          <Compass className="w-12 h-12 text-[#5A5A40]" />
-        </motion.div>
-      </div>
-    );
+    return <SplashLoader />;
   }
 
   const renderActiveContent = () => {
@@ -266,10 +282,24 @@ export default function App() {
       return (
         <div className="space-y-12">
           <div className="max-w-3xl">
-            <h1 className="font-serif italic text-6xl md:text-9xl mb-6 tracking-tighter leading-[0.8]">
+            <h1 className="font-serif italic text-6xl md:text-9xl tracking-tighter leading-[0.8] mb-8">
               World <br /> <span className="text-[#5A5A40]">Explorer</span>
             </h1>
-            <p className="text-xl opacity-60 leading-relaxed">
+            
+            <div className="mb-8 flex items-center gap-4">
+               <motion.img 
+                 initial={{ opacity: 0, scale: 0.8 }}
+                 animate={{ opacity: 1, scale: 1 }}
+                 transition={{ delay: 0.3 }}
+                 src="https://flagcdn.com/in.svg" 
+                 alt="India Flag" 
+                 className="w-20 md:w-32 h-auto rounded-xl shadow-2xl border border-[#141414]/5 transition-all hover:scale-110 active:scale-95 cursor-pointer" 
+               />
+               <div className="h-12 w-[1px] bg-[#141414]/10" />
+               <div className="text-[10px] uppercase tracking-[0.2em] font-black opacity-20">Verified Archive</div>
+            </div>
+
+            <p className="text-xl md:text-2xl opacity-60 leading-relaxed font-light">
               A collaborative archive of earth's most remarkable places. Use the mini menu to navigate continents, countries, and regional gems.
             </p>
           </div>
@@ -349,21 +379,49 @@ export default function App() {
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                     {[
-                      { title: "Taj Mahal, Agra", type: "Heritage", img: "/images/taj_mahal.png" },
-                      { title: "Hawa Mahal, Jaipur", type: "Heritage", img: "/images/hawa_mahal.png" },
-                      { title: "Varanasi Ghats", type: "Spiritual", img: "/images/varanasi.png" },
-                      { title: "Kerala Backwaters", type: "Nature", img: "/images/kerala.png" }
+                      { 
+                        title: "Taj Mahal, Agra", 
+                        type: "Heritage", 
+                        img: "/images/taj_mahal.png" 
+                      },
+                      { 
+                        title: "Hawa Mahal, Jaipur", 
+                        type: "Heritage", 
+                        img: "/images/hawa_mahal.png" 
+                      },
+                      { 
+                        title: "Varanasi Ghats", 
+                        type: "Spiritual", 
+                        img: "/images/varanasi.png" 
+                      },
+                      { 
+                        title: "Kerala Backwaters", 
+                        type: "Nature", 
+                        img: "/images/kerala.png" 
+                      }
                     ].map((item, i) => (
                       <motion.div 
                         key={i} 
+                        initial={{ opacity: 0, scale: 0.9 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        transition={{ delay: 0.5 + (i * 0.1) }}
                         onClick={() => handleSuggestionClick(item.title, item.img)}
                         className="group cursor-pointer active:scale-95 transition-all"
                       >
-                        <div className="relative h-48 rounded-[32px] overflow-hidden mb-4 shadow-sm group-hover:shadow-lg transition-all">
-                          <img src={item.img} className="w-full h-full object-cover transition-transform group-hover:scale-110" />
-                          <div className="absolute top-4 left-4 bg-white/90 backdrop-blur-sm px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest">{item.type}</div>
+                        <div className="relative h-64 rounded-[40px] overflow-hidden mb-6 shadow-sm group-hover:shadow-2xl group-hover:-translate-y-2 transition-all duration-500">
+                          <img 
+                            src={item.img} 
+                            alt={item.title}
+                            className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-110" 
+                          />
+                          <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                          <div className="absolute bottom-6 left-6 right-6 translate-y-4 group-hover:translate-y-0 opacity-0 group-hover:opacity-100 transition-all duration-500">
+                             <span className="text-[8px] font-black uppercase tracking-[0.2em] text-[#00af87] mb-1 block">Live Prediction</span>
+                             <div className="text-white font-serif italic text-lg">Detailed analysis available</div>
+                          </div>
+                          <div className="absolute top-6 left-6 bg-white/90 backdrop-blur-md px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-[0.2em] shadow-sm">{item.type}</div>
                         </div>
-                        <h4 className="font-serif italic text-xl group-hover:text-[#00af87] transition-colors">{item.title}</h4>
+                        <h4 className="font-serif italic text-2xl group-hover:text-[#00af87] transition-colors leading-tight">{item.title}</h4>
                       </motion.div>
                     ))}
                   </div>
@@ -471,7 +529,12 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[#f5f5f0] font-sans text-[#141414]">
-      <Header user={user} searchQuery={searchQuery} onSearchChange={setSearchQuery} />
+      <Header 
+        user={user} 
+        searchQuery={searchQuery} 
+        onSearchChange={setSearchQuery} 
+        onProfileClick={() => setIsProfileOpen(true)}
+      />
       
       <div className="max-w-[1600px] mx-auto flex flex-col md:flex-row min-h-[calc(100-80px)]">
         {/* Mobile Nav Toggle */}
@@ -481,9 +544,26 @@ export default function App() {
              className="flex items-center gap-2 text-xs uppercase tracking-widest font-bold opacity-60"
            >
              {isSidebarOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
-             {isSidebarOpen ? 'Close Menu' : "Discover Menu"}
+             {isSidebarOpen ? 'Close' : "Menu"}
            </button>
-           <div className="text-[10px] uppercase font-black tracking-widest opacity-20">Navigation</div>
+           
+           <div className="flex items-center gap-3">
+             <button onClick={() => handleSelection(null, null, null)} className={`p-2 rounded-lg ${!selectedContinent && !showTourOnly && !showArchiveOnly && !showFavoritesOnly && !showTrashOnly ? 'bg-[#5A5A40] text-white' : 'text-[#141414]/40'}`}>
+               <Globe className="w-4 h-4" />
+             </button>
+             <button onClick={() => handleSelection(null, null, null, false, true)} className={`p-2 rounded-lg ${showTourOnly ? 'bg-[#00af87] text-white' : 'text-[#141414]/40'}`}>
+               <Calendar className="w-4 h-4" />
+             </button>
+             <button onClick={() => handleSelection(null, null, null, false, false, true)} className={`p-2 rounded-lg ${showArchiveOnly ? 'bg-[#141414] text-white' : 'text-[#141414]/40'}`}>
+               <Bookmark className="w-4 h-4" />
+             </button>
+             <button onClick={() => handleSelection(null, null, null, true)} className={`p-2 rounded-lg ${showFavoritesOnly ? 'bg-[#5A5A40] text-white' : 'text-[#141414]/40'}`}>
+               <Heart className={`w-4 h-4 ${showFavoritesOnly ? 'fill-current' : ''}`} />
+             </button>
+             <button onClick={() => handleSelection(null, null, null, false, false, false, true)} className={`p-2 rounded-lg ${showTrashOnly ? 'bg-red-500 text-white' : 'text-[#141414]/40'}`}>
+               <Trash2 className="w-4 h-4" />
+             </button>
+           </div>
         </div>
 
         {/* Unified Mini Menu Sidebar */}
@@ -538,6 +618,7 @@ export default function App() {
       </footer>
 
 
+      <TravelerGuide />
       
       <PlaceDetailsModal 
         isOpen={!!selectedPlace || !!selectedLocationData}
@@ -556,6 +637,11 @@ export default function App() {
         isDeleted={selectedLocationData?.isDeleted}
       />
       <InteractiveBackground />
+      <UserProfileModal 
+        isOpen={isProfileOpen} 
+        onClose={() => setIsProfileOpen(false)} 
+        user={user} 
+      />
     </div>
   );
 }

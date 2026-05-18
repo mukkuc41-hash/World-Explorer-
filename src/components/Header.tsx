@@ -7,9 +7,10 @@ interface HeaderProps {
   user: User | null;
   searchQuery: string;
   onSearchChange: (query: string) => void;
+  onProfileClick: () => void;
 }
 
-export default function Header({ user, searchQuery, onSearchChange }: HeaderProps) {
+export default function Header({ user, searchQuery, onSearchChange, onProfileClick }: HeaderProps) {
   return (
     <header className="px-6 py-6 border-b border-[#141414]/10 sticky top-0 bg-[#f5f5f0]/80 backdrop-blur-md z-50">
       <div className="max-w-7xl mx-auto flex justify-between items-center gap-4">
@@ -44,7 +45,8 @@ export default function Header({ user, searchQuery, onSearchChange }: HeaderProp
               <img 
                 src={user.photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.uid}`} 
                 alt={user.displayName || 'User'} 
-                className="w-10 h-10 rounded-full border border-[#141414]/10 shadow-sm"
+                onClick={onProfileClick}
+                className="w-10 h-10 rounded-full border border-[#141414]/10 shadow-sm cursor-pointer hover:border-[#141414] transition-all"
                 referrerPolicy="no-referrer"
               />
               <button 

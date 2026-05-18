@@ -4,31 +4,337 @@ import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
 import { initializeApp, getApps, getApp } from "firebase-admin/app";
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
-
-// Initialize Firebase Admin
 import firebaseConfig from "./firebase-applet-config.json";
 
-const appAdmin = getApps().length === 0 
-  ? initializeApp({ projectId: firebaseConfig.projectId })
-  : getApp();
+// Initialize Firebase Admin lazily and safely
+let db: any = null;
 
-const db = getFirestore(appAdmin, firebaseConfig.firestoreDatabaseId);
+function getDb() {
+  if (!db) {
+    try {
+      const appAdmin = getApps().length === 0 
+        ? initializeApp({ projectId: firebaseConfig.projectId })
+        : getApp();
+      db = getFirestore(appAdmin, firebaseConfig.firestoreDatabaseId);
+    } catch (error) {
+      console.error("Firebase Admin initialization failed:", error);
+    }
+  }
+  return db;
+}
+
+async function seedDatabase() {
+  const firestore = getDb();
+  if (!firestore) {
+    console.error("Cannot seed: Firestore not initialized");
+    return;
+  }
+
+  try {
+    const seeds = [
+      {
+        id: 'taj-mahal',
+        name: 'Taj Mahal',
+        description: 'An ivory-white marble mausoleum on the right bank of the river Yamuna in Agra, Uttar Pradesh, India. A symbol of eternal love and a UNESCO World Heritage site.',
+        continent: 'Asia',
+        country: 'India',
+        state: 'Uttar Pradesh',
+        imageUrl: 'https://images.unsplash.com/photo-1564507592333-c60657eea023?auto=format&fit=crop&q=80&w=1200',
+        userId: 'system',
+        userName: 'World Explorer',
+        isDeleted: false
+      },
+      {
+        id: 'hawa-mahal',
+        name: 'Hawa Mahal',
+        description: 'The "Palace of Winds" in Jaipur, built of red and pink sandstone. Its unique five-floor exterior is akin to a honeycomb with its 953 small windows called jharokhas.',
+        continent: 'Asia',
+        country: 'India',
+        state: 'Rajasthan',
+        imageUrl: 'https://images.unsplash.com/photo-1627891395562-f67fce533b66?auto=format&fit=crop&q=80&w=1200',
+        userId: 'system',
+        userName: 'World Explorer',
+        isDeleted: false
+      },
+      {
+        id: 'varanasi-ghats',
+        name: 'Varanasi Ghats',
+        description: 'The spiritual heart of India, where city life meets the sacred Ganges. These riverfront steps are used for everything from daily prayers to ancient ceremonies.',
+        continent: 'Asia',
+        country: 'India',
+        state: 'Uttar Pradesh',
+        imageUrl: 'https://images.unsplash.com/photo-1561361513-2d000a50f0dc?auto=format&fit=crop&q=80&w=1200',
+        userId: 'system',
+        userName: 'World Explorer',
+        isDeleted: false
+      },
+      {
+        id: 'kerala-backwaters',
+        name: 'Kerala Backwaters',
+        description: 'A labyrinthine network of lagoons, lakes, and canals lying parallel to the Arabian Sea coast. Famous for its serene beauty and iconic houseboats.',
+        continent: 'Asia',
+        country: 'India',
+        state: 'Kerala',
+        imageUrl: 'https://images.unsplash.com/photo-1602216056096-3b40cc0c9944?auto=format&fit=crop&q=80&w=1200',
+        userId: 'system',
+        userName: 'World Explorer',
+        isDeleted: false
+      }
+    ];
+
+    for (const seed of seeds) {
+      const docRef = firestore.collection('locations').doc(seed.id);
+      const doc = await docRef.get();
+      if (!doc.exists) {
+        await docRef.set({
+          ...seed,
+          createdAt: FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp()
+        });
+        console.log(`Seeded: ${seed.name}`);
+      }
+    }
+  } catch (error) {
+    console.error("Database seeding failed:", error);
+  }
+}
 
 async function startServer() {
   const app = express();
   const PORT = 3000;
 
+  // Start seeding in background - caught to prevent server crash
+  seedDatabase().catch(err => console.error("Background seeding error:", err));
+
   app.use(express.json());
 
-  // Use the modern SDK
   const ai = new GoogleGenAI({ 
-    apiKey: process.env.GEMINI_API_KEY || "",
+    apiKey: process.env.GEMINI_API_KEY,
     httpOptions: { headers: { 'User-Agent': 'aistudio-build' } }
   });
 
   // API routes
-  app.get("/api/health", (req, res) => {
-    res.json({ status: "ok" });
+  app.post("/api/chat", async (req, res) => {
+    try {
+      if (!process.env.GEMINI_API_KEY) {
+        return res.status(500).json({ error: "Gemini API key is missing on the server." });
+      }
+
+      const { message, history } = req.body;
+      const firestore = getDb();
+      
+      const tools = [
+        { googleSearch: {} },
+        {
+          functionDeclarations: [
+            {
+              name: "search_locations",
+              description: "Search for existing travel destinations in the World Explorer database by name or continent.",
+              parameters: {
+                type: "OBJECT",
+                properties: {
+                  query: { type: "STRING", description: "Search terms (name prefix) or specific keywords." },
+                  continent: { 
+                    type: "STRING", 
+                    enum: ["Africa", "Asia", "Europe", "North America", "South America", "Oceania", "Antarctica"],
+                    description: "Filter by continent if specified."
+                  }
+                }
+              }
+            },
+            {
+              name: "add_location",
+              description: "Add a new travel destination to the World Explorer community archive.",
+              parameters: {
+                type: "OBJECT",
+                properties: {
+                  name: { type: "STRING" },
+                  description: { type: "STRING" },
+                  continent: { 
+                    type: "STRING", 
+                    enum: ["Africa", "Asia", "Europe", "North America", "South America", "Oceania", "Antarctica"]
+                  },
+                  country: { type: "STRING" },
+                  state: { type: "STRING" },
+                  imageUrl: { type: "STRING", description: "Optional image URL." }
+                },
+                required: ["name", "description", "continent"]
+              }
+            },
+            {
+              name: "get_location_reviews",
+              description: "Fetch community reviews and insights for a specific location to analyze feedback.",
+              parameters: {
+                type: "OBJECT",
+                properties: {
+                  locationId: { type: "STRING" }
+                },
+                required: ["locationId"]
+              }
+            }
+          ]
+        }
+      ];
+
+      // Build contents for generateContent
+      const contents = [
+        ...(history || []),
+        { role: 'user', parts: [{ text: message }] }
+      ];
+
+      let response = await ai.models.generateContent({
+        model: "gemini-3-flash-preview",
+        contents,
+        config: {
+          tools: tools as any,
+          toolConfig: { includeServerSideToolInvocations: true } as any,
+          systemInstruction: `You are 'Traveler Guide', a sophisticated AI curator.
+          Workflow:
+          1. Always use 'search_locations' (local) and 'googleSearch' (web) for place queries.
+          2. Use 'get_location_reviews' to gauge community sentiment.
+          3. If missing locally, mention it's a hidden gem, provide research-based info, and offer to 'add_location'.
+          4. Use 'add_location' for new valid discoveries with rich details.
+          5. Tone: Sophisticated, curious, 'Powered by Gemini'.`
+        } as any
+      } as any);
+
+      let iterations = 0;
+      while (response.functionCalls && iterations < 5) {
+        iterations++;
+        const toolResults: any[] = [];
+        const modelTurn = response.candidates?.[0]?.content;
+        
+        if (modelTurn) {
+          contents.push(modelTurn);
+        }
+
+        for (const call of response.functionCalls) {
+          try {
+            if (call.name === "search_locations") {
+              const firestore = getDb();
+              if (!firestore) {
+                console.warn("Firestore not available for search_locations");
+                toolResults.push({
+                  functionResponse: { name: call.name, response: { results: [], note: "Community database currently unavailable. Falling back to global knowledge." }, id: call.id }
+                });
+                continue;
+              }
+              const { query: searchQuery, continent } = call.args as any;
+              let q = firestore.collection("locations").where("isDeleted", "==", false);
+              
+              if (continent) {
+                q = q.where("continent", "==", continent);
+              }
+
+              if (searchQuery) {
+                // Prefix search works best with orderBy and startAt/endAt
+                q = q.orderBy("name").startAt(searchQuery).endAt(searchQuery + "\uf8ff");
+              } else {
+                q = q.orderBy("createdAt", "desc");
+              }
+
+              const snapshot = await q.limit(5).get();
+              const results = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+              
+              toolResults.push({
+                functionResponse: {
+                  name: call.name,
+                  response: { results },
+                  id: call.id
+                }
+              });
+            } else if (call.name === "get_location_reviews") {
+              const firestore = getDb();
+              if (!firestore) {
+                console.warn("Firestore not available for get_location_reviews");
+                toolResults.push({
+                  functionResponse: { name: call.name, response: { reviews: [], count: 0, note: "Reviews unavailable." }, id: call.id }
+                });
+                continue;
+              }
+              const { locationId } = call.args as any;
+              const snapshot = await firestore.collection("reviews")
+                .where("locationId", "==", locationId)
+                .orderBy("createdAt", "desc")
+                .limit(10)
+                .get();
+              
+              const reviews = snapshot.docs.map(doc => doc.data());
+              toolResults.push({
+                functionResponse: {
+                  name: call.name,
+                  response: { reviews, count: reviews.length },
+                  id: call.id
+                }
+              });
+            } else if (call.name === "add_location") {
+              const firestore = getDb();
+              if (!firestore) {
+                toolResults.push({
+                  functionResponse: { name: call.name, response: { error: "Database unavailable. Cannot add discovery at this time." }, id: call.id }
+                });
+                continue;
+              }
+              const args = call.args as any;
+              const locationData = {
+                name: args.name,
+                description: args.description,
+                continent: args.continent,
+                country: args.country || "",
+                state: args.state || "",
+                imageUrl: args.imageUrl || `https://images.unsplash.com/photo-1503220317375-aaad61436b1b?auto=format&fit=crop&q=80&w=800&keywords=${encodeURIComponent(args.name)}`,
+                userId: "traveler-guide-ai",
+                userName: "Traveler Guide",
+                createdAt: FieldValue.serverTimestamp(),
+                updatedAt: FieldValue.serverTimestamp(),
+                isDeleted: false
+              };
+              const docRef = await firestore.collection("locations").add(locationData);
+              toolResults.push({
+                functionResponse: {
+                  name: call.name,
+                  response: { success: true, id: docRef.id, name: args.name },
+                  id: call.id
+                }
+              });
+            }
+          } catch (err) {
+            toolResults.push({
+              functionResponse: { name: call.name, response: { error: "Action failed" }, id: call.id }
+            });
+          }
+        }
+
+        contents.push({ role: 'user', parts: toolResults });
+        
+        response = await ai.models.generateContent({
+          model: "gemini-3-flash-preview",
+          contents,
+          config: {
+            tools: tools as any,
+            toolConfig: { includeServerSideToolInvocations: true } as any
+          } as any
+        } as any);
+      }
+
+      const groundingLinks = response.candidates?.[0]?.groundingMetadata?.groundingChunks?.map(chunk => ({
+        title: chunk.web?.title || chunk.maps?.title || "Source",
+        uri: chunk.web?.uri || chunk.maps?.uri 
+      })).filter(link => link.uri) || [];
+
+      res.json({ 
+        text: response.text,
+        links: groundingLinks
+      });
+    } catch (error: any) {
+      console.error("Gemini Error:", error);
+      const isQuotaError = error.message?.includes("RESOURCE_EXHAUSTED") || error.status === 429;
+      res.status(isQuotaError ? 429 : 500).json({ 
+        error: isQuotaError 
+          ? "The traveler guide is resting! We've hit our Gemini API quota. Please try again in a few moments."
+          : error.message || "Failed to get response" 
+      });
+    }
   });
 
   app.post("/api/generate-details", async (req, res) => {
@@ -41,7 +347,10 @@ async function startServer() {
       let text = response.text.replace(/```json\n?/, '').replace(/```/, '').trim();
       res.json(JSON.parse(text));
     } catch (error: any) {
-      res.status(500).json({ error: "Failed to generate" });
+      const isQuotaError = error.message?.includes("RESOURCE_EXHAUSTED") || error.status === 429;
+      res.status(isQuotaError ? 429 : 500).json({ 
+        error: isQuotaError ? "Quota exhausted" : "Failed to generate" 
+      });
     }
   });
 

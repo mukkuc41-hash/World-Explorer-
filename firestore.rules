@@ -39,6 +39,17 @@ service cloud.firestore {
     }
 
     // --- Validation Helpers ---
+    function isValidUserProfile(data) {
+      return data.keys().hasAll(['email', 'updatedAt'])
+        && data.email is string && data.email.size() <= 256
+        && data.updatedAt == request.time
+        && (!data.keys().contains('firstName') || (data.firstName is string && data.firstName.size() <= 100))
+        && (!data.keys().contains('lastName') || (data.lastName is string && data.lastName.size() <= 100))
+        && (!data.keys().contains('username') || (data.username is string && data.username.size() <= 100))
+        && (!data.keys().contains('phoneNumber') || (data.phoneNumber is string && data.phoneNumber.size() <= 25))
+        && (!data.keys().contains('birthDate') || (data.birthDate is string && data.birthDate.size() <= 25))
+        && (!data.keys().contains('gender') || (data.gender is string && data.gender.size() <= 25));
+    }
     function isValidLocation(data) {
       return data.keys().hasAll(['name', 'description', 'imageUrl', 'continent', 'country', 'state', 'userId', 'userName', 'lat', 'lng', 'createdAt', 'updatedAt'])
         && data.keys().size() == 12
@@ -141,6 +152,12 @@ service cloud.firestore {
       
       allow delete: if isVerified()
         && (isOwner(existing().userId) || isAdmin());
+    }
+
+    // --- Collection: users ---
+    match /users/{userId} {
+      allow read: if isSignedIn() && request.auth.uid == userId;
+      allow write: if isVerified() && request.auth.uid == userId && isValidUserProfile(incoming());
     }
   }
 }

@@ -70,6 +70,22 @@
         "createdAt": { "type": "string", "format": "date-time", "description": "When it was archived." }
       },
       "required": ["userId", "locationId", "createdAt"]
+    },
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Information about a registered user.",
+      "type": "object",
+      "properties": {
+        "firstName": { "type": "string", "description": "User's first name." },
+        "lastName": { "type": "string", "description": "User's last name." },
+        "username": { "type": "string", "description": "User's unique username." },
+        "email": { "type": "string", "description": "User's email address." },
+        "phoneNumber": { "type": "string", "description": "User's phone number." },
+        "birthDate": { "type": "string", "description": "User's date of birth." },
+        "gender": { "type": "string", "description": "User's gender." },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "When the profile was last updated." }
+      },
+      "required": ["email", "updatedAt"]
     }
   },
   "firestore": {
@@ -92,6 +108,10 @@
     "archives": {
       "schema": "Archive",
       "description": "User-specific archived discoveries."
+    },
+    "users": {
+      "schema": "UserProfile",
+      "description": "Collection of user profile data."
     }
   }
 }
