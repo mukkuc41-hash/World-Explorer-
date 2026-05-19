@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Sparkles, MapPin, Loader2, Share2, Heart, Trash2, CalendarCheck, Calendar, Bookmark } from 'lucide-react';
+import { X, Sparkles, MapPin, Loader2, Share2, Heart, Trash2, CalendarCheck, Calendar, Bookmark, Volume2, CloudRain, Wind, Thermometer, Briefcase, ChevronRight } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { auth, db, handleFirestoreError, OperationType } from '../lib/firebase.ts';
 import { doc, updateDoc, deleteDoc, setDoc, query, collection, where, onSnapshot, serverTimestamp } from 'firebase/firestore';
@@ -29,6 +29,28 @@ export default function PlaceDetailsModal({ placeName, isOpen, onClose, details,
   const [planningInfo, setPlanningInfo] = useState<any>(null);
   const [isArchived, setIsArchived] = useState(false);
   const [archiveInfo, setArchiveInfo] = useState<any>(null);
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  const [showPackingList, setShowPackingList] = useState(false);
+
+  // Stop speech synthesis on close
+  useEffect(() => {
+    if (!isOpen) {
+      window.speechSynthesis.cancel();
+      setIsSpeaking(false);
+    }
+  }, [isOpen]);
+
+  const toggleSpeech = () => {
+    if (isSpeaking) {
+      window.speechSynthesis.cancel();
+      setIsSpeaking(false);
+    } else {
+      const utterance = new SpeechSynthesisUtterance(details?.description || "");
+      utterance.onend = () => setIsSpeaking(false);
+      window.speechSynthesis.speak(utterance);
+      setIsSpeaking(true);
+    }
+  };
 
   useEffect(() => {
     if (!locationId || !user) return;
@@ -204,6 +226,30 @@ export default function PlaceDetailsModal({ placeName, isOpen, onClose, details,
                   </button>
                </div>
 
+               <div className="flex items-center gap-6 mb-8">
+                  <div className="flex-1 flex items-center gap-4 bg-[#f8f8f5] p-4 rounded-2xl">
+                     <Thermometer className="w-5 h-5 text-[#f59e0b]" />
+                     <div className="flex flex-col">
+                        <span className="text-[8px] font-black uppercase tracking-[0.2em] opacity-30">Local Vibe</span>
+                        <span className="text-sm font-bold">24°C • Pleasant</span>
+                     </div>
+                  </div>
+                  <div className="flex-1 flex items-center gap-4 bg-[#f8f8f5] p-4 rounded-2xl">
+                     <CloudRain className="w-5 h-5 text-[#3b82f6]" />
+                     <div className="flex flex-col">
+                        <span className="text-[8px] font-black uppercase tracking-[0.2em] opacity-30">Sky</span>
+                        <span className="text-sm font-bold">Clear Skies</span>
+                     </div>
+                  </div>
+                  <button 
+                    onClick={toggleSpeech}
+                    className={`p-4 rounded-2xl transition-all flex flex-col items-center justify-center gap-1 min-w-[80px] ${isSpeaking ? 'bg-[#00af87] text-white shadow-lg' : 'bg-[#f8f8f5] text-[#141414]/60 hover:bg-[#141414] hover:text-white'}`}
+                  >
+                    <Volume2 className={`w-5 h-5 ${isSpeaking ? 'animate-pulse' : ''}`} />
+                    <span className="text-[8px] font-black uppercase tracking-widest">{isSpeaking ? 'Stop' : 'Audio'}</span>
+                  </button>
+               </div>
+
                <div className="flex-1">
                  {loading ? (
                    <div className="space-y-6">
@@ -224,6 +270,59 @@ export default function PlaceDetailsModal({ placeName, isOpen, onClose, details,
                          </ReactMarkdown>
                       </div>
                     </div>
+                    
+                    <button 
+                      onClick={() => setShowPackingList(!showPackingList)}
+                      className="mt-8 w-full flex items-center justify-between p-6 bg-[#141414] text-white rounded-3xl hover:scale-[1.02] active:scale-[0.98] transition-all group"
+                    >
+                      <div className="flex items-center gap-4">
+                        <div className="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center">
+                           <Briefcase className="w-5 h-5" />
+                        </div>
+                        <div className="text-left">
+                          <div className="text-[9px] font-black uppercase tracking-[0.2em] opacity-40">Journey Prep</div>
+                          <div className="font-serif italic text-xl">AI Packing Checklist</div>
+                        </div>
+                      </div>
+                      <ChevronRight className={`w-5 h-5 transition-transform ${showPackingList ? 'rotate-90' : ''}`} />
+                    </button>
+
+                    <AnimatePresence>
+                      {showPackingList && (
+                        <motion.div 
+                          initial={{ height: 0, opacity: 0 }}
+                          animate={{ height: 'auto', opacity: 1 }}
+                          exit={{ height: 0, opacity: 0 }}
+                          className="overflow-hidden"
+                        >
+                          <div className="p-8 bg-[#f8f8f5] rounded-3xl mt-4 grid grid-cols-2 gap-4">
+                             {[
+                               { item: "Sunscreen & Shades", reason: "Sunny exposure" },
+                               { item: "Comfortable Boots", reason: "Gravel trails" },
+                               { item: "External Battery", reason: "Long photo sessions" },
+                               { item: "Local Sim Card", reason: "Connectivity" },
+                               { item: "Rain Poncho", reason: "Passing clouds" },
+                               { item: "Heritage Map", reason: "Offline navigation" }
+                             ].map((thing, i) => (
+                               <motion.div 
+                                 key={i}
+                                 initial={{ opacity: 0, x: -10 }}
+                                 animate={{ opacity: 1, x: 0 }}
+                                 transition={{ delay: i * 0.05 }}
+                                 className="flex items-start gap-3 p-3 bg-white rounded-xl shadow-sm"
+                               >
+                                  <div className="w-2 h-2 rounded-full bg-[#00af87] mt-1.5" />
+                                  <div>
+                                    <div className="text-[11px] font-bold">{thing.item}</div>
+                                    <div className="text-[9px] opacity-40 uppercase tracking-widest">{thing.reason}</div>
+                                  </div>
+                                </motion.div>
+                             ))}
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+
                     {locationId && <ReviewSection locationId={locationId} />}
                    </>
                  ) : null}

@@ -90,8 +90,8 @@ export default function SelfAssistBot({ isOpen, onClose, onAction }: SelfAssistB
             {/* Header - Dark Style */}
             <div className="p-6 bg-[#141414] text-white flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center shadow-lg border border-white/20 overflow-hidden">
-                   <img src="https://ais-pre-mmqor7qunwcb2mdgsi7wcu-75557326522.asia-southeast1.run.app/api/artifacts/4f3f0196-1875-4c0d-b4db-5452d3c90772" alt="Bot" className="w-full h-full object-cover" />
+                <div className="w-10 h-10 rounded-full bg-blue-500 flex items-center justify-center shadow-lg border border-white/20 overflow-hidden">
+                   <Sparkles className="w-5 h-5 text-white" />
                 </div>
                 <div>
                   <h2 className="font-serif italic text-xl tracking-tight leading-none">Self Assist</h2>
@@ -123,8 +123,8 @@ export default function SelfAssistBot({ isOpen, onClose, onAction }: SelfAssistB
                 >
                   <div className={`flex gap-2 max-w-[85%] ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
                     {msg.role === 'assistant' && (
-                      <div className="w-7 h-7 rounded-full bg-white flex-shrink-0 flex items-center justify-center overflow-hidden shadow-sm border border-[#141414]/5">
-                        <img src="https://ais-pre-mmqor7qunwcb2mdgsi7wcu-75557326522.asia-southeast1.run.app/api/artifacts/4f3f0196-1875-4c0d-b4db-5452d3c90772" alt="Bot" className="w-full h-full object-cover" />
+                      <div className="w-7 h-7 rounded-full bg-blue-500 flex-shrink-0 flex items-center justify-center overflow-hidden shadow-sm">
+                        <Sparkles className="w-3 h-3 text-white" />
                       </div>
                     )}
                     <div className={`p-4 rounded-[20px] text-sm leading-relaxed shadow-sm ${msg.role === 'user' ? 'bg-[#141414] text-white rounded-tr-none' : 'bg-white text-[#141414] rounded-tl-none border border-[#141414]/5'}`}>

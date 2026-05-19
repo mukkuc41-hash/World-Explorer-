@@ -7,7 +7,7 @@ import { useState, useEffect } from 'react';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { auth, signInWithGoogle, logout } from './lib/firebase.ts';
 import { motion, AnimatePresence } from 'motion/react';
-import { MapPin, Plus, Compass, LogOut, ChevronLeft, Search, Map as MapIcon, LayoutGrid, Menu, X, ChevronRight, Globe, Share2, Link, Heart, Calendar, Bookmark, Trash2, Bot } from 'lucide-react';
+import { MapPin, Plus, Compass, LogOut, ChevronLeft, Search, Map as MapIcon, LayoutGrid, Menu, X, ChevronRight, Globe, Share2, Link, Heart, Calendar, Bookmark, Trash2, Bot, Sparkles, Trophy } from 'lucide-react';
 import Header from './components/Header.tsx';
 import SidebarNav from './components/SidebarNav.tsx';
 import LocationList from './components/LocationList.tsx';
@@ -21,6 +21,12 @@ import InteractiveBackground from './components/InteractiveBackground.tsx';
 import UserProfileModal from './components/UserProfileModal.tsx';
 import TravelerGuide from './components/TravelerGuide.tsx';
 import SelfAssistBot from './components/SelfAssistBot.tsx';
+import BadgesOverlay from './components/BadgesOverlay.tsx';
+import TermsModal from './components/TermsModal.tsx';
+import GlobalRotatingEarth from './components/GlobalRotatingEarth.tsx';
+import { db, handleFirestoreError, OperationType } from './lib/firebase.ts';
+import { collection, query, where, getDocs, onSnapshot } from 'firebase/firestore';
+import { LogIn } from 'lucide-react';
 
 export type Continent = "Africa" | "Asia" | "Europe" | "North America" | "South America" | "Oceania" | "Antarctica";
 
@@ -74,13 +80,21 @@ export default function App() {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isSelfAssistOpen, setIsSelfAssistOpen] = useState(false);
   const [isTravelerGuideOpen, setIsTravelerGuideOpen] = useState(false);
+  const [isBadgesOpen, setIsBadgesOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [stats, setStats] = useState({
+    saved: 0,
+    planned: 0,
+    archived: 0,
+    contributed: 0
+  });
   const [viewMode, setViewMode] = useState<'list' | 'map'>('list');
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
   const [showTourOnly, setShowTourOnly] = useState(false);
   const [showArchiveOnly, setShowArchiveOnly] = useState(false);
   const [showTrashOnly, setShowTrashOnly] = useState(false);
+  const [showUserWorldOnly, setShowUserWorldOnly] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
   const [selectedPlace, setSelectedPlace] = useState<string | null>(null);
@@ -88,20 +102,84 @@ export default function App() {
   const [placeDetails, setPlaceDetails] = useState<{ description: string; imageUrl: string } | null>(null);
   const [loadingDetails, setLoadingDetails] = useState(false);
 
+  const [isTermsAccepted, setIsTermsAccepted] = useState(() => localStorage.getItem('world_explorer_terms_accepted') === 'true');
+  const [flowStep, setFlowStep] = useState<'splash' | 'login' | 'terms' | 'app'>('splash');
+
   useEffect(() => {
-    const minLoadTime = new Promise(resolve => setTimeout(resolve, 2000));
-    const authPromise = new Promise(resolve => {
-      const unsubscribe = onAuthStateChanged(auth, (user) => {
-        setUser(user);
-        resolve(null);
-        unsubscribe();
+    if (!user) return;
+    
+    const collections = ['favorites', 'tours', 'archives', 'locations'];
+    const unsubscribes = collections.map(col => {
+      const q = query(collection(db, col), where('userId', '==', user.uid));
+      return onSnapshot(q, (snap) => {
+        setStats(prev => ({
+          ...prev,
+          [col === 'favorites' ? 'saved' : col === 'tours' ? 'planned' : col === 'archives' ? 'archived' : 'contributed']: snap.size
+        }));
       });
     });
 
-    Promise.all([minLoadTime, authPromise]).then(() => {
+    return () => unsubscribes.forEach(unsub => unsub());
+  }, [user]);
+
+  useEffect(() => {
+    // Initial splash duration
+    const splashTimer = setTimeout(() => {
       setIsLoading(false);
+    }, 3000);
+
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      setUser(currentUser);
+      if (!isLoading || flowStep !== 'splash') {
+        if (!currentUser) {
+          setFlowStep('login');
+        } else if (!isTermsAccepted) {
+          setFlowStep('terms');
+        } else {
+          setFlowStep('app');
+        }
+      }
     });
-  }, []);
+
+    return () => {
+      clearTimeout(splashTimer);
+      unsubscribe();
+    };
+  }, [isTermsAccepted, isLoading]);
+
+  // When loading finishes, if we are still in splash, trigger the next step
+  useEffect(() => {
+    if (!isLoading && flowStep === 'splash') {
+      if (!user) {
+        setFlowStep('login');
+      } else if (!isTermsAccepted) {
+        setFlowStep('terms');
+      } else {
+        setFlowStep('app');
+      }
+    }
+  }, [isLoading, user, isTermsAccepted, flowStep]);
+
+  const handleAcceptTerms = () => {
+    localStorage.setItem('world_explorer_terms_accepted', 'true');
+    setIsTermsAccepted(true);
+    setFlowStep('app');
+  };
+
+  const handleLogin = async () => {
+    try {
+      const resultUser = await signInWithGoogle();
+      if (resultUser) {
+        if (!isTermsAccepted) {
+          setFlowStep('terms');
+        } else {
+          setFlowStep('app');
+        }
+      }
+    } catch (error) {
+      console.error("Login failed:", error);
+    }
+  };
 
   const handleSuggestionClick = async (placeName: string, initialImage?: string) => {
     setSelectedPlace(placeName);
@@ -164,7 +242,7 @@ export default function App() {
     }
   };
 
-  const handleSelection = (continent: Continent | null, country: string | null, state: string | null, showFavorites: boolean = false, showTour: boolean = false, showArchive: boolean = false, showTrash: boolean = false) => {
+  const handleSelection = (continent: Continent | null, country: string | null, state: string | null, showFavorites: boolean = false, showTour: boolean = false, showArchive: boolean = false, showTrash: boolean = false, showUserWorld: boolean = false) => {
     setSelectedContinent(continent);
     setSelectedCountry(country);
     setSelectedState(state);
@@ -172,6 +250,7 @@ export default function App() {
     setShowTourOnly(showTour);
     setShowArchiveOnly(showArchive);
     setShowTrashOnly(showTrash);
+    setShowUserWorldOnly(showUserWorld);
     setSearchQuery(''); // Clear search when navigating categories
     
     // Close sidebar on mobile after selection
@@ -198,8 +277,55 @@ export default function App() {
     }
   };
 
-  if (isLoading) {
+  if (isLoading || flowStep === 'splash') {
     return <SplashLoader />;
+  }
+
+  if (flowStep === 'login') {
+    return (
+      <div className="min-h-screen bg-[#f5f5f0] flex flex-col items-center justify-center p-6 text-[#141414] relative overflow-hidden">
+        <GlobalRotatingEarth />
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="w-full max-w-md bg-white p-12 rounded-[48px] shadow-2xl space-y-10 text-center border border-[#141414]/5"
+        >
+          <div className="flex flex-col items-center gap-6">
+            <div className="w-20 h-20 bg-[#141414] rounded-[32px] flex items-center justify-center shadow-xl rotate-12 group-hover:rotate-0 transition-transform">
+              <Compass className="w-10 h-10 text-white" />
+            </div>
+            <div>
+              <h1 className="text-4xl font-serif italic tracking-tight">World Explorer</h1>
+              <p className="text-[10px] uppercase font-black tracking-[0.3em] opacity-30 mt-2">The Global Archive</p>
+            </div>
+          </div>
+
+          <p className="text-sm opacity-50 leading-relaxed max-w-[280px] mx-auto">
+            Link your Google account to join our collective of modern-day explorers and archive earth's architectural gems.
+          </p>
+
+          <button
+            onClick={handleLogin}
+            className="w-full bg-[#141414] text-white py-5 rounded-[24px] font-bold text-lg uppercase tracking-widest hover:bg-[#333] active:scale-[0.98] transition-all flex items-center justify-center gap-4 shadow-xl"
+          >
+            <LogIn className="w-6 h-6" /> Start Exploring
+          </button>
+
+          <div className="pt-6 flex flex-col items-center gap-4">
+             <div className="h-px w-12 bg-[#141414]/10" />
+             <div className="text-[9px] uppercase font-black tracking-widest opacity-20">Safe & Secure Authentication</div>
+          </div>
+        </motion.div>
+        
+        <div className="mt-12 opacity-30 uppercase tracking-[0.3em] font-black pointer-events-none select-none text-[8px] md:text-[10px] text-center">
+          &copy; 2026 World Explorer &bull; Discovery Engine v4.0
+        </div>
+      </div>
+    );
+  }
+
+  if (flowStep === 'terms') {
+    return <TermsModal onAccept={handleAcceptTerms} />;
   }
 
   const renderActiveContent = () => {
@@ -299,6 +425,30 @@ export default function App() {
       );
     }
 
+    if (showUserWorldOnly) {
+      return (
+        <div className="space-y-12">
+          <div className="max-w-3xl">
+            <h1 className="font-serif italic text-6xl md:text-9xl mb-6 tracking-tighter leading-[0.8]">
+              Community <br /> <span className="text-[#5A5A40]">Discoveries</span>
+            </h1>
+            <p className="text-xl opacity-60 leading-relaxed">
+               Explore the global archive of every fellow traveler. These are personal gems shared by the community, independent of AI recommendations.
+            </p>
+          </div>
+
+          <LocationList 
+            continent={null} 
+            country={null} 
+            state={null} 
+            showUserAddedOnly={true} 
+            searchQuery={searchQuery}
+            onSelect={setSelectedLocationData}
+          />
+        </div>
+      );
+    }
+
     if (!selectedContinent) {
       return (
         <div className="space-y-12">
@@ -352,7 +502,16 @@ export default function App() {
           <AnimatePresence mode="wait">
             {viewMode === 'map' && hasMapsKey ? (
               <motion.div key="global-map" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                <WorldView continent={null} country={null} state={null} searchQuery={searchQuery} onSelect={setSelectedLocationData} />
+                <WorldView 
+                  continent={null} 
+                  country={null} 
+                  state={null} 
+                  showFavoritesOnly={showFavoritesOnly}
+                  showTourOnly={showTourOnly}
+                  showUserAddedOnly={showUserWorldOnly}
+                  searchQuery={searchQuery} 
+                  onSelect={setSelectedLocationData} 
+                />
               </motion.div>
             ) : (
               <motion.div 
@@ -507,7 +666,16 @@ export default function App() {
         <AnimatePresence mode="wait">
           {viewMode === 'map' && hasMapsKey ? (
             <motion.div key="filtered-map" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-              <WorldView continent={selectedContinent} country={selectedCountry} state={selectedState} searchQuery={searchQuery} onSelect={setSelectedLocationData} />
+              <WorldView 
+                continent={selectedContinent} 
+                country={selectedCountry} 
+                state={selectedState} 
+                showFavoritesOnly={showFavoritesOnly}
+                showTourOnly={showTourOnly}
+                showUserAddedOnly={showUserWorldOnly}
+                searchQuery={searchQuery} 
+                onSelect={setSelectedLocationData} 
+              />
             </motion.div>
           ) : (
             <motion.div key="filtered-list" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
@@ -555,6 +723,7 @@ export default function App() {
         searchQuery={searchQuery} 
         onSearchChange={setSearchQuery} 
         onProfileClick={() => setIsProfileOpen(true)}
+        onBadgesClick={() => setIsBadgesOpen(true)}
       />
       
       <div className="max-w-[1600px] mx-auto flex flex-col md:flex-row min-h-[calc(100-80px)]">
@@ -569,8 +738,18 @@ export default function App() {
            </button>
            
            <div className="flex items-center gap-3">
-             <button onClick={() => handleSelection(null, null, null)} className={`p-2 rounded-lg ${!selectedContinent && !showTourOnly && !showArchiveOnly && !showFavoritesOnly && !showTrashOnly ? 'bg-[#5A5A40] text-white' : 'text-[#141414]/40'}`}>
+             <button 
+               onClick={() => setIsBadgesOpen(true)}
+               className="p-2 rounded-lg text-red-500 hover:bg-red-50 transition-colors"
+               title="Achievement Hold"
+             >
+               <Trophy className="w-4 h-4" />
+             </button>
+             <button onClick={() => handleSelection(null, null, null)} className={`p-2 rounded-lg ${!selectedContinent && !showTourOnly && !showArchiveOnly && !showFavoritesOnly && !showTrashOnly && !showUserWorldOnly ? 'bg-[#5A5A40] text-white' : 'text-[#141414]/40'}`}>
                <Globe className="w-4 h-4" />
+             </button>
+             <button onClick={() => handleSelection(null, null, null, false, false, false, false, true)} className={`p-2 rounded-lg ${showUserWorldOnly ? 'bg-[#5A5A40] text-white' : 'text-[#141414]/40'}`}>
+               <Compass className="w-4 h-4" />
              </button>
              <button onClick={() => handleSelection(null, null, null, false, true)} className={`p-2 rounded-lg ${showTourOnly ? 'bg-[#00af87] text-white' : 'text-[#141414]/40'}`}>
                <Calendar className="w-4 h-4" />
@@ -602,6 +781,7 @@ export default function App() {
             showTourOnly={showTourOnly}
             showArchiveOnly={showArchiveOnly}
             showTrashOnly={showTrashOnly}
+            showUserWorldOnly={showUserWorldOnly}
             onSelect={handleSelection}
           />
         </aside>
@@ -613,20 +793,26 @@ export default function App() {
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
             onClick={() => setIsSelfAssistOpen(true)}
-            className="w-full bg-red-500 h-12 md:h-16 mb-12 rounded-[20px] flex items-center justify-center cursor-pointer hover:bg-red-600 transition-all group relative overflow-hidden shadow-xl shadow-red-500/20"
+            className="w-full bg-[#141414] h-12 md:h-16 mb-12 rounded-[20px] flex items-center justify-center cursor-pointer hover:bg-black transition-all group relative overflow-hidden shadow-xl shadow-black/10 border border-white/5"
           >
-            <div className="absolute inset-0 border-2 border-white/30 m-1.5 rounded-[14px] pointer-events-none" />
+            <div className="absolute inset-0 border-2 border-white/10 m-1.5 rounded-[14px] pointer-events-none" />
             <div className="flex items-center gap-3 text-white font-black uppercase tracking-[0.2em] text-[9px] md:text-[11px] relative z-10">
-              <div className="w-10 h-10 rounded-xl overflow-hidden border-2 border-white/20 bg-white shadow-lg p-0.5">
-                <img src="https://ais-pre-mmqor7qunwcb2mdgsi7wcu-75557326522.asia-southeast1.run.app/api/artifacts/4f3f0196-1875-4c0d-b4db-5452d3c90772" alt="Bot" className="w-full h-full object-cover" />
+              <div className="w-10 h-10 rounded-xl overflow-hidden border-2 border-white/10 bg-blue-500 shadow-lg flex items-center justify-center">
+                <Sparkles className="w-5 h-5 text-white" />
               </div>
               <span className="group-hover:scale-105 transition-transform">Access Self Assist Bot</span>
-              <div className="w-2 h-2 bg-white/40 rounded-full animate-pulse ml-2" />
+              <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse ml-2" />
             </div>
           </motion.div>
 
           {/* Floating Action Button for Traveler Guide Bot */}
-          <div className="fixed bottom-6 right-6 z-[100]">
+          <motion.div 
+            drag
+            dragConstraints={{ left: -window.innerWidth + 100, right: 0, top: -window.innerHeight + 100, bottom: 0 }}
+            dragElastic={0.1}
+            whileDrag={{ scale: 1.1, cursor: 'grabbing' }}
+            className="fixed bottom-6 right-6 z-[100]"
+          >
             <button 
               onClick={() => setIsTravelerGuideOpen(true)}
               className="group relative flex items-center justify-center w-14 h-14 bg-[#141414] rounded-full shadow-2xl hover:scale-110 active:scale-95 transition-all border border-white/10"
@@ -641,7 +827,7 @@ export default function App() {
                 <div className="w-1 h-1 bg-white rounded-full" />
               </motion.div>
             </button>
-          </div>
+          </motion.div>
 
           <AnimatePresence mode="wait">
             <motion.div
@@ -690,11 +876,18 @@ export default function App() {
         userId={selectedLocationData?.userId}
         isDeleted={selectedLocationData?.isDeleted}
       />
+      <GlobalRotatingEarth />
       <InteractiveBackground />
       <UserProfileModal 
         isOpen={isProfileOpen} 
         onClose={() => setIsProfileOpen(false)} 
         user={user} 
+      />
+
+      <BadgesOverlay
+        isOpen={isBadgesOpen}
+        onClose={() => setIsBadgesOpen(false)}
+        stats={stats}
       />
       <SelfAssistBot 
         isOpen={isSelfAssistOpen} 

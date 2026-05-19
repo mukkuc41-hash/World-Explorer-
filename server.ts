@@ -12,19 +12,25 @@ let db: any = null;
 function getDb() {
   if (!db) {
     try {
-      // Primary: Use zero-config initialization which is best for Cloud Run environment
-      const appAdmin = getApps().length === 0 ? initializeApp() : getApp();
-      db = getFirestore(appAdmin, firebaseConfig.firestoreDatabaseId);
-    } catch (error) {
-      console.warn("Zero-config Firebase initialization failed, trying with explicit projectId:", error);
-      try {
-        const appAdmin = getApps().length === 0 
-          ? initializeApp({ projectId: firebaseConfig.projectId })
-          : getApp();
-        db = getFirestore(appAdmin, firebaseConfig.firestoreDatabaseId);
-      } catch (innerError) {
-        console.error("Firebase Admin initialization totally failed:", innerError);
+      const apps = getApps();
+      const appAdmin = apps.length === 0 ? initializeApp({
+        projectId: firebaseConfig.projectId
+      }) : apps[0];
+      
+      // Try to use the configured database ID first
+      if (firebaseConfig.firestoreDatabaseId) {
+        try {
+          db = getFirestore(appAdmin, firebaseConfig.firestoreDatabaseId);
+          console.log(`Using Firestore database: ${firebaseConfig.firestoreDatabaseId}`);
+        } catch (e) {
+          console.warn(`Failed to connect to DB ${firebaseConfig.firestoreDatabaseId}, falling back to default`);
+          db = getFirestore(appAdmin);
+        }
+      } else {
+        db = getFirestore(appAdmin);
       }
+    } catch (error) {
+      console.error("Firebase Admin initialization failed:", error);
     }
   }
   return db;
@@ -122,6 +128,10 @@ async function startServer() {
   });
 
   // API routes
+  app.get("/api/health", (req, res) => {
+    res.json({ status: "ok", firebase: !!db, gemini: !!process.env.GEMINI_API_KEY });
+  });
+
   app.post("/api/chat", async (req, res) => {
     try {
       if (!process.env.GEMINI_API_KEY) {
@@ -400,16 +410,55 @@ async function startServer() {
   app.post("/api/generate-details", async (req, res) => {
     try {
       const { place } = req.body;
+      if (!place) {
+        return res.status(400).json({ error: "Place name is required" });
+      }
+
+      if (!process.env.GEMINI_API_KEY) {
+        return res.status(500).json({ error: "Gemini API key is missing on the server." });
+      }
+
+      console.log(`Generating details for: ${place}`);
+
       const response = await ai.models.generateContent({
         model: "gemini-3-flash-preview",
-        contents: `Provide description of "${place}" as JSON: {"description": "...", "imageKeywords": "..."}. ONLY JSON.`,
-      });
-      let text = response.text.replace(/```json\n?/, '').replace(/```/, '').trim();
-      res.json(JSON.parse(text));
+        contents: `Provide a detailed description of "${place}" including travel significance. Return as JSON with "description" and "imageKeywords" fields only.`,
+        config: {
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: "OBJECT",
+            properties: {
+              description: { type: "STRING" },
+              imageKeywords: { type: "STRING" }
+            },
+            required: ["description", "imageKeywords"]
+          }
+        } as any
+      } as any);
+
+      console.log(`Gemini response received for: ${place}`);
+      
+      let text = response.text;
+      if (!text) {
+        throw new Error("Empty response from Gemini");
+      }
+
+      try {
+        const data = JSON.parse(text);
+        res.json(data);
+      } catch (parseError) {
+        console.error("JSON Parse Error:", text);
+        // Fallback for malformed JSON
+        res.json({
+          description: text.substring(0, 500),
+          imageKeywords: place
+        });
+      }
     } catch (error: any) {
+      console.error("Generate details error:", error);
       const isQuotaError = error.message?.includes("RESOURCE_EXHAUSTED") || error.status === 429;
       res.status(isQuotaError ? 429 : 500).json({ 
-        error: isQuotaError ? "Quota exhausted" : "Failed to generate" 
+        error: isQuotaError ? "The guide is taking a break (Quota exceeded). Please try again later." : `Generation failed: ${error.message || "Unknown error"}`
       });
     }
   });
@@ -423,9 +472,15 @@ async function startServer() {
     app.get('*', (req, res) => res.sendFile(path.join(distPath, 'index.html')));
   }
 
-  app.listen(PORT, "0.0.0.0", () => console.log(`Server on port ${PORT}`));
+  app.listen(PORT, "0.0.0.0", () => {
+    console.log(`Server running on http://localhost:${PORT}`);
+    console.log(`Environment: NODE_ENV=${process.env.NODE_ENV}`);
+    console.log(`Gemini Key present: ${!!process.env.GEMINI_API_KEY}`);
+  });
 }
 
-startServer();
+startServer().catch(err => {
+  console.error("FAILED TO START SERVER:", err);
+});
 
 

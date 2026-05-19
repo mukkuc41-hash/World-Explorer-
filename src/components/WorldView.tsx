@@ -1,10 +1,37 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { APIProvider, Map, AdvancedMarker, Pin, useMap, InfoWindow, useAdvancedMarkerRef } from '@vis.gl/react-google-maps';
-import { collection, onSnapshot, query } from 'firebase/firestore';
-import { db, handleFirestoreError, OperationType } from '../lib/firebase.ts';
+import { collection, onSnapshot, query, where, orderBy } from 'firebase/firestore';
+import { db, handleFirestoreError, OperationType, auth } from '../lib/firebase.ts';
 import { LocationData } from './LocationList.tsx';
 import { motion, AnimatePresence } from 'motion/react';
-import { Map as MapIcon, Layers, Navigation, MapPin } from 'lucide-react';
+import { Map as MapIcon, Layers, Navigation, MapPin, Activity } from 'lucide-react';
+
+// Polyline component for Google Maps
+function MapPolyline({ locations }: { locations: LocationData[] }) {
+  const map = useMap();
+  useEffect(() => {
+    if (!map || locations.length < 2) return;
+
+    const path = locations.map(l => ({ lat: l.lat, lng: l.lng }));
+    const polyline = new google.maps.Polyline({
+      path,
+      geodesic: true,
+      strokeColor: "#00af87",
+      strokeOpacity: 0.8,
+      strokeWeight: 3,
+      map: map,
+      icons: [{
+        icon: { path: google.maps.SymbolPath.FORWARD_CLOSED_ARROW },
+        offset: '100%',
+        repeat: '100px'
+      }]
+    });
+
+    return () => polyline.setMap(null);
+  }, [map, locations]);
+
+  return null;
+}
 
 const API_KEY = process.env.GOOGLE_MAPS_PLATFORM_KEY || '';
 
@@ -12,22 +39,53 @@ interface WorldViewProps {
   continent: string | null;
   country: string | null;
   state: string | null;
+  showFavoritesOnly?: boolean;
+  showTourOnly?: boolean;
+  showUserAddedOnly?: boolean;
   searchQuery?: string;
   onSelect?: (location: LocationData) => void;
 }
 
-export default function WorldView({ continent, country, state, searchQuery, onSelect }: WorldViewProps) {
+export default function WorldView({ continent, country, state, showFavoritesOnly, showTourOnly, showUserAddedOnly, searchQuery, onSelect }: WorldViewProps) {
   const [locations, setLocations] = useState<LocationData[]>([]);
   const [selectedLocation, setSelectedLocation] = useState<LocationData | null>(null);
+  const [userFavorites, setUserFavorites] = useState<Set<string>>(new Set());
+  const [userTour, setUserTour] = useState<Set<string>>(new Set());
+
+  const user = auth.currentUser;
 
   useEffect(() => {
-    const q = query(collection(db, 'locations'));
+    if (!user) return;
+    const qFav = query(collection(db, 'favorites'), where('userId', '==', user.uid));
+    const unsubFav = onSnapshot(qFav, (snap) => {
+      setUserFavorites(new Set(snap.docs.map(d => d.data().locationId)));
+    });
+    const qTour = query(collection(db, 'tours'), where('userId', '==', user.uid));
+    const unsubTour = onSnapshot(qTour, (snap) => {
+      setUserTour(new Set(snap.docs.map(d => d.data().locationId)));
+    });
+    return () => { unsubFav(); unsubTour(); };
+  }, [user]);
+
+  useEffect(() => {
+    const q = query(collection(db, 'locations'), where('isDeleted', '==', false));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       let locs = snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
       })) as LocationData[];
       
+      // Filter special collections
+      if (showFavoritesOnly) {
+        locs = locs.filter(l => userFavorites.has(l.id));
+      }
+      if (showTourOnly) {
+        locs = locs.filter(l => userTour.has(l.id));
+      }
+      if (showUserAddedOnly) {
+        locs = locs.filter(l => l.userId !== 'traveler-guide-ai' && l.userId !== 'system');
+      }
+
       // Filter hierarchy
       if (continent) {
         locs = locs.filter(l => l.continent === continent);
@@ -56,7 +114,7 @@ export default function WorldView({ continent, country, state, searchQuery, onSe
     });
 
     return () => unsubscribe();
-  }, [continent, country, state, searchQuery]);
+  }, [continent, country, state, showFavoritesOnly, showTourOnly, showUserAddedOnly, userFavorites, userTour, searchQuery]);
 
   const mapCenter = ((state || country) && locations.length > 0) 
     ? { lat: locations[0].lat, lng: locations[0].lng } 
@@ -82,9 +140,13 @@ export default function WorldView({ continent, country, state, searchQuery, onSe
             <LocationMarker 
               key={loc.id} 
               location={loc} 
+              isFavorite={userFavorites.has(loc.id)}
+              isTour={userTour.has(loc.id)}
               onSelect={() => setSelectedLocation(loc)}
             />
           ))}
+
+          {showTourOnly && <MapPolyline locations={locations} />}
 
           {selectedLocation && (
             <InfoWindow
@@ -127,7 +189,7 @@ export default function WorldView({ continent, country, state, searchQuery, onSe
   );
 }
 
-function LocationMarker({ location, onSelect }: { location: LocationData, onSelect: () => void }) {
+function LocationMarker({ location, isFavorite, isTour, onSelect }: { location: LocationData, isFavorite: boolean, isTour: boolean, onSelect: () => void }) {
   const [markerRef, marker] = useAdvancedMarkerRef();
 
   return (
@@ -137,7 +199,12 @@ function LocationMarker({ location, onSelect }: { location: LocationData, onSele
       onClick={onSelect}
       title={location.name}
     >
-      <Pin background="#5A5A40" glyphColor="#fff" borderColor="#f5f5f0" scale={0.8} />
+      <Pin 
+        background={isTour ? "#00af87" : isFavorite ? "#ef4444" : "#5A5A40"} 
+        glyphColor="#fff" 
+        borderColor="#f5f5f0" 
+        scale={isTour || isFavorite ? 1 : 0.8} 
+      />
     </AdvancedMarker>
   );
 }

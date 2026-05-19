@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react';
 import { Continent } from '../App.tsx';
 import { motion, AnimatePresence } from 'motion/react';
-import { ChevronRight, ChevronDown, Globe, MapPin, Map, Compass, Heart, Calendar, Bookmark, Trash2 } from 'lucide-react';
+import { ChevronRight, ChevronDown, Globe, MapPin, Map, Compass, Heart, Calendar, Bookmark, Trash2, Activity, Zap, Star } from 'lucide-react';
 import { TRAVEL_GEOGRAPHY } from '../constants/geography';
+import { db } from '../lib/firebase.ts';
+import { collection, query, orderBy, limit, onSnapshot } from 'firebase/firestore';
 
 interface SidebarNavProps {
   selectedContinent: Continent | null;
@@ -12,15 +14,35 @@ interface SidebarNavProps {
   showTourOnly?: boolean;
   showArchiveOnly?: boolean;
   showTrashOnly?: boolean;
-  onSelect: (continent: Continent | null, country: string | null, state: string | null, showFavorites?: boolean, showTour?: boolean, showArchive?: boolean, showTrash?: boolean) => void;
+  showUserWorldOnly?: boolean;
+  onSelect: (continent: Continent | null, country: string | null, state: string | null, showFavorites?: boolean, showTour?: boolean, showArchive?: boolean, showTrash?: boolean, showUserWorld?: boolean) => void;
 }
 
 const CONTINENTS: Continent[] = ["Africa", "Asia", "Europe", "North America", "South America", "Oceania", "Antarctica"];
 
-export default function SidebarNav({ selectedContinent, selectedCountry, selectedState, showFavoritesOnly, showTourOnly, showArchiveOnly, showTrashOnly, onSelect }: SidebarNavProps) {
+export default function SidebarNav({ selectedContinent, selectedCountry, selectedState, showFavoritesOnly, showTourOnly, showArchiveOnly, showTrashOnly, showUserWorldOnly, onSelect }: SidebarNavProps) {
   // Internal expansion state to allow browsing without changing the main view
   const [expandedContinent, setExpandedContinent] = useState<Continent | null>(selectedContinent);
   const [expandedCountry, setExpandedCountry] = useState<string | null>(selectedCountry);
+  const [recentActivity, setRecentActivity] = useState<any[]>([]);
+
+  useEffect(() => {
+    const q = query(collection(db, 'locations'), orderBy('createdAt', 'desc'), limit(3));
+    return onSnapshot(q, (snap) => {
+      setRecentActivity(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    });
+  }, []);
+
+  const handleRandom = () => {
+    const continents = Object.keys(TRAVEL_GEOGRAPHY) as Continent[];
+    const randomContinent = continents[Math.floor(Math.random() * continents.length)];
+    const countries = Object.keys(TRAVEL_GEOGRAPHY[randomContinent]);
+    const randomCountry = countries[Math.floor(Math.random() * countries.length)];
+    const states = TRAVEL_GEOGRAPHY[randomContinent][randomCountry];
+    const randomState = states && states.length > 0 ? states[Math.floor(Math.random() * states.length)] : null;
+    
+    onSelect(randomContinent, randomCountry, randomState);
+  };
 
   // Sync internal state with props when they change externally
   useEffect(() => {
@@ -79,6 +101,18 @@ export default function SidebarNav({ selectedContinent, selectedCountry, selecte
         >
           <Globe className="w-4 h-4" />
           <span className="text-sm font-bold">World View</span>
+        </button>
+
+        <button 
+          onClick={() => {
+            onSelect(null, null, null, false, false, false, false, true);
+            setExpandedContinent(null);
+            setExpandedCountry(null);
+          }}
+          className={`flex items-center gap-3 w-full p-3 rounded-2xl transition-all mt-1 ${showUserWorldOnly ? 'bg-[#5A5A40] text-white shadow-lg' : 'hover:bg-white/50 text-[#141414]/60'}`}
+        >
+          <Compass className="w-4 h-4" />
+          <span className="text-sm font-bold">Community Discoveries</span>
         </button>
 
         <button 
@@ -225,6 +259,53 @@ export default function SidebarNav({ selectedContinent, selectedCountry, selecte
               </div>
             );
           })}
+        </div>
+      </div>
+
+      <div className="px-6 py-8">
+        <button 
+          onClick={handleRandom}
+          className="w-full bg-[#141414] text-white p-6 rounded-[32px] hover:scale-[1.02] active:scale-[0.98] transition-all shadow-xl shadow-black/10 flex items-center justify-between group"
+        >
+          <div className="flex items-center gap-4">
+             <div className="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center group-hover:rotate-12 transition-transform">
+                <Zap className="w-5 h-5 text-yellow-400 fill-current" />
+             </div>
+             <div className="text-left">
+               <span className="text-[8px] font-black uppercase tracking-[0.2em] opacity-40">Feeling Lost?</span>
+               <div className="font-serif italic text-lg leading-tight">Teleport Me</div>
+             </div>
+          </div>
+          <ChevronRight className="w-4 h-4 opacity-40" />
+        </button>
+
+        <div className="mt-12">
+          <div className="flex items-center gap-2 mb-6 px-2">
+            <Activity className="w-3 h-3 text-[#00af87]" />
+            <h4 className="text-[10px] uppercase font-black tracking-widest opacity-30">Live Insights</h4>
+          </div>
+          <div className="space-y-4">
+            {recentActivity.map((act, i) => (
+              <motion.div 
+                key={act.id}
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: i * 0.1 }}
+                className="flex items-center gap-3 p-3 bg-white/40 rounded-2xl border border-[#141414]/5"
+              >
+                <div className="w-10 h-10 rounded-xl overflow-hidden flex-shrink-0 bg-[#f8f8f5]">
+                  <img src={act.imageUrl} className="w-full h-full object-cover" />
+                </div>
+                <div className="min-w-0">
+                  <div className="text-[10px] font-bold truncate">{act.name}</div>
+                  <div className="flex items-center gap-1">
+                    <Star className="w-2 h-2 text-[#00af87] fill-current" />
+                    <span className="text-[8px] opacity-40 uppercase tracking-widest">Added recently</span>
+                  </div>
+                </div>
+              </motion.div>
+            ))}
+          </div>
         </div>
       </div>
     </div>

@@ -1,9 +1,11 @@
 import { motion } from 'motion/react';
 import { Compass } from 'lucide-react';
+import GlobalRotatingEarth from './GlobalRotatingEarth.tsx';
 
 export default function SplashLoader() {
   return (
     <div className="fixed inset-0 z-[100] bg-[#f5f5f0] flex flex-col items-center justify-center">
+      <GlobalRotatingEarth />
       <motion.div
         initial={{ opacity: 0, scale: 0.8 }}
         animate={{ opacity: 1, scale: 1 }}

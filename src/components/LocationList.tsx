@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react';
-import { collection, query, where, orderBy, onSnapshot } from 'firebase/firestore';
+import { CollectionReference, collection, query, where, orderBy, onSnapshot } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType, auth } from '../lib/firebase.ts';
 import { Continent } from '../App.tsx';
 import LocationCard from './LocationCard.tsx';
 import { motion, AnimatePresence } from 'motion/react';
-import { MapPinOff, Heart, Search, Calendar, Bookmark, Trash2 } from 'lucide-react';
+import { MapPinOff, Heart, Search, Calendar, Bookmark, Trash2, Compass } from 'lucide-react';
 
 interface LocationListProps {
   continent: Continent | null;
@@ -14,6 +14,7 @@ interface LocationListProps {
   showTourOnly?: boolean;
   showArchiveOnly?: boolean;
   showTrashOnly?: boolean;
+  showUserAddedOnly?: boolean;
   searchQuery?: string;
   onSelect?: (location: LocationData) => void;
 }
@@ -36,7 +37,7 @@ export interface LocationData {
   updatedAt: any;
 }
 
-export default function LocationList({ continent, country, state, showFavoritesOnly, showTourOnly, showArchiveOnly, showTrashOnly, searchQuery, onSelect }: LocationListProps) {
+export default function LocationList({ continent, country, state, showFavoritesOnly, showTourOnly, showArchiveOnly, showTrashOnly, showUserAddedOnly, searchQuery, onSelect }: LocationListProps) {
   const [locations, setLocations] = useState<LocationData[]>([]);
   const [userFavorites, setUserFavorites] = useState<Set<string>>(new Set());
   const [userTour, setUserTour] = useState<Set<string>>(new Set());
@@ -114,7 +115,7 @@ export default function LocationList({ continent, country, state, showFavoritesO
 
   useEffect(() => {
     // If no continent and not showing special collections and no search query, we don't know what to show
-    if (!continent && !showFavoritesOnly && !showTourOnly && !showArchiveOnly && !showTrashOnly && !searchQuery) return;
+    if (!continent && !showFavoritesOnly && !showTourOnly && !showArchiveOnly && !showTrashOnly && !showUserAddedOnly && !searchQuery) return;
 
     setLoading(true);
     let q;
@@ -123,7 +124,7 @@ export default function LocationList({ continent, country, state, showFavoritesO
     if (searchQuery) {
         // Fetch all locations to filter in memory for robust search
         q = query(collection(db, 'locations'), orderBy('createdAt', 'desc'));
-    } else if (showFavoritesOnly || showTourOnly || showArchiveOnly || showTrashOnly) {
+    } else if (showFavoritesOnly || showTourOnly || showArchiveOnly || showTrashOnly || showUserAddedOnly) {
       q = query(collection(db, 'locations'), orderBy('createdAt', 'desc'));
     } else {
       q = query(
@@ -168,6 +169,11 @@ export default function LocationList({ continent, country, state, showFavoritesO
       if (showArchiveOnly) {
         locs = locs.filter(loc => userArchive.has(loc.id));
       }
+      
+      // Filter by user added only (not AI or system)
+      if (showUserAddedOnly) {
+        locs = locs.filter(loc => loc.userId !== 'traveler-guide-ai' && loc.userId !== 'system');
+      }
 
       // Filter by search query if present
       if (searchQuery) {
@@ -193,7 +199,7 @@ export default function LocationList({ continent, country, state, showFavoritesO
     });
 
     return () => unsubscribe();
-  }, [continent, country, state, showFavoritesOnly, showTourOnly, showArchiveOnly, showTrashOnly, userFavorites, userTour, userArchive, searchQuery]);
+  }, [continent, country, state, showFavoritesOnly, showTourOnly, showArchiveOnly, showTrashOnly, showUserAddedOnly, userFavorites, userTour, userArchive, searchQuery]);
 
   if (loading) {
     return (
@@ -233,6 +239,12 @@ export default function LocationList({ continent, country, state, showFavoritesO
             <Bookmark className="w-16 h-16 opacity-10 mb-6" />
             <h3 className="text-2xl font-serif italic mb-2">Archive empty</h3>
             <p className="text-[#141414]/40">Your archived gems will appear here.</p>
+          </>
+        ) : showUserAddedOnly ? (
+          <>
+            <Compass className="w-16 h-16 opacity-10 mb-6" />
+            <h3 className="text-2xl font-serif italic mb-2">No community discoveries</h3>
+            <p className="text-[#141414]/40">Be the first to share a personal discovery!</p>
           </>
         ) : showTrashOnly ? (
           <>
