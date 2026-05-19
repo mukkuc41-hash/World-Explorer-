@@ -71,6 +71,20 @@
       },
       "required": ["userId", "locationId", "createdAt"]
     },
+    "PublicProfile": {
+      "title": "Public Profile",
+      "description": "Publicly visible user information for leaderboards and social features.",
+      "type": "object",
+      "properties": {
+        "displayName": { "type": "string", "description": "User's display name." },
+        "photoURL": { "type": "string", "description": "User's profile photo URL." },
+        "points": { "type": "number", "description": "User's total experience points." },
+        "totalDiscoveries": { "type": "number", "description": "Total locations shared." },
+        "totalReviews": { "type": "number", "description": "Total reviews written." },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "When the profile was last updated." }
+      },
+      "required": ["displayName", "updatedAt"]
+    },
     "UserProfile": {
       "title": "UserProfile",
       "description": "Information about a registered user.",
@@ -112,6 +126,10 @@
     "users": {
       "schema": "UserProfile",
       "description": "Collection of user profile data."
+    },
+    "public_profiles": {
+      "schema": "PublicProfile",
+      "description": "Public user profiles for leaderboard."
     }
   }
 }

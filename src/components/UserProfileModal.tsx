@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { User } from 'firebase/auth';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
-import { collection, query, where, getDocs, doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, getDoc, setDoc, serverTimestamp, orderBy, limit } from 'firebase/firestore';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, User as UserIcon, Calendar, Mail, Phone, ChevronDown, Check, Award, MapPin, Bookmark, Compass, Lock, Trophy } from 'lucide-react';
+import { X, User as UserIcon, Calendar, Mail, Phone, ChevronDown, Check, Award, MapPin, Bookmark, Compass, Lock, Trophy, Clock } from 'lucide-react';
 import { TRAVEL_BADGES } from '../constants/badges.tsx';
 
 interface UserProfile {
@@ -14,6 +14,7 @@ interface UserProfile {
   phoneNumber: string;
   birthDate: string;
   gender: string;
+  lastLogin?: any;
 }
 
 interface UserProfileModalProps {
@@ -42,11 +43,13 @@ export default function UserProfileModal({ isOpen, onClose, user }: UserProfileM
     archived: 0,
     contributed: 0
   });
+  const [recentContributions, setRecentContributions] = useState<any[]>([]);
 
   useEffect(() => {
     if (isOpen && user) {
       fetchProfile();
       fetchStats();
+      fetchRecentActivity();
     }
   }, [isOpen, user]);
 
@@ -67,6 +70,22 @@ export default function UserProfileModal({ isOpen, onClose, user }: UserProfileM
       });
     } catch (e) {
       console.error("Error fetching stats:", e);
+    }
+  };
+
+  const fetchRecentActivity = async () => {
+    if (!user) return;
+    try {
+      const q = query(
+        collection(db, 'locations'), 
+        where('userId', '==', user.uid),
+        orderBy('createdAt', 'desc'),
+        limit(3)
+      );
+      const snap = await getDocs(q);
+      setRecentContributions(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    } catch (e) {
+      console.error("Error fetching recent activity:", e);
     }
   };
 
@@ -94,6 +113,18 @@ export default function UserProfileModal({ isOpen, onClose, user }: UserProfileM
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const formatDate = (timestamp: any) => {
+    if (!timestamp) return 'Never';
+    const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+    return new Intl.DateTimeFormat('en-US', { 
+      month: 'short', 
+      day: 'numeric', 
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    }).format(date);
   };
 
   const handleSave = async (e: React.FormEvent) => {
@@ -145,23 +176,51 @@ export default function UserProfileModal({ isOpen, onClose, user }: UserProfileM
                     animate={{ opacity: 1, x: 0 }}
                     exit={{ opacity: 0, x: 20 }}
                   >
-                    <div className="flex justify-between items-start mb-10">
-                      <div>
-                        <h2 className="text-4xl font-sans font-bold tracking-tight text-[#141414]">Edit Profile</h2>
-                        {user?.email === 'mukkuc41@gmail.com' && (
-                          <div className="mt-2 flex items-center gap-2">
-                             <span className="px-2 py-0.5 bg-[#141414] text-white text-[8px] font-black uppercase tracking-[0.2em] rounded-md">Site Owner</span>
-                             <span className="text-[10px] font-bold text-[#141414]/40 italic">@Admin/owner-41@123</span>
+                      <div className="flex justify-between items-start mb-10">
+                        <div>
+                          <h2 className="text-4xl font-sans font-bold tracking-tight text-[#141414]">Edit Profile</h2>
+                          <div className="mt-2 flex flex-wrap items-center gap-2">
+                             {user?.email === 'mukkuc41@gmail.com' && (
+                                <span className="px-2 py-0.5 bg-[#141414] text-white text-[8px] font-black uppercase tracking-[0.2em] rounded-md">Site Owner</span>
+                             )}
+                             <span className="px-2 py-0.5 bg-[#f5f5f0] border border-[#141414]/10 text-[8px] font-black uppercase tracking-[0.2em] rounded-md opacity-60">
+                               Last Login: {formatDate(profile.lastLogin)}
+                             </span>
+                             {user?.email === 'mukkuc41@gmail.com' && (
+                                <span className="text-[10px] font-bold text-[#141414]/40 italic">@Admin/owner-41@123</span>
+                             )}
                           </div>
-                        )}
+                        </div>
+                        <button 
+                          onClick={onClose}
+                          className="p-3 hover:bg-[#f5f5f0] rounded-full transition-colors"
+                        >
+                          <X className="w-6 h-6" />
+                        </button>
                       </div>
-                      <button 
-                        onClick={onClose}
-                        className="p-3 hover:bg-[#f5f5f0] rounded-full transition-colors"
-                      >
-                        <X className="w-6 h-6" />
-                      </button>
-                    </div>
+
+                      {/* Recent Activity Section */}
+                      {recentContributions.length > 0 && (
+                        <div className="mb-12">
+                           <h3 className="text-[10px] uppercase font-black tracking-[0.2em] text-[#141414]/40 mb-4 px-1">Recent Contributions</h3>
+                           <div className="space-y-3">
+                              {recentContributions.map(loc => (
+                                <div key={loc.id} className="flex items-center gap-4 p-3 bg-[#f8f8f5] rounded-2xl border border-[#141414]/5 group hover:bg-white transition-all">
+                                   <div className="w-12 h-12 rounded-xl overflow-hidden shadow-sm">
+                                      <img src={loc.imageUrl} alt={loc.name} className="w-full h-full object-cover" />
+                                   </div>
+                                   <div className="flex-1 min-w-0">
+                                      <div className="text-xs font-bold text-[#141414] truncate">{loc.name}</div>
+                                      <div className="text-[10px] text-[#141414]/40">{loc.continent} • {loc.country}</div>
+                                   </div>
+                                   <div className="text-[9px] font-bold text-[#141414]/20 mr-2 flex items-center gap-1">
+                                      <Clock className="w-3 h-3" /> {new Date(loc.createdAt?.toDate ? loc.createdAt.toDate() : loc.createdAt).toLocaleDateString()}
+                                   </div>
+                                </div>
+                              ))}
+                           </div>
+                        </div>
+                      )}
 
                     {/* Stats Dashboard */}
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-12">

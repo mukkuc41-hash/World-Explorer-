@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { User } from 'firebase/auth';
-import { collection, doc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, doc, setDoc, serverTimestamp, increment } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase.ts';
 import { Continent } from '../App.tsx';
 import { motion, AnimatePresence } from 'motion/react';
@@ -80,6 +80,28 @@ export default function AddLocationModal({ isOpen, onClose, continent, user }: A
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       });
+
+      // Award points for discovery
+      try {
+        const userRef = doc(db, 'users', user.uid);
+        await setDoc(userRef, {
+          points: increment(50), 
+          totalDiscoveries: increment(1),
+          updatedAt: serverTimestamp()
+        }, { merge: true });
+
+        // Update public profile for leaderboard
+        const publicRef = doc(db, 'public_profiles', user.uid);
+        await setDoc(publicRef, {
+          displayName: user.displayName || 'Anonymous Explorer',
+          photoURL: user.photoURL,
+          points: increment(50),
+          totalDiscoveries: increment(1),
+          updatedAt: serverTimestamp()
+        }, { merge: true });
+      } catch (e) {
+        console.error("Error awarding points:", e);
+      }
 
       // Clear form and close
       setName('');

@@ -58,7 +58,11 @@ export default function TravelerGuide({ isOpen, onClose, onAction }: TravelerGui
       const data = await response.json();
       
       if (data.error) {
-        setMessages(prev => [...prev, { role: 'assistant', text: `Sorry, I encountered an error: ${data.error}` }]);
+        let errorMsg = `Sorry, I encountered an error: ${data.error}`;
+        if (response.status === 429) {
+          errorMsg = "**Quota Exceeded:** My research tools are cooling down. Please try again in a minute.";
+        }
+        setMessages(prev => [...prev, { role: 'assistant', text: errorMsg }]);
       } else {
         setMessages(prev => [...prev, { 
           role: 'assistant', 

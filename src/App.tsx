@@ -21,11 +21,13 @@ import InteractiveBackground from './components/InteractiveBackground.tsx';
 import UserProfileModal from './components/UserProfileModal.tsx';
 import TravelerGuide from './components/TravelerGuide.tsx';
 import SelfAssistBot from './components/SelfAssistBot.tsx';
+import LeaderboardModal from './components/LeaderboardModal.tsx';
+import AppGuideModal from './components/AppGuideModal.tsx';
 import BadgesOverlay from './components/BadgesOverlay.tsx';
 import TermsModal from './components/TermsModal.tsx';
 import GlobalRotatingEarth from './components/GlobalRotatingEarth.tsx';
 import { db, handleFirestoreError, OperationType } from './lib/firebase.ts';
-import { collection, query, where, getDocs, onSnapshot } from 'firebase/firestore';
+import { collection, query, where, getDocs, onSnapshot, doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { LogIn } from 'lucide-react';
 
 export type Continent = "Africa" | "Asia" | "Europe" | "North America" | "South America" | "Oceania" | "Antarctica";
@@ -81,6 +83,8 @@ export default function App() {
   const [isSelfAssistOpen, setIsSelfAssistOpen] = useState(false);
   const [isTravelerGuideOpen, setIsTravelerGuideOpen] = useState(false);
   const [isBadgesOpen, setIsBadgesOpen] = useState(false);
+  const [isLeaderboardOpen, setIsLeaderboardOpen] = useState(false);
+  const [isGuideOpen, setIsGuideOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [stats, setStats] = useState({
     saved: 0,
@@ -103,7 +107,8 @@ export default function App() {
   const [loadingDetails, setLoadingDetails] = useState(false);
 
   const [isTermsAccepted, setIsTermsAccepted] = useState(() => localStorage.getItem('world_explorer_terms_accepted') === 'true');
-  const [flowStep, setFlowStep] = useState<'splash' | 'login' | 'terms' | 'app'>('splash');
+  const [isGuideSeen, setIsGuideSeen] = useState(() => localStorage.getItem('world_explorer_guide_seen') === 'true');
+  const [flowStep, setFlowStep] = useState<'splash' | 'login' | 'terms' | 'guide' | 'app'>('splash');
 
   useEffect(() => {
     if (!user) return;
@@ -128,13 +133,37 @@ export default function App() {
       setIsLoading(false);
     }, 3000);
 
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
+      if (currentUser) {
+        // Track last login and ensure profile exists
+        try {
+          const userDoc = doc(db, 'users', currentUser.uid);
+          await setDoc(userDoc, {
+            lastLogin: serverTimestamp(),
+            email: currentUser.email,
+            updatedAt: serverTimestamp()
+          }, { merge: true });
+
+          // Sync with public profile
+          const publicRef = doc(db, 'public_profiles', currentUser.uid);
+          await setDoc(publicRef, {
+            displayName: currentUser.displayName || 'Architectural Explorer',
+            photoURL: currentUser.photoURL,
+            updatedAt: serverTimestamp()
+          }, { merge: true });
+        } catch (e) {
+          console.error("Error updating profiles:", e);
+        }
+      }
+
       if (!isLoading || flowStep !== 'splash') {
         if (!currentUser) {
           setFlowStep('login');
         } else if (!isTermsAccepted) {
           setFlowStep('terms');
+        } else if (!isGuideSeen) {
+          setFlowStep('guide');
         } else {
           setFlowStep('app');
         }
@@ -145,7 +174,7 @@ export default function App() {
       clearTimeout(splashTimer);
       unsubscribe();
     };
-  }, [isTermsAccepted, isLoading]);
+  }, [isTermsAccepted, isGuideSeen, isLoading]);
 
   // When loading finishes, if we are still in splash, trigger the next step
   useEffect(() => {
@@ -154,15 +183,27 @@ export default function App() {
         setFlowStep('login');
       } else if (!isTermsAccepted) {
         setFlowStep('terms');
+      } else if (!isGuideSeen) {
+        setFlowStep('guide');
       } else {
         setFlowStep('app');
       }
     }
-  }, [isLoading, user, isTermsAccepted, flowStep]);
+  }, [isLoading, user, isTermsAccepted, isGuideSeen, flowStep]);
 
   const handleAcceptTerms = () => {
     localStorage.setItem('world_explorer_terms_accepted', 'true');
     setIsTermsAccepted(true);
+    if (!isGuideSeen) {
+      setFlowStep('guide');
+    } else {
+      setFlowStep('app');
+    }
+  };
+
+  const handleFinishGuide = () => {
+    localStorage.setItem('world_explorer_guide_seen', 'true');
+    setIsGuideSeen(true);
     setFlowStep('app');
   };
 
@@ -172,6 +213,8 @@ export default function App() {
       if (resultUser) {
         if (!isTermsAccepted) {
           setFlowStep('terms');
+        } else if (!isGuideSeen) {
+          setFlowStep('guide');
         } else {
           setFlowStep('app');
         }
@@ -326,6 +369,10 @@ export default function App() {
 
   if (flowStep === 'terms') {
     return <TermsModal onAccept={handleAcceptTerms} />;
+  }
+
+  if (flowStep === 'guide') {
+    return <AppGuideModal isOpen={true} onClose={handleFinishGuide} />;
   }
 
   const renderActiveContent = () => {
@@ -724,6 +771,8 @@ export default function App() {
         onSearchChange={setSearchQuery} 
         onProfileClick={() => setIsProfileOpen(true)}
         onBadgesClick={() => setIsBadgesOpen(true)}
+        onLeaderboardClick={() => setIsLeaderboardOpen(true)}
+        onGuideClick={() => setIsGuideOpen(true)}
       />
       
       <div className="max-w-[1600px] mx-auto flex flex-col md:flex-row min-h-[calc(100-80px)]">
@@ -737,10 +786,17 @@ export default function App() {
              {isSidebarOpen ? 'Close' : "Menu"}
            </button>
            
-           <div className="flex items-center gap-3">
+           <div className="flex items-center gap-1.5">
+             <button 
+               onClick={() => setIsLeaderboardOpen(true)}
+               className="w-8 h-8 rounded-lg bg-[#141414] text-white flex items-center justify-center shadow-md hover:scale-110 transition-transform"
+               title="Leaderboard"
+             >
+               <Trophy className="w-4 h-4" />
+             </button>
              <button 
                onClick={() => setIsBadgesOpen(true)}
-               className="p-2 rounded-lg text-red-500 hover:bg-red-50 transition-colors"
+               className="w-8 h-8 rounded-lg bg-red-500 text-white flex items-center justify-center shadow-md hover:scale-110 transition-transform"
                title="Achievement Hold"
              >
                <Trophy className="w-4 h-4" />
@@ -827,6 +883,14 @@ export default function App() {
                 <div className="w-1 h-1 bg-white rounded-full" />
               </motion.div>
             </button>
+
+            {/* Quick Guide Trigger */}
+            <button
+              onClick={() => setIsGuideOpen(true)}
+              className="absolute -top-10 right-0 py-1.5 px-3 bg-white border border-[#141414]/10 rounded-full shadow-lg text-[9px] font-black uppercase tracking-widest text-[#141414] hover:bg-[#141414] hover:text-white transition-all whitespace-nowrap"
+            >
+              Need Help?
+            </button>
           </motion.div>
 
           <AnimatePresence mode="wait">
@@ -888,6 +952,14 @@ export default function App() {
         isOpen={isBadgesOpen}
         onClose={() => setIsBadgesOpen(false)}
         stats={stats}
+      />
+      <LeaderboardModal 
+        isOpen={isLeaderboardOpen} 
+        onClose={() => setIsLeaderboardOpen(false)} 
+      />
+      <AppGuideModal 
+        isOpen={isGuideOpen} 
+        onClose={() => setIsGuideOpen(false)} 
       />
       <SelfAssistBot 
         isOpen={isSelfAssistOpen} 

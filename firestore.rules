@@ -48,7 +48,19 @@ service cloud.firestore {
         && (!data.keys().contains('username') || (data.username is string && data.username.size() <= 100))
         && (!data.keys().contains('phoneNumber') || (data.phoneNumber is string && data.phoneNumber.size() <= 25))
         && (!data.keys().contains('birthDate') || (data.birthDate is string && data.birthDate.size() <= 25))
-        && (!data.keys().contains('gender') || (data.gender is string && data.gender.size() <= 25));
+        && (!data.keys().contains('gender') || (data.gender is string && data.gender.size() <= 25))
+        && (!data.keys().contains('points') || data.points is number)
+        && (!data.keys().contains('totalDiscoveries') || data.totalDiscoveries is number)
+        && (!data.keys().contains('totalReviews') || data.totalReviews is number);
+    }
+    function isValidPublicProfile(data) {
+      return data.keys().hasAll(['displayName', 'updatedAt'])
+        && data.displayName is string && data.displayName.size() <= 100
+        && data.updatedAt == request.time
+        && (!data.keys().contains('photoURL') || (data.photoURL is string && data.photoURL.size() <= 2000))
+        && (!data.keys().contains('points') || data.points is number)
+        && (!data.keys().contains('totalDiscoveries') || data.totalDiscoveries is number)
+        && (!data.keys().contains('totalReviews') || data.totalReviews is number);
     }
     function isValidLocation(data) {
       return data.keys().hasAll(['name', 'description', 'imageUrl', 'continent', 'country', 'state', 'userId', 'userName', 'lat', 'lng', 'createdAt', 'updatedAt'])
@@ -158,6 +170,12 @@ service cloud.firestore {
     match /users/{userId} {
       allow read: if isSignedIn() && request.auth.uid == userId;
       allow write: if isVerified() && request.auth.uid == userId && isValidUserProfile(incoming());
+    }
+
+    // --- Collection: public_profiles ---
+    match /public_profiles/{userId} {
+      allow read: if isSignedIn(); // Allow all signed-in users to see leaderboard stats
+      allow write: if isVerified() && request.auth.uid == userId && isValidPublicProfile(incoming());
     }
   }
 }

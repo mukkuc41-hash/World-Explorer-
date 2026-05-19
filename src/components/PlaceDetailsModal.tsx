@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Sparkles, MapPin, Loader2, Share2, Heart, Trash2, CalendarCheck, Calendar, Bookmark, Volume2, CloudRain, Wind, Thermometer, Briefcase, ChevronRight } from 'lucide-react';
+import { X, Sparkles, MapPin, Loader2, Share2, Heart, Trash2, CalendarCheck, Calendar, Bookmark, Volume2, CloudRain, Wind, Thermometer, Briefcase, ChevronRight, Compass } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { auth, db, handleFirestoreError, OperationType } from '../lib/firebase.ts';
 import { doc, updateDoc, deleteDoc, setDoc, query, collection, where, onSnapshot, serverTimestamp } from 'firebase/firestore';
@@ -31,6 +31,50 @@ export default function PlaceDetailsModal({ placeName, isOpen, onClose, details,
   const [archiveInfo, setArchiveInfo] = useState<any>(null);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [showPackingList, setShowPackingList] = useState(false);
+  const [weather, setWeather] = useState<{ temp: number; wind: number; condition: string } | null>(null);
+  const [recommendations, setRecommendations] = useState<any[]>([]);
+  const [loadingRecs, setLoadingRecs] = useState(false);
+  const [recError, setRecError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (isOpen && placeName) {
+      fetchWeather();
+      fetchRecommendations();
+    }
+  }, [isOpen, placeName]);
+
+  const fetchWeather = async () => {
+    try {
+      const res = await fetch(`/api/weather?place=${encodeURIComponent(placeName)}`);
+      const data = await res.json();
+      if (res.ok) setWeather(data);
+    } catch (e) {
+      console.error("Weather fetch failed:", e);
+    }
+  };
+
+  const fetchRecommendations = async () => {
+    setLoadingRecs(true);
+    setRecError(null);
+    try {
+      const res = await fetch('/api/recommendations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ place: placeName })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setRecommendations(data);
+      } else {
+        setRecError(data.error || "Recommendation error");
+      }
+    } catch (e) {
+      console.error("Recs fetch failed:", e);
+      setRecError("Connection error");
+    } finally {
+      setLoadingRecs(false);
+    }
+  };
 
   // Stop speech synthesis on close
   useEffect(() => {
@@ -231,14 +275,14 @@ export default function PlaceDetailsModal({ placeName, isOpen, onClose, details,
                      <Thermometer className="w-5 h-5 text-[#f59e0b]" />
                      <div className="flex flex-col">
                         <span className="text-[8px] font-black uppercase tracking-[0.2em] opacity-30">Local Vibe</span>
-                        <span className="text-sm font-bold">24°C • Pleasant</span>
+                        <span className="text-sm font-bold">{weather ? `${weather.temp}°C` : '...'} • {weather ? (weather.temp > 25 ? 'Warm' : weather.temp > 15 ? 'Pleasant' : 'Cool') : 'Loading'}</span>
                      </div>
                   </div>
                   <div className="flex-1 flex items-center gap-4 bg-[#f8f8f5] p-4 rounded-2xl">
                      <CloudRain className="w-5 h-5 text-[#3b82f6]" />
                      <div className="flex flex-col">
-                        <span className="text-[8px] font-black uppercase tracking-[0.2em] opacity-30">Sky</span>
-                        <span className="text-sm font-bold">Clear Skies</span>
+                        <span className="text-[8px] font-black uppercase tracking-[0.2em] opacity-30">Wind</span>
+                        <span className="text-sm font-bold">{weather ? `${weather.wind} km/h` : '...'}</span>
                      </div>
                   </div>
                   <button 
@@ -324,6 +368,41 @@ export default function PlaceDetailsModal({ placeName, isOpen, onClose, details,
                     </AnimatePresence>
 
                     {locationId && <ReviewSection locationId={locationId} />}
+
+                    {/* AI Recommendations */}
+                    {(recommendations.length > 0 || loadingRecs || recError) && (
+                      <div className="mt-12 overflow-hidden">
+                        <h3 className="text-[10px] uppercase font-black tracking-[0.2em] text-[#141414]/40 mb-6 px-1">AI Smart Discovery</h3>
+                        <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide">
+                           {loadingRecs ? (
+                             [1,2,3].map(i => (
+                               <div key={i} className="min-w-[200px] h-32 bg-[#f8f8f5] rounded-3xl animate-pulse" />
+                             ))
+                           ) : recError ? (
+                             <div className="flex-1 bg-red-50 p-6 rounded-[32px] border border-red-100">
+                                <p className="text-xs text-red-900/60 font-serif italic mb-2">Notice from AI Engine</p>
+                                <p className="text-sm font-bold text-red-900">{recError}</p>
+                             </div>
+                           ) : (
+                             recommendations.map((rec, i) => (
+                               <motion.div 
+                                 key={i}
+                                 initial={{ opacity: 0, x: 20 }}
+                                 animate={{ opacity: 1, x: 0 }}
+                                 transition={{ delay: i * 0.1 }}
+                                 className="min-w-[240px] bg-[#f8f8f5] p-4 rounded-3xl border border-[#141414]/5 group hover:bg-white transition-all cursor-default"
+                               >
+                                 <div className="text-[10px] items-center gap-2 text-[#00af87] font-bold uppercase tracking-widest mb-2 flex">
+                                   <Compass className="w-3 h-3" /> Similar Gem
+                                 </div>
+                                 <div className="text-sm font-bold text-[#141414] mb-1">{rec.name}</div>
+                                 <div className="text-[10px] text-[#141414]/60 leading-relaxed italic truncate">"{rec.reason}"</div>
+                               </motion.div>
+                             ))
+                           )}
+                        </div>
+                      </div>
+                    )}
                    </>
                  ) : null}
                </div>

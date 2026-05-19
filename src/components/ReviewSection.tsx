@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { collection, query, where, orderBy, onSnapshot, addDoc, deleteDoc, doc, serverTimestamp } from 'firebase/firestore';
+import { collection, query, where, orderBy, onSnapshot, addDoc, deleteDoc, doc, serverTimestamp, setDoc, increment } from 'firebase/firestore';
 import { db, auth, handleFirestoreError, OperationType } from '../lib/firebase.ts';
 import { motion, AnimatePresence } from 'motion/react';
 import { Star, MessageSquare, Send, Trash2, User } from 'lucide-react';
@@ -67,6 +67,29 @@ export default function ReviewSection({ locationId }: ReviewSectionProps) {
         comment: newComment.trim(),
         createdAt: serverTimestamp()
       });
+
+      // Award points for community insight
+      try {
+        const userRef = doc(db, 'users', user.uid);
+        await setDoc(userRef, {
+          points: increment(10), // 10 points per community insight
+          totalReviews: increment(1),
+          updatedAt: serverTimestamp()
+        }, { merge: true });
+
+        // Update public stats for leaderboard
+        const publicRef = doc(db, 'public_profiles', user.uid);
+        await setDoc(publicRef, {
+          displayName: user.displayName || 'Anonymous Explorer',
+          photoURL: user.photoURL,
+          points: increment(10),
+          totalReviews: increment(1),
+          updatedAt: serverTimestamp()
+        }, { merge: true });
+      } catch (e) {
+        console.error("Error awarding review points:", e);
+      }
+
       setNewComment('');
       setNewRating(5);
     } catch (error) {

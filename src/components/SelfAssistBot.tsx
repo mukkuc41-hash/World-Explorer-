@@ -58,7 +58,11 @@ export default function SelfAssistBot({ isOpen, onClose, onAction }: SelfAssistB
       const data = await response.json();
       
       if (data.error) {
-        setMessages(prev => [...prev, { role: 'assistant', text: `Sorry, I encountered an error: ${data.error}` }]);
+        let errorMsg = `Sorry, I encountered an error: ${data.error}`;
+        if (response.status === 429) {
+          errorMsg = "**Quota Exceeded:** The AI is currently at capacity. Please wait a minute before trying again.";
+        }
+        setMessages(prev => [...prev, { role: 'assistant', text: errorMsg }]);
       } else {
         setMessages(prev => [...prev, { 
           role: 'assistant', 
