@@ -41,20 +41,21 @@ export default function TermsModal({ onAccept }: TermsModalProps) {
               <Shield className="w-5 h-5 text-[#00af87]" />
               <h3 className="text-2xl font-serif italic text-[#141414]">Privacy Policy</h3>
             </div>
-            <div className="text-[10px] uppercase tracking-widest font-black opacity-20">Last Updated: May 2026</div>
-            <div className="prose prose-sm prose-slate max-w-none text-[#141414]/70 leading-relaxed space-y-4">
-              <p>Welcome to World Explorer ("we," "our," or "us"). We are highly committed to protecting your personal information and your right to privacy. If you have any questions, concerns, or feedback regarding this privacy notice or our data handling practices, please contact us at mukkuc41@gmail.com.</p>
+            <div className="text-[10px] uppercase tracking-widest font-black opacity-40">Last Updated: May 2026</div>
+            <div className="prose prose-sm prose-slate max-w-none text-[#141414]/70 leading-relaxed space-y-6">
+              <p>Welcome to World Explorer ("we," "our," or "us"). We are highly committed to protecting your personal information and your right to privacy. If you have any questions, concerns, or feedback regarding this privacy notice or our data handling practices, please contact us at <span className="font-bold text-[#141414]">mukkuc41@gmail.com</span>.</p>
               
               <div className="space-y-4">
-                <h4 className="text-[#141414] font-bold">1. Information We Collect</h4>
+                <h4 className="text-[#141414] font-black uppercase tracking-widest text-[10px]">Information We Collect</h4>
                 <p>We only collect information that you directly provide to us, or data that is automatically generated when you browse our platform:</p>
-                <ul className="list-disc pl-5 space-y-2">
+                <ul className="list-disc pl-5 space-y-3">
                   <li><strong>Voluntary Communication Data:</strong> If you contact us directly via email for support, content inquiries, or feedback, we collect your email address and any text or attachments you choose to send.</li>
                   <li><strong>Usage and Log Data:</strong> Our web hosting servers automatically record standard internet log data when you access World Explorer. This includes your device's anonymized IP address, browser type, operating system, referring pages, and the specific timestamps of your visits.</li>
                   <li><strong>Cookies:</strong> We use basic browser cookies to enhance performance, save user interface preferences, and analyze generalized, aggregated traffic patterns.</li>
                 </ul>
 
-                <h4 className="text-[#141414] font-bold">2. How We Use Your Information</h4>
+                <h4 className="text-[#141414] font-black uppercase tracking-widest text-[10px]">How We Use Your Information</h4>
+                <p>The details we collect are used strictly to:</p>
                 <ul className="list-disc pl-5 space-y-2">
                   <li>Maintain, secure, optimize, and improve the World Explorer platform.</li>
                   <li>Respond to user inquiries and provide support via email.</li>
@@ -62,13 +63,13 @@ export default function TermsModal({ onAccept }: TermsModalProps) {
                   <li>Protect our website against cyber threats, automated spam, and abuse.</li>
                 </ul>
 
-                <h4 className="text-[#141414] font-bold">3. Data Protection and Sharing</h4>
+                <h4 className="text-[#141414] font-black uppercase tracking-widest text-[10px]">Data Protection and Sharing</h4>
                 <p>We implement industry-standard security practices to keep your data safe. World Explorer does not sell, rent, trade, or share your personal information with third-party companies.</p>
 
-                <h4 className="text-[#141414] font-bold">4. Third-Party Links & Integrations</h4>
+                <h4 className="text-[#141414] font-black uppercase tracking-widest text-[10px]">Third-Party Links & Integrations</h4>
                 <p>As a platform exploring the world, our website may contain links to external websites, maps, or media services. We do not control or operate these third-party platforms, and we strongly recommend reviewing their respective privacy policies when visiting them.</p>
 
-                <h4 className="text-[#141414] font-bold">5. Updates to This Policy</h4>
+                <h4 className="text-[#141414] font-black uppercase tracking-widest text-[10px]">Updates to This Policy</h4>
                 <p>We reserve the right to update this Privacy Policy at any time. Any changes will be updated on this page with a revised "Last Updated" date.</p>
               </div>
             </div>
@@ -80,35 +81,35 @@ export default function TermsModal({ onAccept }: TermsModalProps) {
           <section className="space-y-6 pb-12">
             <div className="flex items-center gap-3">
               <ScrollText className="w-5 h-5 text-[#5A5A40]" />
-              <h3 className="text-2xl font-serif italic text-[#141414]">Terms & Conditions</h3>
+              <h3 className="text-2xl font-serif italic text-[#141414]">Terms & Conditions (Rules & Regulations)</h3>
             </div>
-            <div className="text-[10px] uppercase tracking-widest font-black opacity-20">Last Updated: May 2026</div>
-            <div className="prose prose-sm prose-slate max-w-none text-[#141414]/70 leading-relaxed space-y-4">
+            <div className="text-[10px] uppercase tracking-widest font-black opacity-40">Last Updated: May 2026</div>
+            <div className="prose prose-sm prose-slate max-w-none text-[#141414]/70 leading-relaxed space-y-6">
               <p>Please read these Terms & Conditions carefully before using the website operated by World Explorer (the "Service"). By accessing or using our website, you agree to be bound by these rules. If you disagree with any part of these terms, you do not have permission to access the Service.</p>
 
               <div className="space-y-4">
-                <h4 className="text-[#141414] font-bold">1. Intellectual Property Rights</h4>
+                <h4 className="text-[#141414] font-black uppercase tracking-widest text-[10px]">Intellectual Property Rights</h4>
                 <p>The Service and its original features, custom web tools, code architecture, written content, UI design, and platform imagery are the exclusive property of World Explorer and its creators. Unauthorized duplication, modification, web scraping, or commercial distribution of our platform assets is strictly prohibited without explicit written consent.</p>
 
-                <h4 className="text-[#141414] font-bold">2. Prohibited User Conduct</h4>
+                <h4 className="text-[#141414] font-black uppercase tracking-widest text-[10px]">Prohibited User Conduct</h4>
                 <p>To ensure a secure environment for all users, you agree not to engage in any of the following activities:</p>
-                <ul className="list-disc pl-5 space-y-2">
+                <ul className="list-disc pl-5 space-y-3">
                   <li><strong>Automated Scraping:</strong> Using scrapers, crawlers, bots, or custom automated scripts to extract data, media, or content from World Explorer.</li>
                   <li><strong>Infrastructure Abuse:</strong> Flooding our servers with excessive queries, DDOS attempts, or actions that intentionally slow down site performance.</li>
                   <li><strong>Malicious Injections:</strong> Attempting to upload or inject malicious code, scripts, viruses, or trojans into the website interface or backend.</li>
                 </ul>
 
-                <h4 className="text-[#141414] font-bold">3. Disclaimer of Warranties</h4>
+                <h4 className="text-[#141414] font-black uppercase tracking-widest text-[10px]">Disclaimer of Warranties</h4>
                 <p>The tools, information, and features on World Explorer are provided on an "AS IS" and "AS AVAILABLE" basis. World Explorer makes no warranties, expressed or implied, regarding the absolute accuracy, completeness, or reliability of any data, content, or external links hosted on the platform. You utilize the platform's resources entirely at your own risk.</p>
 
-                <h4 className="text-[#141414] font-bold">4. Limitation of Liability</h4>
+                <h4 className="text-[#141414] font-black uppercase tracking-widest text-[10px]">Limitation of Liability</h4>
                 <p>In no event shall World Explorer, its creators, or its affiliates be held liable for any direct, indirect, incidental, or consequential damages resulting from your access to, use of, or inability to access our platform or tools.</p>
 
-                <h4 className="text-[#141414] font-bold">5. Governing Law</h4>
-                <p>These Terms shall be governed and construed in accordance with the laws of Rajasthan, India, without regard to its conflict of law provisions. Any legal actions or disputes related to World Explorer must be filed exclusively in the courts located within that jurisdiction.</p>
+                <h4 className="text-[#141414] font-black uppercase tracking-widest text-[10px]">Governing Law</h4>
+                <p>These Terms shall be governed and construed in accordance with the laws of <span className="font-bold text-[#141414]">Rajasthan, India</span>, without regard to its conflict of law provisions. Any legal actions or disputes related to World Explorer must be filed exclusively in the courts located within that jurisdiction.</p>
 
-                <h4 className="text-[#141414] font-bold">6. Contact Us</h4>
-                <p>For any clarifications regarding these Terms and Conditions, please reach out to us at mukkuc41@gmail.com</p>
+                <h4 className="text-[#141414] font-black uppercase tracking-widest text-[10px]">Contact Us</h4>
+                <p>For any clarifications regarding these Terms and Conditions, please reach out to us at <span className="font-bold text-[#141414]">mukkuc41@gmail.com</span>.</p>
               </div>
             </div>
           </section>

@@ -137,24 +137,33 @@ export default function App() {
       setUser(currentUser);
       if (currentUser) {
         // Track last login and ensure profile exists
-        try {
-          const userDoc = doc(db, 'users', currentUser.uid);
-          await setDoc(userDoc, {
-            lastLogin: serverTimestamp(),
-            email: currentUser.email || '',
-            updatedAt: serverTimestamp()
-          }, { merge: true });
+        const syncProfiles = async () => {
+          try {
+            const { writeBatch, doc, serverTimestamp } = await import('firebase/firestore');
+            const batch = writeBatch(db);
+            
+            const userDoc = doc(db, 'users', currentUser.uid);
+            batch.set(userDoc, {
+              lastLogin: serverTimestamp(),
+              email: currentUser.email || '',
+              displayName: currentUser.displayName || '',
+              updatedAt: serverTimestamp()
+            }, { merge: true });
 
-          // Sync with public profile
-          const publicRef = doc(db, 'public_profiles', currentUser.uid);
-          await setDoc(publicRef, {
-            displayName: currentUser.displayName || 'Architectural Explorer',
-            photoURL: currentUser.photoURL,
-            updatedAt: serverTimestamp()
-          }, { merge: true });
-        } catch (e) {
-          console.error("Error updating profiles:", e);
-        }
+            const publicRef = doc(db, 'public_profiles', currentUser.uid);
+            batch.set(publicRef, {
+              displayName: currentUser.displayName || 'Architectural Explorer',
+              photoURL: currentUser.photoURL || null,
+              updatedAt: serverTimestamp()
+            }, { merge: true });
+
+            await batch.commit();
+          } catch (e: any) {
+            console.error("Profile Sync Failed:", e.message || e);
+          }
+        };
+        
+        syncProfiles();
       }
 
       if (!isLoading || flowStep !== 'splash') {
