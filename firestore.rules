@@ -16,7 +16,7 @@ service cloud.firestore {
     }
 
     function isOwner(userId) {
-      return isVerified() && request.auth.uid == userId;
+      return isSignedIn() && request.auth.uid == userId;
     }
 
     function isAdmin() {
@@ -45,6 +45,7 @@ service cloud.firestore {
         && data.updatedAt == request.time
         && (!data.keys().contains('firstName') || (data.firstName is string && data.firstName.size() <= 100))
         && (!data.keys().contains('lastName') || (data.lastName is string && data.lastName.size() <= 100))
+        && (!data.keys().contains('displayName') || (data.displayName is string && data.displayName.size() <= 256))
         && (!data.keys().contains('username') || (data.username is string && data.username.size() <= 100))
         && (!data.keys().contains('phoneNumber') || (data.phoneNumber is string && data.phoneNumber.size() <= 25))
         && (!data.keys().contains('birthDate') || (data.birthDate is string && data.birthDate.size() <= 25))
@@ -55,7 +56,7 @@ service cloud.firestore {
     }
     function isValidPublicProfile(data) {
       return data.keys().hasAll(['displayName', 'updatedAt'])
-        && data.displayName is string && data.displayName.size() <= 100
+        && data.displayName is string && data.displayName.size() <= 256
         && data.updatedAt == request.time
         && (!data.keys().contains('photoURL') || (data.photoURL is string && data.photoURL.size() <= 2000))
         && (!data.keys().contains('points') || data.points is number)
@@ -169,13 +170,13 @@ service cloud.firestore {
     // --- Collection: users ---
     match /users/{userId} {
       allow read: if isSignedIn() && request.auth.uid == userId;
-      allow write: if isVerified() && request.auth.uid == userId && isValidUserProfile(incoming());
+      allow write: if isSignedIn() && request.auth.uid == userId && isValidUserProfile(incoming());
     }
 
     // --- Collection: public_profiles ---
     match /public_profiles/{userId} {
       allow read: if isSignedIn(); // Allow all signed-in users to see leaderboard stats
-      allow write: if isVerified() && request.auth.uid == userId && isValidPublicProfile(incoming());
+      allow write: if isSignedIn() && request.auth.uid == userId && isValidPublicProfile(incoming());
     }
   }
 }

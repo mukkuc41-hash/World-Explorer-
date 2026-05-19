@@ -141,7 +141,7 @@ export default function App() {
           const userDoc = doc(db, 'users', currentUser.uid);
           await setDoc(userDoc, {
             lastLogin: serverTimestamp(),
-            email: currentUser.email,
+            email: currentUser.email || '',
             updatedAt: serverTimestamp()
           }, { merge: true });
 
