@@ -33,7 +33,7 @@ const AppGuideModal: React.FC<AppGuideModalProps> = ({ isOpen, onClose }) => {
               <div className="absolute inset-0 opacity-60">
                 <iframe 
                   className="w-full h-full object-cover scale-110 pointer-events-none"
-                  src="https://www.youtube.com/embed/PjG8pAdPnbU?autoplay=1&mute=1&controls=0&loop=1&playlist=PjG8pAdPnbU&showinfo=0&rel=0"
+                  src="https://www.youtube.com/embed/L_LUpnjgPso?autoplay=1&mute=1&controls=0&loop=1&playlist=L_LUpnjgPso&showinfo=0&rel=0"
                   title="App Introduction"
                   allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                 ></iframe>
