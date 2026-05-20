@@ -30,32 +30,14 @@ const AppGuideModal: React.FC<AppGuideModalProps> = ({ isOpen, onClose }) => {
           >
             {/* Left: Visual Media Side */}
             <div className="w-full md:w-3/5 bg-[#141414] relative overflow-hidden group">
-              <AnimatePresence mode="wait">
-                <motion.div 
-                  key={page}
-                  initial={{ opacity: 0, scale: 1.1 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  transition={{ duration: 0.8 }}
-                  className="absolute inset-0"
-                >
-                  <div className="absolute inset-0 opacity-60">
-                    {page === 1 ? (
-                      <iframe 
-                        className="w-full h-full object-cover scale-110 pointer-events-none"
-                        src="https://www.youtube.com/embed/PjG8pAdPnbU?autoplay=1&mute=1&controls=0&loop=1&playlist=PjG8pAdPnbU&showinfo=0&rel=0"
-                        title="App Introduction"
-                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                      ></iframe>
-                    ) : (
-                      <img 
-                        src="https://images.unsplash.com/photo-1516026672322-bc52d61a55d5?auto=format&fit=crop&q=80&w=1200" 
-                        alt="Discovery"
-                        className="w-full h-full object-cover"
-                      />
-                    )}
-                  </div>
-                </motion.div>
-              </AnimatePresence>
+              <div className="absolute inset-0 opacity-60">
+                <iframe 
+                  className="w-full h-full object-cover scale-110 pointer-events-none"
+                  src="https://www.youtube.com/embed/PjG8pAdPnbU?autoplay=1&mute=1&controls=0&loop=1&playlist=PjG8pAdPnbU&showinfo=0&rel=0"
+                  title="App Introduction"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                ></iframe>
+              </div>
               
               <div className="absolute inset-0 bg-gradient-to-t from-[#141414] via-[#141414]/20 to-transparent" />
               
@@ -122,7 +104,7 @@ const AppGuideModal: React.FC<AppGuideModalProps> = ({ isOpen, onClose }) => {
                           "The world is a book, and those who do not travel read only one page."
                         </p>
                         <p className="text-sm text-[#141414]/60 mt-4 leading-relaxed">
-                          World Explorer was built to democratize geographical knowledge. We believe every hidden alleyway deserves to be archived.
+                          World Explorer was built to democratize geographical knowledge. We believe every hidden alleyway deserves to be archived for eternity.
                         </p>
                       </section>
 
@@ -134,7 +116,8 @@ const AppGuideModal: React.FC<AppGuideModalProps> = ({ isOpen, onClose }) => {
                         <div className="space-y-3">
                           {[
                             { title: 'Interactive Geodata', desc: 'Real-time map exploration.' },
-                            { title: 'AI Recommendation', desc: 'Gemini-powered location insights.' }
+                            { title: 'AI Recommendation', desc: 'Gemini-powered location insights.' },
+                            { title: 'Live Vibe Engine', desc: 'Instant local weather and atmosphere.' }
                           ].map((item, i) => (
                             <div key={i} className="flex gap-4 p-4 bg-white rounded-2xl border border-[#141414]/5 shadow-sm">
                               <div className="w-2 h-2 rounded-full bg-[#5A5A40] mt-1.5 shrink-0" />
@@ -160,13 +143,20 @@ const AppGuideModal: React.FC<AppGuideModalProps> = ({ isOpen, onClose }) => {
                           <Award className="w-5 h-5" />
                           <h3 className="text-[10px] font-black uppercase tracking-[0.3em]">The Badge System</h3>
                         </div>
-                        <div className="grid grid-cols-1 gap-4">
+                        <div className="grid grid-cols-1 gap-3">
                           <div className="p-4 bg-red-50 rounded-2xl border border-red-100 flex justify-between items-center">
                             <div>
                               <div className="text-[10px] font-bold text-red-900 uppercase tracking-widest">Discovery</div>
                               <div className="text-xs text-red-900/60">Contribute new gems</div>
                             </div>
                             <div className="text-2xl font-serif italic text-red-900">+50 XP</div>
+                          </div>
+                          <div className="p-4 bg-red-50 rounded-2xl border border-red-100 flex justify-between items-center">
+                            <div>
+                              <div className="text-[10px] font-bold text-red-900 uppercase tracking-widest">Community Insight</div>
+                              <div className="text-xs text-red-900/60">Write helpful reviews</div>
+                            </div>
+                            <div className="text-2xl font-serif italic text-red-900">+10 XP</div>
                           </div>
                         </div>
                       </section>
@@ -181,10 +171,10 @@ const AppGuideModal: React.FC<AppGuideModalProps> = ({ isOpen, onClose }) => {
                         </div>
                         <div className="space-y-2">
                            <div className="flex items-center gap-2 text-[10px] font-bold text-[#141414]/60">
-                            <div className="w-1 h-1 rounded-full bg-green-600" /> Military-Grade Firebase Auth
+                            <div className="w-1.5 h-1.5 rounded-full bg-green-600 animate-pulse" /> Military-Grade Firebase Encryption
                           </div>
                           <div className="flex items-center gap-2 text-[10px] font-bold text-[#141414]/60">
-                            <div className="w-1 h-1 rounded-full bg-green-600" /> Secure Server-Side Firestore Rules
+                            <div className="w-1.5 h-1.5 rounded-full bg-green-600 animate-pulse" /> Secure Server-Side Firestore Rules
                           </div>
                         </div>
                       </section>
