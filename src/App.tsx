@@ -8,9 +8,10 @@ import { onAuthStateChanged, User } from 'firebase/auth';
 import { auth, signInWithGoogle, logout } from './lib/firebase.ts';
 import { motion, AnimatePresence } from 'motion/react';
 import { MapPin, Plus, Compass, LogOut, ChevronLeft, Search, Map as MapIcon, LayoutGrid, Menu, X, ChevronRight, Globe, Share2, Link, Heart, Calendar, Bookmark, Trash2, Bot, Sparkles, Trophy } from 'lucide-react';
-import Header from './components/Header.tsx';
+import Header, { ExplorerNotification } from './components/Header.tsx';
 import SidebarNav from './components/SidebarNav.tsx';
 import LocationList from './components/LocationList.tsx';
+import StateSelector from './components/StateSelector.tsx';
 import AddLocationModal from './components/AddLocationModal.tsx';
 import WorldView from './components/WorldView.tsx';
 import GoogleMapsSplash from './components/GoogleMapsSplash.tsx';
@@ -19,13 +20,14 @@ import DiscoveryHero from './components/DiscoveryHero.tsx';
 import PlaceDetailsModal from './components/PlaceDetailsModal.tsx';
 import InteractiveBackground from './components/InteractiveBackground.tsx';
 import UserProfileModal from './components/UserProfileModal.tsx';
-import TravelerGuide from './components/TravelerGuide.tsx';
-import SelfAssistBot from './components/SelfAssistBot.tsx';
 import LeaderboardModal from './components/LeaderboardModal.tsx';
 import AppGuideModal from './components/AppGuideModal.tsx';
 import BadgesOverlay from './components/BadgesOverlay.tsx';
 import TermsModal from './components/TermsModal.tsx';
+import LocationHintButton from './components/LocationHintButton.tsx';
 import GlobalRotatingEarth from './components/GlobalRotatingEarth.tsx';
+import WorldExplorerAI from './components/WorldExplorerAI.tsx';
+import AmbientSoundtrack from './components/AmbientSoundtrack.tsx';
 import { db, handleFirestoreError, OperationType } from './lib/firebase.ts';
 import { collection, query, where, getDocs, onSnapshot, doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { LogIn } from 'lucide-react';
@@ -80,11 +82,10 @@ export default function App() {
   const [selectedState, setSelectedState] = useState<string | null>(null);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
-  const [isSelfAssistOpen, setIsSelfAssistOpen] = useState(false);
-  const [isTravelerGuideOpen, setIsTravelerGuideOpen] = useState(false);
   const [isBadgesOpen, setIsBadgesOpen] = useState(false);
   const [isLeaderboardOpen, setIsLeaderboardOpen] = useState(false);
   const [isGuideOpen, setIsGuideOpen] = useState(false);
+  const [isAIOpen, setIsAIOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [stats, setStats] = useState({
     saved: 0,
@@ -106,8 +107,8 @@ export default function App() {
   const [placeDetails, setPlaceDetails] = useState<{ description: string; imageUrl: string } | null>(null);
   const [loadingDetails, setLoadingDetails] = useState(false);
 
-  const [isTermsAccepted, setIsTermsAccepted] = useState(() => localStorage.getItem('world_explorer_terms_accepted') === 'true');
-  const [isGuideSeen, setIsGuideSeen] = useState(() => localStorage.getItem('world_explorer_guide_seen') === 'true');
+  const [isTermsAccepted, setIsTermsAccepted] = useState(false);
+  const [isGuideSeen, setIsGuideSeen] = useState(false);
   const [flowStep, setFlowStep] = useState<'splash' | 'login' | 'terms' | 'guide' | 'app'>('splash');
 
   useEffect(() => {
@@ -127,8 +128,26 @@ export default function App() {
     return () => unsubscribes.forEach(unsub => unsub());
   }, [user]);
 
+  // Initial mount setup: clean onboarding slate & automatic logout so they must go through the login and guide steps
   useEffect(() => {
-    // Initial splash duration
+    localStorage.removeItem('world_explorer_terms_accepted');
+    localStorage.removeItem('world_explorer_guide_seen');
+    setIsTermsAccepted(false);
+    setIsGuideSeen(false);
+
+    const performOnboardingSignout = async () => {
+      try {
+        await logout();
+      } catch (e) {
+        console.error("Clean slate signout failed:", e);
+      }
+    };
+    performOnboardingSignout();
+  }, []);
+
+  // Timer & Auth subscription
+  useEffect(() => {
+    // Initial splash duration of EXACTLY 3.0 seconds
     const splashTimer = setTimeout(() => {
       setIsLoading(false);
     }, 3000);
@@ -165,40 +184,28 @@ export default function App() {
         
         syncProfiles();
       }
-
-      if (!isLoading || flowStep !== 'splash') {
-        if (!currentUser) {
-          setFlowStep('login');
-        } else if (!isTermsAccepted) {
-          setFlowStep('terms');
-        } else if (!isGuideSeen) {
-          setFlowStep('guide');
-        } else {
-          setFlowStep('app');
-        }
-      }
     });
 
     return () => {
       clearTimeout(splashTimer);
       unsubscribe();
     };
-  }, [isTermsAccepted, isGuideSeen, isLoading]);
+  }, []);
 
-  // When loading finishes, if we are still in splash, trigger the next step
+  // Compute flowStep dynamically to resolve any timing or race-condition flows beautifully
   useEffect(() => {
-    if (!isLoading && flowStep === 'splash') {
-      if (!user) {
-        setFlowStep('login');
-      } else if (!isTermsAccepted) {
-        setFlowStep('terms');
-      } else if (!isGuideSeen) {
-        setFlowStep('guide');
-      } else {
-        setFlowStep('app');
-      }
+    if (isLoading) {
+      setFlowStep('splash');
+    } else if (!user) {
+      setFlowStep('login');
+    } else if (!isTermsAccepted) {
+      setFlowStep('terms');
+    } else if (!isGuideSeen) {
+      setFlowStep('guide');
+    } else {
+      setFlowStep('app');
     }
-  }, [isLoading, user, isTermsAccepted, isGuideSeen, flowStep]);
+  }, [isLoading, user, isTermsAccepted, isGuideSeen]);
 
   const handleAcceptTerms = () => {
     localStorage.setItem('world_explorer_terms_accepted', 'true');
@@ -267,9 +274,9 @@ export default function App() {
       }
     } catch (error: any) {
       console.error("Detail generation error:", error);
-      let errorMessage = "The Traveler Guide is currently overwhelmed with requests. Please try again in a moment.";
+      let errorMessage = "World Explorer AI is currently overwhelmed with requests. Please try again in a moment.";
       if (error.name === 'TypeError' && error.message === 'Failed to fetch') {
-        errorMessage = "Unable to connect to the guide server. Please verify your connection.";
+        errorMessage = "Unable to connect to the World Explorer AI server. Please verify your connection.";
       }
       setPlaceDetails({
         description: errorMessage,
@@ -311,10 +318,10 @@ export default function App() {
     }
   };
 
-  const handleAssistantAction = (action: string) => {
+  const handleAIAction = (action: string) => {
     switch (action) {
       case 'open_add_location':
-        user ? setIsAddModalOpen(true) : signInWithGoogle();
+        user ? setIsAddModalOpen(true) : handleLogin();
         break;
       case 'open_search':
         const searchInput = document.querySelector('header input') as HTMLInputElement;
@@ -674,10 +681,43 @@ export default function App() {
     return (
       <div className="space-y-4">
         {/* Breadcrumbs for easier navigation */}
-        <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.2em] font-black opacity-30 mb-8 px-1">
-          {selectedContinent} 
-          {selectedCountry && <><ChevronRight className="w-3 h-3" /> {selectedCountry}</>}
-          {selectedState && <><ChevronRight className="w-3 h-3" /> {selectedState}</>}
+        <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.2em] font-black mb-8 px-1">
+          <button 
+            onClick={() => handleSelection(null, null, null)}
+            className="opacity-40 hover:opacity-100 transition-opacity hover:underline"
+          >
+            World View
+          </button>
+          {selectedContinent && (
+            <>
+              <ChevronRight className="w-3 h-3 opacity-20" />
+              <button 
+                onClick={() => handleSelection(selectedContinent, null, null)}
+                className="opacity-45 hover:opacity-100 transition-opacity hover:underline"
+              >
+                {selectedContinent}
+              </button>
+            </>
+          )} 
+          {selectedCountry && (
+            <>
+              <ChevronRight className="w-3 h-3 opacity-20" />
+              <button 
+                onClick={() => handleSelection(selectedContinent, selectedCountry, null)}
+                className="opacity-45 hover:opacity-100 transition-opacity hover:underline"
+              >
+                {selectedCountry}
+              </button>
+            </>
+          )}
+          {selectedState && (
+            <>
+              <ChevronRight className="w-3 h-3 opacity-20" />
+              <span className="opacity-80 font-bold text-[#5A5A40]">
+                {selectedState}
+              </span>
+            </>
+          )}
         </div>
 
         <DiscoveryHero 
@@ -744,15 +784,32 @@ export default function App() {
                   onSelect={setSelectedLocationData}
                 />
               ) : selectedCountry ? (
-                <div className="space-y-6">
-                  {/* LocationList handles the filtering of countries even if state is null now based on previous edits */}
-                  <LocationList 
-                    continent={selectedContinent} 
-                    country={selectedCountry} 
-                    state={null} 
-                    searchQuery={searchQuery} 
-                    onSelect={setSelectedLocationData}
-                  />
+                <div className="space-y-12">
+                  <div className="pt-4 pb-2 border-b border-[#141414]/5 space-y-4">
+                    <div className="flex items-center gap-2">
+                      <div className="w-1.5 h-3 bg-[#5A5A40] rounded-full" />
+                      <h2 className="text-sm uppercase tracking-[0.2em] font-black opacity-50">Explore by Region / State</h2>
+                    </div>
+                    <StateSelector 
+                      continent={selectedContinent!} 
+                      country={selectedCountry} 
+                      onSelect={(state) => handleSelection(selectedContinent, selectedCountry, state)} 
+                    />
+                  </div>
+                  
+                  <div className="space-y-6">
+                    <div className="flex items-center gap-2">
+                      <div className="w-1.5 h-3 bg-[#00af87] rounded-full" />
+                      <h2 className="text-sm uppercase tracking-[0.2em] font-black opacity-50">Discoveries in {selectedCountry}</h2>
+                    </div>
+                    <LocationList 
+                      continent={selectedContinent} 
+                      country={selectedCountry} 
+                      state={null} 
+                      searchQuery={searchQuery} 
+                      onSelect={setSelectedLocationData}
+                    />
+                  </div>
                 </div>
               ) : (
                 <div className="space-y-6">
@@ -853,54 +910,6 @@ export default function App() {
 
         {/* Main Dynamic Content Area */}
         <main className="flex-1 px-6 md:px-16 py-12 pb-32">
-          {/* Self Assist Bot - Interactive Bar */}
-          <motion.div 
-            initial={{ opacity: 0, y: -20 }}
-            animate={{ opacity: 1, y: 0 }}
-            onClick={() => setIsSelfAssistOpen(true)}
-            className="w-full bg-[#141414] h-12 md:h-16 mb-12 rounded-[20px] flex items-center justify-center cursor-pointer hover:bg-black transition-all group relative overflow-hidden shadow-xl shadow-black/10 border border-white/5"
-          >
-            <div className="absolute inset-0 border-2 border-white/10 m-1.5 rounded-[14px] pointer-events-none" />
-            <div className="flex items-center gap-3 text-white font-black uppercase tracking-[0.2em] text-[9px] md:text-[11px] relative z-10">
-              <div className="w-10 h-10 rounded-xl overflow-hidden border-2 border-white/10 bg-blue-500 shadow-lg flex items-center justify-center">
-                <Sparkles className="w-5 h-5 text-white" />
-              </div>
-              <span className="group-hover:scale-105 transition-transform">Access Self Assist Bot</span>
-              <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse ml-2" />
-            </div>
-          </motion.div>
-
-          {/* Floating Action Button for Traveler Guide Bot */}
-          <motion.div 
-            drag
-            dragConstraints={{ left: -window.innerWidth + 100, right: 0, top: -window.innerHeight + 100, bottom: 0 }}
-            dragElastic={0.1}
-            whileDrag={{ scale: 1.1, cursor: 'grabbing' }}
-            className="fixed bottom-6 right-6 z-[100]"
-          >
-            <button 
-              onClick={() => setIsTravelerGuideOpen(true)}
-              className="group relative flex items-center justify-center w-14 h-14 bg-[#141414] rounded-full shadow-2xl hover:scale-110 active:scale-95 transition-all border border-white/10"
-              title="Traveler Guide Bot"
-            >
-              <Bot className="w-6 h-6 text-white" />
-              <motion.div 
-                animate={{ scale: [1, 1.2, 1] }}
-                transition={{ duration: 2, repeat: Infinity }}
-                className="absolute -top-1 -right-1 w-4 h-4 bg-[#00af87] rounded-full border-2 border-white flex items-center justify-center"
-              >
-                <div className="w-1 h-1 bg-white rounded-full" />
-              </motion.div>
-            </button>
-
-            {/* Quick Guide Trigger */}
-            <button
-              onClick={() => setIsGuideOpen(true)}
-              className="absolute -top-10 right-0 py-1.5 px-3 bg-white border border-[#141414]/10 rounded-full shadow-lg text-[9px] font-black uppercase tracking-widest text-[#141414] hover:bg-[#141414] hover:text-white transition-all whitespace-nowrap"
-            >
-              Need Help?
-            </button>
-          </motion.div>
 
           <AnimatePresence mode="wait">
             <motion.div
@@ -951,6 +960,36 @@ export default function App() {
       />
       <GlobalRotatingEarth />
       <InteractiveBackground />
+      <LocationHintButton 
+        onLaunchUploader={() => setIsAddModalOpen(true)}
+        isLoggedIn={!!user}
+        onLogin={handleLogin}
+      />
+      
+      {/* World Explorer AI Trigger */}
+      <motion.div 
+        whileHover={{ scale: 1.05 }}
+        whileTap={{ scale: 0.95 }}
+        className="fixed bottom-6 right-6 z-[95]"
+      >
+        <button
+          onClick={() => setIsAIOpen(true)}
+          className="px-5 py-3.5 bg-[#141414] text-white rounded-full shadow-2xl hover:shadow-[#141414]/25 flex items-center gap-2.5 border border-white/10 font-bold text-xs tracking-wider uppercase transition-all"
+          title="World Explorer AI Chatbot"
+        >
+          <div className="w-5 h-5 rounded-full bg-gradient-to-tr from-[#5A5A40] to-emerald-500 flex items-center justify-center">
+            <Sparkles className="w-3.5 h-3.5 text-white animate-pulse" />
+          </div>
+          <span>World Explorer AI</span>
+        </button>
+      </motion.div>
+
+      <WorldExplorerAI 
+        isOpen={isAIOpen}
+        onClose={() => setIsAIOpen(false)}
+        onAction={handleAIAction}
+        user={user}
+      />
       <UserProfileModal 
         isOpen={isProfileOpen} 
         onClose={() => setIsProfileOpen(false)} 
@@ -970,16 +1009,7 @@ export default function App() {
         isOpen={isGuideOpen} 
         onClose={() => setIsGuideOpen(false)} 
       />
-      <SelfAssistBot 
-        isOpen={isSelfAssistOpen} 
-        onClose={() => setIsSelfAssistOpen(false)} 
-        onAction={handleAssistantAction}
-      />
-      <TravelerGuide 
-        isOpen={isTravelerGuideOpen} 
-        onClose={() => setIsTravelerGuideOpen(false)} 
-        onAction={handleAssistantAction}
-      />
+      <AmbientSoundtrack />
     </div>
   );
 }

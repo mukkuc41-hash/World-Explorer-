@@ -1,7 +1,19 @@
+import { useState, useEffect, useRef } from 'react';
 import { User } from 'firebase/auth';
 import { signInWithGoogle, logout } from '../lib/firebase.ts';
-import { LogIn, LogOut, Compass, Search, Info, Trophy } from 'lucide-react';
-import { motion } from 'motion/react';
+import { LogIn, LogOut, Compass, Search, Info, Trophy, Bell, Check, MapPin } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
+
+export interface ExplorerNotification {
+  id: string;
+  type: 'new_location';
+  locationName: string;
+  locationId: string;
+  userName: string;
+  timestamp: string;
+  read: boolean;
+  locationData: any;
+}
 
 interface HeaderProps {
   user: User | null;
@@ -11,6 +23,9 @@ interface HeaderProps {
   onBadgesClick: () => void;
   onLeaderboardClick: () => void;
   onGuideClick: () => void;
+  notifications: ExplorerNotification[];
+  onNotificationClick: (notif: ExplorerNotification) => void;
+  onMarkAllAsRead: () => void;
 }
 
 export default function Header({ 
@@ -20,8 +35,40 @@ export default function Header({
   onProfileClick,
   onBadgesClick,
   onLeaderboardClick,
-  onGuideClick
+  onGuideClick,
+  notifications = [],
+  onNotificationClick,
+  onMarkAllAsRead
 }: HeaderProps) {
+  const [isNotifOpen, setIsNotifOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement | null>(null);
+
+  const unreadCount = notifications.filter(n => !n.read).length;
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsNotifOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  function formatTimeAgo(timestampString: string): string {
+    try {
+      const elapsed = Date.now() - new Date(timestampString).getTime();
+      if (elapsed < 60000) return 'Just now';
+      const mins = Math.floor(elapsed / 60000);
+      if (mins < 60) return `${mins}m ago`;
+      const hrs = Math.floor(mins / 60);
+      if (hrs < 24) return `${hrs}h ago`;
+      return new Date(timestampString).toLocaleDateString([], { month: 'short', day: 'numeric' });
+    } catch {
+      return 'Recently';
+    }
+  }
+
   return (
     <header className="px-6 py-6 border-b border-[#141414]/10 sticky top-0 bg-[#f5f5f0]/80 backdrop-blur-md z-50">
       <div className="max-w-7xl mx-auto flex justify-between items-center gap-4">
@@ -85,6 +132,104 @@ export default function Header({
              <span className="text-xs font-bold">How it Works</span>
           </button>
 
+          {/* New Interactive Bell Notification Component */}
+          <div className="relative" ref={dropdownRef}>
+            <button
+              onClick={() => setIsNotifOpen(!isNotifOpen)}
+              className={`p-2.5 relative hover:bg-[#141414]/5 rounded-xl transition-all h-10 w-10 flex items-center justify-center ${isNotifOpen ? 'bg-[#141414]/5 text-[#5A5A40]' : 'text-[#141414]/70'}`}
+              title="Activity Alerts"
+              id="notification-bell-btn"
+            >
+              <Bell className={`w-5 h-5 ${unreadCount > 0 ? 'animate-bounce' : ''}`} />
+              {unreadCount > 0 && (
+                <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full animate-ping" />
+              )}
+              {unreadCount > 0 && (
+                <span className="absolute top-2 right-2 w-2.5 h-2.5 bg-red-500 rounded-full flex items-center justify-center text-[7px] font-bold text-white leading-none">
+                  {unreadCount}
+                </span>
+              )}
+            </button>
+
+            <AnimatePresence>
+              {isNotifOpen && (
+                <motion.div
+                  initial={{ opacity: 0, y: 12, scale: 0.95 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: 12, scale: 0.95 }}
+                  className="absolute right-0 mt-3 w-80 bg-[#fbfbfa]/95 backdrop-blur-xl border border-[#141414]/10 rounded-[32px] p-5 shadow-2xl z-50 flex flex-col gap-4 text-left text-[#141414] select-none text-sm pointer-events-auto"
+                  id="notifications-panel"
+                >
+                  <div className="flex items-center justify-between border-b border-[#141414]/5 pb-3">
+                    <div className="flex items-center gap-2">
+                      <div className="p-1.5 bg-[#5A5A40]/10 rounded-lg text-[#5A5A40]">
+                        <Bell className="w-3.5 h-3.5" />
+                      </div>
+                      <span className="font-serif italic font-bold">Activity Feed</span>
+                    </div>
+                    {unreadCount > 0 && (
+                      <button
+                        onClick={() => {
+                          onMarkAllAsRead();
+                        }}
+                        className="flex items-center gap-1 text-[9px] uppercase font-black tracking-wider text-[#5A5A40] hover:opacity-75 transition-opacity"
+                        title="Mark all notifications as read"
+                      >
+                        <Check className="w-3 h-3" />
+                        read all
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="max-h-60 overflow-y-auto flex flex-col gap-1.5 pr-1 scrollbar-thin">
+                    {notifications.length === 0 ? (
+                      <div className="py-8 text-center text-xs opacity-50 px-2">
+                        <Bell className="w-8 h-8 mx-auto opacity-15 mb-2.5 text-[#5A5A40]" />
+                        <p className="font-serif italic font-bold text-sm mb-1">Pristine Broadcast</p>
+                        <p className="text-[9px] leading-relaxed max-w-[200px] mx-auto opacity-60">
+                          When fellow travelers share new personal discoveries, alerts will stream here in real-time.
+                        </p>
+                      </div>
+                    ) : (
+                      notifications.map((notif) => (
+                        <button
+                          key={notif.id}
+                          onClick={() => {
+                            onNotificationClick(notif);
+                            setIsNotifOpen(false);
+                          }}
+                          className={`w-full flex items-start gap-2.5 p-3 rounded-2xl transition-all text-left group border ${
+                            notif.read 
+                              ? 'border-transparent hover:bg-[#141414]/5 opacity-60' 
+                              : 'bg-white border-[#141414]/5 shadow-sm hover:border-[#141414]/15'
+                          }`}
+                        >
+                          <div className={`p-2 rounded-xl shrink-0 ${notif.read ? 'bg-[#141414]/5 text-[#141414]/40' : 'bg-[#5A5A40]/10 text-[#5A5A40]'}`}>
+                            <MapPin className="w-3.5 h-3.5 group-hover:scale-110 transition-transform" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="font-semibold text-xs leading-tight line-clamp-1 group-hover:text-[#5A5A40] transition-colors">
+                              {notif.locationName}
+                            </div>
+                            <div className="text-[10px] opacity-50 mt-0.5 line-clamp-1">
+                              Added by <span className="font-medium opacity-80">{notif.userName}</span>
+                            </div>
+                            <div className="text-[8px] opacity-40 font-mono mt-1">
+                              {formatTimeAgo(notif.timestamp)}
+                            </div>
+                          </div>
+                          {!notif.read && (
+                            <span className="w-1.5 h-1.5 bg-red-500 rounded-full mt-1.5 shrink-0" />
+                          )}
+                        </button>
+                      ))
+                    )}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+
           {user ? (
             <div className="flex items-center gap-4">
               <div className="hidden lg:flex flex-col items-end">
@@ -124,3 +269,4 @@ export default function Header({
     </header>
   );
 }
+

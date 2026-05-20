@@ -29,21 +29,30 @@ const AppGuideModal: React.FC<AppGuideModalProps> = ({ isOpen, onClose }) => {
             className="relative w-full max-w-5xl h-[85vh] bg-white rounded-[48px] shadow-2xl overflow-hidden flex flex-col md:flex-row border border-white/20"
           >
             {/* Left: Visual Media Side */}
-            <div className="w-full md:w-3/5 bg-[#141414] relative overflow-hidden group">
-              <div className="absolute inset-0 opacity-60">
-                <iframe 
-                  className="w-full h-full object-cover scale-110 pointer-events-none"
-                  src="https://www.youtube.com/embed/L_LUpnjgPso?autoplay=1&mute=1&controls=0&loop=1&playlist=L_LUpnjgPso&showinfo=0&rel=0"
-                  title="App Introduction"
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                ></iframe>
+            <div className="w-full md:w-3/5 bg-[#121210] relative overflow-hidden group">
+              {/* Ambient Glowing Background */}
+              <div className="absolute inset-0">
+                <div className="absolute -top-[30%] -left-[20%] w-[90%] h-[80%] rounded-full bg-[#5a5a40]/25 blur-[120px] transition-all duration-1000 group-hover:opacity-80" />
+                <div className="absolute -bottom-[20%] -right-[10%] w-[80%] h-[70%] rounded-full bg-[#00af87]/15 blur-[120px] transition-all duration-1000 group-hover:opacity-80" />
+                
+                {/* Subtle Geometric Grid Pattern */}
+                <div className="absolute inset-0 opacity-[0.05] bg-[linear-gradient(to_right,#ffffff_1px,transparent_1px),linear-gradient(to_bottom,#ffffff_1px,transparent_1px)] bg-[size:32px_32px]" />
+                
+                {/* Visual Decorative Accent (Large Minimalist compass rose silhouette) */}
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[340px] h-[340px] border border-white/[0.03] rounded-full flex items-center justify-center">
+                  <div className="w-[240px] h-[240px] border border-white/[0.04] rounded-full flex items-center justify-center">
+                    <div className="w-[140px] h-[140px] border border-white/[0.05] rounded-full flex items-center justify-center">
+                      <Compass className="w-16 h-16 text-white/[0.04]" />
+                    </div>
+                  </div>
+                </div>
               </div>
               
-              <div className="absolute inset-0 bg-gradient-to-t from-[#141414] via-[#141414]/20 to-transparent" />
+              <div className="absolute inset-0 bg-gradient-to-t from-[#121210] via-transparent to-transparent" />
               
-              <div className="absolute bottom-10 left-10 right-10">
+              <div className="absolute bottom-10 left-10 right-10 z-10">
                 <div className="flex items-center gap-3 text-white/60 mb-4 px-1">
-                  <Play className="w-4 h-4 fill-white/60" />
+                  <Compass className="w-4 h-4 text-[#00af87]" />
                   <span className="text-[10px] font-black uppercase tracking-[0.4em]">
                     {page === 1 ? 'Page 1: The Vision' : 'Page 2: The Logic'}
                   </span>

@@ -4,6 +4,7 @@ import { db, handleFirestoreError, OperationType } from '../lib/firebase.ts';
 import { Continent } from '../App.tsx';
 import { motion } from 'motion/react';
 import { ChevronRight, Map } from 'lucide-react';
+import { TRAVEL_GEOGRAPHY } from '../constants/geography';
 
 interface StateSelectorProps {
   continent: Continent;
@@ -31,10 +32,21 @@ export default function StateSelector({ continent, country, onSelect }: StateSel
           uniqueStates.add(data.state);
         }
       });
-      setStates(Array.from(uniqueStates).sort());
+      
+      let finalStates = Array.from(uniqueStates).sort();
+      if (finalStates.length === 0) {
+        // Fallback to pre-defined states from TRAVEL_GEOGRAPHY for this country
+        const preDefined = TRAVEL_GEOGRAPHY[continent]?.[country] || [];
+        finalStates = [...preDefined].sort();
+      }
+      
+      setStates(finalStates);
       setLoading(false);
     }, (error) => {
       handleFirestoreError(error, OperationType.LIST, 'locations');
+      // On error, fallback to pre-defined static states
+      const preDefined = TRAVEL_GEOGRAPHY[continent]?.[country] || [];
+      setStates([...preDefined].sort());
       setLoading(false);
     });
 

@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { User } from 'firebase/auth';
-import { db, handleFirestoreError, OperationType } from '../lib/firebase';
+import { db, handleFirestoreError, OperationType, logout } from '../lib/firebase';
 import { collection, query, where, getDocs, doc, getDoc, setDoc, serverTimestamp, orderBy, limit } from 'firebase/firestore';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, User as UserIcon, Calendar, Mail, Phone, ChevronDown, Check, Award, MapPin, Bookmark, Compass, Lock, Trophy, Clock } from 'lucide-react';
+import { X, User as UserIcon, Calendar, Mail, Phone, ChevronDown, Check, Award, MapPin, Bookmark, Compass, Lock, Trophy, Clock, LogOut } from 'lucide-react';
 import { TRAVEL_BADGES } from '../constants/badges.tsx';
 
 interface UserProfile {
@@ -390,7 +390,7 @@ export default function UserProfileModal({ isOpen, onClose, user }: UserProfileM
                           </div>
                         </div>
 
-                        <div className="pt-6">
+                        <div className="pt-6 space-y-3">
                           <button
                             type="submit"
                             disabled={isSaving}
@@ -407,6 +407,21 @@ export default function UserProfileModal({ isOpen, onClose, user }: UserProfileM
                             ) : (
                               'Update Profile'
                             )}
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              try {
+                                await logout();
+                                onClose();
+                              } catch (e) {
+                                console.error("Logout Error:", e);
+                              }
+                            }}
+                            className="w-full py-4 rounded-[24px] border border-red-200 text-red-600 font-bold text-base uppercase tracking-widest hover:bg-red-50 active:scale-95 transition-all flex items-center justify-center gap-2"
+                          >
+                            <LogOut className="w-5 h-5" /> Log Out
                           </button>
                         </div>
                       </form>
