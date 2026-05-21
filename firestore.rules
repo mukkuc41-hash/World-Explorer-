@@ -7,7 +7,10 @@ service cloud.firestore {
     }
 
     function isVerified() {
-      return isSignedIn() && request.auth.token.email_verified == true;
+      return isSignedIn() && (
+        !('email_verified' in request.auth.token) ||
+        request.auth.token.email_verified == true
+      );
     }
 
     function isOwner(userId) {
@@ -61,7 +64,7 @@ service cloud.firestore {
     }
     function isValidLocation(data) {
       return data.keys().hasAll(['name', 'description', 'imageUrl', 'continent', 'country', 'state', 'userId', 'userName', 'lat', 'lng', 'createdAt', 'updatedAt'])
-        && data.keys().size() == 12
+        && (data.keys().size() == 12 || (data.keys().size() == 13 && data.keys().contains('isDeleted')))
         && data.name is string && data.name.size() > 0 && data.name.size() <= 200
         && data.description is string && data.description.size() > 0 && data.description.size() <= 5000
         && data.imageUrl is string && data.imageUrl.size() > 0 && data.imageUrl.size() <= 2000
@@ -72,6 +75,7 @@ service cloud.firestore {
         && data.userName is string && data.userName.size() <= 100
         && data.lat is number
         && data.lng is number
+        && (!data.keys().contains('isDeleted') || data.isDeleted is bool)
         && data.createdAt == request.time
         && data.updatedAt == request.time;
     }
