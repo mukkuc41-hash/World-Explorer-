@@ -461,7 +461,9 @@ async function startServer() {
                   },
                   country: { type: "STRING" },
                   state: { type: "STRING" },
-                  imageUrl: { type: "STRING", description: "Optional image URL." }
+                  imageUrl: { type: "STRING", description: "Optional image URL." },
+                  lat: { type: "NUMBER", description: "Latitude coordinate of the location." },
+                  lng: { type: "NUMBER", description: "Longitude coordinate of the location." }
                 },
                 required: ["name", "description", "continent"]
               }
@@ -690,6 +692,21 @@ Tone: Professional, highly responsive, objective, and deeply knowledgeable. 'Pow
             } else if (call.name === "add_location") {
               const firestore = getDb();
               const args = call.args as any;
+
+              const continentCoords: Record<string, { lat: number; lng: number }> = {
+                "Asia": { lat: 34.0479, lng: 100.6197 },
+                "Europe": { lat: 48.69096, lng: 14.7202 },
+                "North America": { lat: 39.8283, lng: -98.5795 },
+                "South America": { lat: -14.2350, lng: -51.9253 },
+                "Africa": { lat: -8.7832, lng: 34.5085 },
+                "Oceania": { lat: -25.2744, lng: 133.7751 },
+                "Antarctica": { lat: -82.8628, lng: 135.0000 }
+              };
+
+              const defaultCoord = continentCoords[args.continent] || { lat: 0.0, lng: 0.0 };
+              const latNum = typeof args.lat === 'number' ? args.lat : defaultCoord.lat;
+              const lngNum = typeof args.lng === 'number' ? args.lng : defaultCoord.lng;
+
               const locationData = {
                 name: args.name,
                 description: args.description,
@@ -699,6 +716,8 @@ Tone: Professional, highly responsive, objective, and deeply knowledgeable. 'Pow
                 imageUrl: args.imageUrl || `https://images.unsplash.com/photo-1503220317375-aaad61436b1b?auto=format&fit=crop&q=80&w=800&keywords=${encodeURIComponent(args.name)}`,
                 userId: currentUserId || "world-explorer-ai",
                 userName: currentUserName || "World Explorer AI",
+                lat: latNum,
+                lng: lngNum,
                 createdAt: new Date().toISOString(),
                 updatedAt: new Date().toISOString(),
                 isDeleted: false
@@ -878,6 +897,98 @@ Tone: Professional, highly responsive, objective, and deeply knowledgeable. 'Pow
       const isQuotaError = error.message?.includes("RESOURCE_EXHAUSTED") || error.status === 429;
       res.status(isQuotaError ? 429 : 500).json({ 
         error: isQuotaError ? "World Explorer AI is taking a break (Quota exceeded). Please try again later." : `Generation failed: ${error.message || "Unknown error"}`
+      });
+    }
+  });
+
+  app.post("/api/ai-autofill", async (req, res) => {
+    try {
+      const { place } = req.body;
+      if (!place) {
+        return res.status(400).json({ error: "Place name is required" });
+      }
+
+      if (!process.env.GEMINI_API_KEY) {
+        return res.status(500).json({ error: "Gemini API key is missing on the server." });
+      }
+
+      console.log(`AI-autofill details for: ${place}`);
+
+      const response = await callGemini(
+        () => ai.models.generateContent({
+          model: "gemini-3.5-flash",
+          contents: `You are a world-class travel, geography and metadata expert. Search for the place: "${place}" (and use Google Search grounding). Extract and return:
+1. Exact coordinates (latitude and longitude numbers).
+2. Clean capitalized State/Region and Country of the place.
+3. Continent: must be one of: "Africa", "Asia", "Europe", "North America", "South America", "Oceania", "Antarctica".
+4. A highly descriptive, beautifully written, 2-3 sentence travel description for tourists.
+5. A clean, beautiful, short name or display title for this place (keep it short and elegant, under 60 characters).
+6. 2-3 photography search keywords for Unsplash (e.g., "paris eiffel tower evening").
+
+Format the output strictly as a JSON object matching the requested schema.`,
+          config: {
+            tools: [{ googleSearch: {} }],
+            toolConfig: { includeServerSideToolInvocations: true } as any,
+            responseMimeType: "application/json",
+            responseSchema: {
+              type: "OBJECT",
+              properties: {
+                name: { type: "STRING" },
+                description: { type: "STRING" },
+                country: { type: "STRING" },
+                state: { type: "STRING" },
+                continent: { 
+                  type: "STRING", 
+                  enum: ["Africa", "Asia", "Europe", "North America", "South America", "Oceania", "Antarctica"]
+                },
+                lat: { type: "NUMBER" },
+                lng: { type: "NUMBER" },
+                imageKeywords: { type: "STRING" }
+              },
+              required: ["name", "description", "country", "state", "continent", "lat", "lng", "imageKeywords"]
+            }
+          } as any
+        } as any),
+        () => ai.models.generateContent({
+          model: "gemini-flash-latest",
+          contents: `Generate travel metadata for: "${place}". Extract exact coordinates, state, country, continent (Africa, Asia, Europe, North America, South America, Oceania, Antarctica), descriptive sentences, name/title, and image keywords in JSON.`,
+          config: {
+            tools: [{ googleSearch: {} }],
+            toolConfig: { includeServerSideToolInvocations: true } as any,
+            responseMimeType: "application/json",
+            responseSchema: {
+              type: "OBJECT",
+              properties: {
+                name: { type: "STRING" },
+                description: { type: "STRING" },
+                country: { type: "STRING" },
+                state: { type: "STRING" },
+                continent: { 
+                  type: "STRING", 
+                  enum: ["Africa", "Asia", "Europe", "North America", "South America", "Oceania", "Antarctica"]
+                },
+                lat: { type: "NUMBER" },
+                lng: { type: "NUMBER" },
+                imageKeywords: { type: "STRING" }
+              },
+              required: ["name", "description", "country", "state", "continent", "lat", "lng", "imageKeywords"]
+            }
+          } as any
+        } as any)
+      );
+
+      let text = response.text;
+      if (!text) {
+        throw new Error("Empty response from Gemini");
+      }
+
+      const data = JSON.parse(text);
+      res.json(data);
+    } catch (error: any) {
+      console.error("AI Auto-fill error:", error);
+      const isQuotaError = error.message?.includes("RESOURCE_EXHAUSTED") || error.status === 429;
+      res.status(isQuotaError ? 429 : 500).json({ 
+        error: isQuotaError ? "World Explorer AI is taking a break (Quota exceeded). Please try again later." : `Auto-fill failed: ${error.message || "Unknown error"}`
       });
     }
   });

@@ -4,7 +4,7 @@ import { collection, doc, setDoc, serverTimestamp, increment } from 'firebase/fi
 import { db, handleFirestoreError, OperationType } from '../lib/firebase.ts';
 import { Continent } from '../App.tsx';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Camera, Upload, AlertCircle, MapPin, Image as ImageIcon, Trash2, Check, RefreshCw, CheckCircle2 } from 'lucide-react';
+import { X, Camera, Upload, AlertCircle, MapPin, Image as ImageIcon, Trash2, Check, RefreshCw, CheckCircle2, Sparkles } from 'lucide-react';
 import PlaceAutocomplete from './PlaceAutocomplete.tsx';
 
 interface AddLocationModalProps {
@@ -23,6 +23,151 @@ export default function AddLocationModal({ isOpen, onClose, continent, user }: A
   const [coords, setCoords] = useState<{ lat: number, lng: number } | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // AI Co-pilot State Additions
+  const [aiSearchText, setAiSearchText] = useState('');
+  const [isAiLoading, setIsAiLoading] = useState(false);
+  const [aiMessage, setAiMessage] = useState<{ text: string; isError: boolean } | null>(null);
+
+  // AI Co-pilot Handlers
+  const handleAiAutofill = async () => {
+    const targetPlace = aiSearchText.trim() || name.trim();
+    if (!targetPlace) {
+      setAiMessage({ text: "Please enter a landmark or landmark name to autofill.", isError: true });
+      return;
+    }
+
+    setIsAiLoading(true);
+    setAiMessage(null);
+    setError(null);
+
+    try {
+      const response = await fetch('/api/ai-autofill', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ place: targetPlace }),
+      });
+
+      if (!response.ok) {
+        const errData = await response.json();
+        throw new Error(errData.error || 'AI Auto-fill failed.');
+      }
+
+      const data = await response.json();
+
+      // Populate states with AI recommendations
+      setName(data.name || name || targetPlace);
+      setDescription(data.description || '');
+      setCountry(data.country || '');
+      setState(data.state || '');
+      if (typeof data.lat === 'number' && typeof data.lng === 'number') {
+        setCoords({ lat: data.lat, lng: data.lng });
+      }
+
+      // Sync the AI input text if they left it empty
+      if (!aiSearchText) {
+        setAiSearchText(data.name || targetPlace);
+      }
+
+      // Suggest Unsplash image using keywords if no image is loaded OR if they are using URL link method
+      if (data.imageKeywords) {
+        setUploadMethod('url');
+        setImageUrl(`https://images.unsplash.com/photo-1503220317375-aaad61436b1b?auto=format&fit=crop&q=80&w=800&keywords=${encodeURIComponent(data.imageKeywords)}`);
+      }
+
+      setAiMessage({ text: "✨ AI Smart Fill successfully configured all fields, coordinates and Unsplash image! ✨", isError: false });
+    } catch (err: any) {
+      console.error(err);
+      setAiMessage({ text: err.message || "Failed to contact AI copilot.", isError: true });
+    } finally {
+      setIsAiLoading(false);
+    }
+  };
+
+  const handleGenerateDescription = async () => {
+    const targetPlace = name.trim() || aiSearchText.trim();
+    if (!targetPlace) {
+      setError("Please put a Display Name first so the AI knows what place to write about!");
+      return;
+    }
+
+    setIsAiLoading(true);
+    setError(null);
+    setAiMessage(null);
+
+    try {
+      const response = await fetch('/api/generate-details', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ place: targetPlace }),
+      });
+
+      if (!response.ok) {
+        const errData = await response.json();
+        throw new Error(errData.error || 'AI details generation failed.');
+      }
+
+      const data = await response.json();
+      setDescription(data.description || '');
+      
+      if (data.imageKeywords) {
+        setUploadMethod('url');
+        setImageUrl(`https://images.unsplash.com/photo-1503220317375-aaad61436b1b?auto=format&fit=crop&q=80&w=800&keywords=${encodeURIComponent(data.imageKeywords)}`);
+      }
+
+      setAiMessage({ text: "AI has finished writing a travel description!", isError: false });
+    } catch (err: any) {
+      console.error(err);
+      setError(`AI generation failed: ${err.message || 'Unknown error'}`);
+    } finally {
+      setIsAiLoading(false);
+    }
+  };
+
+  const handleResolveCoordinates = async () => {
+    const targetPlace = name.trim() || aiSearchText.trim();
+    if (!targetPlace) {
+      setError("Please enter a Display Name first so AI can lookup its coordinates!");
+      return;
+    }
+
+    setIsAiLoading(true);
+    setError(null);
+    setAiMessage(null);
+
+    try {
+      const response = await fetch('/api/ai-autofill', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ place: targetPlace }),
+      });
+
+      if (!response.ok) {
+        const errData = await response.json();
+        throw new Error(errData.error || 'AI coordinate lookup failed.');
+      }
+
+      const data = await response.json();
+      setCountry(data.country || '');
+      setState(data.state || '');
+      if (typeof data.lat === 'number' && typeof data.lng === 'number') {
+        setCoords({ lat: data.lat, lng: data.lng });
+      }
+
+      setAiMessage({ text: `AI found coordinates: ${data.lat.toFixed(4)}, ${data.lng.toFixed(4)}`, isError: false });
+    } catch (err: any) {
+      console.error(err);
+      setError(`Failed to resolve coordinates: ${err.message || 'Unknown error'}`);
+    } finally {
+      setIsAiLoading(false);
+    }
+  };
 
   // Gallery Upload additions
   const [uploadMethod, setUploadMethod] = useState<'gallery' | 'url'>('gallery');
@@ -288,6 +433,46 @@ export default function AddLocationModal({ isOpen, onClose, continent, user }: A
 
             <form onSubmit={handleSubmit} className="space-y-8">
               <div className="space-y-6">
+                {/* AI Co-pilot Smart Fill Box */}
+                <div className="p-6 bg-[#141414] text-white rounded-3xl shadow-xl space-y-4 relative overflow-hidden group border border-white/5">
+                  <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/10 rounded-full blur-2xl pointer-events-none group-hover:scale-125 transition-transform duration-500" />
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="w-5 h-5 text-emerald-400 animate-pulse" />
+                    <h3 className="font-serif italic text-lg leading-none">World Explorer AI • Smart Co-pilot</h3>
+                  </div>
+                  <p className="text-[11px] text-white/70 leading-relaxed">
+                    This smart tool is connected directly to the master <strong>World Explorer AI</strong> network and Google Search. Enter any global landmark (e.g. Kyoto Golden Pavilion, Petra Jordan) to automatically download geotags, resolve coordinates, and write accurate travel descriptions!
+                  </p>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      placeholder="Enter a landmark or city..."
+                      className="flex-1 bg-white/5 hover:bg-white/10 focus:bg-white/12 border border-white/10 focus:border-emerald-500/50 rounded-xl px-4 py-3 text-xs outline-none transition-all placeholder:text-white/30 font-medium"
+                      value={aiSearchText}
+                      onChange={(e) => setAiSearchText(e.target.value)}
+                    />
+                    <button
+                      type="button"
+                      disabled={isAiLoading || !aiSearchText.trim()}
+                      onClick={handleAiAutofill}
+                      className="px-5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 active:scale-95 text-white font-bold text-[10px] uppercase tracking-wider rounded-xl transition-all shadow-md flex items-center gap-1.5 shrink-0"
+                    >
+                      {isAiLoading ? (
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Sparkles className="w-3.5 h-3.5 hover:scale-110 transition-transform" />
+                      )}
+                      <span>Autofill</span>
+                    </button>
+                  </div>
+                  {aiMessage && (
+                    <p className={`text-[10px] uppercase font-bold tracking-widest flex items-center gap-1.5 ${aiMessage.isError ? 'text-red-400' : 'text-emerald-400'}`}>
+                      {aiMessage.isError ? <AlertCircle className="w-3.5 h-3.5" /> : <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 animate-bounce" />}
+                      {aiMessage.text}
+                    </p>
+                  )}
+                </div>
+
                 <div className="group">
                   <label className="text-[10px] uppercase tracking-widest font-bold opacity-40 group-focus-within:opacity-100 transition-opacity mb-2 block">Search Location</label>
                   <div className="relative">
@@ -298,11 +483,24 @@ export default function AddLocationModal({ isOpen, onClose, continent, user }: A
                     />
                     <MapPin className="absolute left-6 top-1/2 -translate-y-1/2 w-5 h-5 opacity-30" />
                   </div>
-                  {coords && (
-                    <p className="mt-2 text-[10px] text-green-600 font-bold uppercase tracking-widest flex items-center gap-1">
-                      <CheckCircle2 className="w-3 h-3" /> Location verified: {coords.lat.toFixed(4)}, {coords.lng.toFixed(4)}
-                    </p>
-                  )}
+                  <div className="flex flex-wrap items-center justify-between gap-2 mt-2">
+                    {coords ? (
+                      <p className="text-[10px] text-green-600 font-bold uppercase tracking-widest flex items-center gap-1">
+                        <CheckCircle2 className="w-3 h-3 text-green-600" /> Location verified: {coords.lat.toFixed(4)}, {coords.lng.toFixed(4)}
+                      </p>
+                    ) : (
+                      <span className="text-[9px] opacity-40 uppercase font-bold tracking-widest">No coordinates verified yet</span>
+                    )}
+                    <button
+                      type="button"
+                      onClick={handleResolveCoordinates}
+                      disabled={isAiLoading || (!name && !aiSearchText)}
+                      className="text-[10px] text-[#5A5A40] hover:text-[#7A7A50] disabled:opacity-40 font-bold uppercase tracking-widest flex items-center gap-1 bg-[#5A5A40]/5 hover:bg-[#5A5A40]/10 px-2.5 py-1 rounded-md transition-colors"
+                    >
+                      <Sparkles className="w-3 h-3" />
+                      <span>Resolve Coords with World Explorer AI</span>
+                    </button>
+                  </div>
                 </div>
 
                 <div className="group">
@@ -326,9 +524,21 @@ export default function AddLocationModal({ isOpen, onClose, continent, user }: A
                     onChange={(e) => setDescription(e.target.value)}
                     placeholder="Tell us what makes this place special..."
                     rows={4}
-                    className="w-full bg-[#f5f5f0] border-none rounded-2xl px-6 py-4 focus:ring-2 focus:ring-[#5A5A40] outline-none transition-all font-medium resize-none"
+                    className="w-full bg-[#f5f5f0] border-none rounded-2xl px-6 py-4 focus:ring-2 focus:ring-[#5A5A40] outline-none transition-all font-medium resize-none resize-none"
                     maxLength={5000}
                   />
+                  <div className="flex items-center justify-between mt-2">
+                    <button
+                      type="button"
+                      onClick={handleGenerateDescription}
+                      disabled={isAiLoading || (!name && !aiSearchText)}
+                      className="flex items-center gap-1.5 py-1.5 px-3 bg-[#5A5A40]/10 hover:bg-[#5A5A40]/25 rounded-xl text-[10px] font-bold text-[#5A5A40] uppercase tracking-wider transition-all disabled:opacity-40"
+                    >
+                      <Sparkles className="w-3 h-3" />
+                      <span>Generate Description with World Explorer AI</span>
+                    </button>
+                    <span className="text-[10px] opacity-40 font-mono">{description.length} / 5000 characters</span>
+                  </div>
                 </div>
 
                 {/* Beautiful Dual-Mode image selector (Gallery upload & Web URL paste) */}
