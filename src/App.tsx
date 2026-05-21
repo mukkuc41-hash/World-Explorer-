@@ -28,8 +28,9 @@ import LocationHintButton from './components/LocationHintButton.tsx';
 import GlobalRotatingEarth from './components/GlobalRotatingEarth.tsx';
 import WorldExplorerAI from './components/WorldExplorerAI.tsx';
 import AmbientSoundtrack from './components/AmbientSoundtrack.tsx';
+import PermissionsManager from './components/PermissionsManager.tsx';
 import { db, handleFirestoreError, OperationType } from './lib/firebase.ts';
-import { collection, query, where, getDocs, onSnapshot, doc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, query, where, getDocs, onSnapshot, doc, setDoc, serverTimestamp, orderBy } from 'firebase/firestore';
 import { LogIn } from 'lucide-react';
 
 export type Continent = "Africa" | "Asia" | "Europe" | "North America" | "South America" | "Oceania" | "Antarctica";
@@ -127,6 +128,191 @@ export default function App() {
 
     return () => unsubscribes.forEach(unsub => unsub());
   }, [user]);
+
+  // Real-time notifications listener for new locations added by other explorers
+  const [notifications, setNotifications] = useState<ExplorerNotification[]>([]);
+  const [activeToast, setActiveToast] = useState<ExplorerNotification | null>(null);
+
+  // Play beautiful, premium synthetic chime when an update arrives
+  const playNotificationChime = () => {
+    try {
+      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioContextClass) return;
+      const ctx = new AudioContextClass();
+      
+      const osc1 = ctx.createOscillator();
+      const osc2 = ctx.createOscillator();
+      const gainNode = ctx.createGain();
+      
+      osc1.type = 'sine';
+      osc2.type = 'sine';
+      
+      // Multi-harmonic perfect chord (C5 followed rapidly by E5 and high G5)
+      osc1.frequency.setValueAtTime(523.25, ctx.currentTime); // C5
+      osc1.frequency.setValueAtTime(659.25, ctx.currentTime + 0.12); // E5
+      osc1.frequency.setValueAtTime(1046.50, ctx.currentTime + 0.24); // C6
+      
+      osc2.frequency.setValueAtTime(392.00, ctx.currentTime); // G4
+      osc2.frequency.setValueAtTime(523.25, ctx.currentTime + 0.12); // C5
+      osc2.frequency.setValueAtTime(783.99, ctx.currentTime + 0.24); // G5
+      
+      gainNode.gain.setValueAtTime(0, ctx.currentTime);
+      gainNode.gain.linearRampToValueAtTime(0.2, ctx.currentTime + 0.06);
+      gainNode.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.75);
+      
+      osc1.connect(gainNode);
+      osc2.connect(gainNode);
+      gainNode.connect(ctx.destination);
+      
+      osc1.start();
+      osc2.start();
+      
+      osc1.stop(ctx.currentTime + 0.85);
+      osc2.stop(ctx.currentTime + 0.85);
+    } catch (e) {
+      console.warn("Audio chime play error:", e);
+    }
+  };
+
+  // Securely request browser Push Notification permissions on mount
+  useEffect(() => {
+    if ('Notification' in window && Notification.permission === 'default') {
+      try {
+        Notification.requestPermission();
+      } catch (err) {
+        console.warn("HTML5 Notification request blocked in current sandbox:", err);
+      }
+    }
+  }, []);
+
+  // Watch Active Toast and automatically fade it out after 8.5 seconds
+  useEffect(() => {
+    if (!activeToast) return;
+    const timer = setTimeout(() => {
+      setActiveToast(null);
+    }, 8500);
+    return () => clearTimeout(timer);
+  }, [activeToast]);
+
+  const handleSimulateNotification = () => {
+    const mockNotif: ExplorerNotification = {
+      id: `sim-${Date.now()}`,
+      type: 'new_location',
+      locationName: 'Taj Mahal',
+      locationId: 'sim-location-id',
+      userName: 'Sophia Laurent',
+      timestamp: new Date().toISOString(),
+      read: false,
+      locationData: {
+        id: 'sim-location-id',
+        name: 'Taj Mahal',
+        imageUrl: 'https://images.unsplash.com/photo-1564507592333-c60657eea523?auto=format&fit=crop&q=80',
+        userName: 'Sophia Laurent',
+        description: 'The Taj Mahal is an ivory-white marble mausoleum on the south bank of the Yamuna River in Agra, India.',
+        continent: 'Asia'
+      }
+    };
+    
+    setNotifications(prev => [mockNotif, ...prev]);
+    setActiveToast(mockNotif);
+    playNotificationChime();
+  };
+
+  useEffect(() => {
+    if (!user) {
+      setNotifications([]);
+      return;
+    }
+
+    const q = query(
+      collection(db, 'locations'),
+      orderBy('createdAt', 'desc')
+    );
+
+    let isInitialLoad = true;
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const newNotifications: ExplorerNotification[] = [];
+      let latestLiveNotif: ExplorerNotification | null = null;
+      
+      snapshot.docChanges().forEach((change) => {
+        if (change.type === 'added') {
+          const data = change.doc.data();
+          if (data && data.userId !== user.uid) {
+            const locationId = change.doc.id;
+            
+            // Format fallback date properly
+            let seconds = data.createdAt?.seconds;
+            if (!seconds && data.createdAt?.toDate) {
+              seconds = Math.floor(data.createdAt.toDate().getTime() / 1000);
+            }
+            const dateVal = seconds ? new Date(seconds * 1000) : new Date();
+            const dateString = dateVal.toISOString();
+
+            const newNotif: ExplorerNotification = {
+              id: `notif-${locationId}`,
+              type: 'new_location',
+              locationName: data.name || 'Mysterious Spot',
+              locationId: locationId,
+              userName: data.userName || 'Anonymous Traveler',
+              timestamp: dateString,
+              read: isInitialLoad, // auto-mark older historical items as read so they don't badge immediately on startup
+              locationData: { id: locationId, ...data }
+            };
+            newNotifications.push(newNotif);
+
+            if (!isInitialLoad) {
+              latestLiveNotif = newNotif;
+            }
+          }
+        }
+      });
+
+      if (newNotifications.length > 0) {
+        setNotifications((prev) => {
+          const merged = [...newNotifications, ...prev];
+          // Filter duplicates strictly
+          const unique = merged.filter((v, i, a) => a.findIndex(t => t.locationId === v.locationId) === i);
+          // Sort by timestamp descending
+          unique.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+          return unique.slice(0, 30);
+        });
+
+        // Trigger notifications and sounds for live real-time additions
+        if (latestLiveNotif) {
+          setActiveToast(latestLiveNotif);
+          playNotificationChime();
+
+          if ('Notification' in window && Notification.permission === 'granted') {
+            try {
+              new Notification("🌍 New Explorer Alert!", {
+                body: `${(latestLiveNotif as ExplorerNotification).locationName} was discovered by ${(latestLiveNotif as ExplorerNotification).userName}!`,
+              });
+            } catch (err) {
+              console.warn("Native Notification blocked in sandboxed iframe environment:", err);
+            }
+          }
+        }
+      }
+
+      isInitialLoad = false;
+    }, (error) => {
+      console.warn("Real-time alerts subscription:", error);
+    });
+
+    return () => unsubscribe();
+  }, [user]);
+
+  const handleNotificationClick = (notif: ExplorerNotification) => {
+    // 1. Mark notification as read
+    setNotifications(prev => prev.map(n => n.id === notif.id ? { ...n, read: true } : n));
+    // 2. Load the target location into details so it opens the info modal beautifully
+    setSelectedLocationData(notif.locationData);
+  };
+
+  const handleMarkAllAsRead = () => {
+    setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+  };
 
   // Initial mount setup: clean onboarding slate & automatic logout so they must go through the login and guide steps
   useEffect(() => {
@@ -831,6 +1017,84 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[#f5f5f0] font-sans text-[#141414]">
+      {/* iOS/Android Simulated Phone Notification Alert Card */}
+      <AnimatePresence>
+        {activeToast && (
+          <motion.div
+            initial={{ opacity: 0, y: -100, x: "-50%", scale: 0.85 }}
+            animate={{ opacity: 1, y: 0, x: "-50%", scale: 1 }}
+            exit={{ opacity: 0, y: -42, x: "-50%", scale: 0.9 }}
+            transition={{ type: "spring", damping: 16, stiffness: 220 }}
+            className="fixed top-24 left-1/2 w-[calc(100%-32px)] max-w-[390px] bg-[#fbfbfa]/95 backdrop-blur-2xl border border-emerald-500/30 rounded-[32px] p-4.5 shadow-2xl z-[120] flex flex-col gap-3 text-left hover:border-emerald-500/50 transition-colors pointer-events-auto"
+            id="phone-notification-card"
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5">
+                <div className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                </div>
+                <span className="text-[10px] uppercase font-black tracking-wider text-emerald-600 block">
+                  Realtime Discovery Alert
+                </span>
+              </div>
+              <button
+                onClick={() => setActiveToast(null)}
+                className="p-1 hover:bg-[#141414]/5 rounded-full opacity-60 hover:opacity-100 transition-all active:scale-95"
+                title="Dismiss notification"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+
+            <div className="flex items-start gap-3">
+              <div className="relative shrink-0 w-11 h-11 bg-emerald-600/10 text-emerald-700 rounded-2xl flex items-center justify-center overflow-hidden border border-emerald-500/10">
+                {activeToast.locationData?.imageUrl ? (
+                  <img 
+                    src={activeToast.locationData.imageUrl} 
+                    alt={activeToast.locationName} 
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <MapPin className="w-5 h-5 shrink-0" />
+                )}
+                <span className="absolute bottom-0 right-0 w-3 h-3 bg-[#fbfbfa] rounded-full flex items-center justify-center border border-[#141414]/10 animate-bounce">
+                  <span className="w-1.5 h-1.5 bg-red-500 rounded-full shrink-0" />
+                </span>
+              </div>
+
+              <div className="flex-1 min-w-0">
+                <h4 className="font-serif italic font-bold text-xs leading-snug truncate">
+                  {activeToast.locationName}
+                </h4>
+                <p className="text-[10px] opacity-60 mt-0.5 leading-snug">
+                  Pinned by <span className="font-semibold">{activeToast.userName}</span>
+                </p>
+              </div>
+            </div>
+
+            <div className="flex gap-2 border-t border-[#141414]/5 pt-2 text-[10px] uppercase font-bold tracking-wider">
+              <button
+                onClick={() => {
+                  handleNotificationClick(activeToast);
+                  setActiveToast(null);
+                }}
+                className="flex-1 bg-[#141414] hover:bg-[#2c2c2c] active:scale-[0.98] text-white py-2 rounded-xl text-center transition-all flex items-center justify-center gap-1.5 shadow-sm"
+              >
+                <Compass className="w-3 h-3 animate-spin" style={{ animationDuration: '6s' }} />
+                Inspect Now
+              </button>
+              <button
+                onClick={() => setActiveToast(null)}
+                className="px-4 py-2 border border-[#141414]/10 hover:bg-[#141414]/5 rounded-xl text-[#141414] text-center active:scale-[0.98] transition-all"
+              >
+                Dismiss
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       <Header 
         user={user} 
         searchQuery={searchQuery} 
@@ -839,6 +1103,9 @@ export default function App() {
         onBadgesClick={() => setIsBadgesOpen(true)}
         onLeaderboardClick={() => setIsLeaderboardOpen(true)}
         onGuideClick={() => setIsGuideOpen(true)}
+        notifications={notifications}
+        onNotificationClick={handleNotificationClick}
+        onMarkAllAsRead={handleMarkAllAsRead}
       />
       
       <div className="max-w-[1600px] mx-auto flex flex-col md:flex-row min-h-[calc(100-80px)]">
@@ -964,6 +1231,9 @@ export default function App() {
         onLaunchUploader={() => setIsAddModalOpen(true)}
         isLoggedIn={!!user}
         onLogin={handleLogin}
+      />
+      <PermissionsManager 
+        onSimulateNotification={handleSimulateNotification}
       />
       
       {/* World Explorer AI Trigger */}

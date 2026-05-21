@@ -168,11 +168,16 @@ export default function LocationHintButton({ onLaunchUploader, isLoggedIn, onLog
                       </div>
                       <div>
                         <h4 className="font-bold text-gray-900 text-sm flex items-center gap-2">
-                          <Image className="w-4 h-4 text-amber-500" /> Provide an Image URL
+                          <Image className="w-4 h-4 text-amber-500" /> Grant Permissions & Upload
                         </h4>
                         <p className="text-gray-600 text-xs mt-1.5 leading-relaxed">
-                          Paste a direct web link (such as Unsplash, Pexels, or Picsum) to render high-definition cards. Don't worry if you don't have one—we automatically assign a cozy placeholder if left blank!
+                          To display real-time activity, the app prompts you <strong>all over the app</strong> via standard systems. You can upload landmarks directly from your device.
                         </p>
+                        <div className="mt-2 text-[10px] text-amber-900 bg-amber-50 rounded-lg p-2.5 space-y-1">
+                          <p>📸 <strong>Gallery File Picker:</strong> Browse from your phone gallery and capture with local camera securely. Images are resized completely on-device.</p>
+                          <p>🍿 <strong>Interactive App Popups:</strong> Real-time discovery banners fly onto your screen immediately when someone pins a location anywhere on the globe!</p>
+                          <p>🔒 <strong>Strict AI Safety Guard:</strong> Artificial intelligence networks and scraping agents are <strong>strictly forbidden</strong> from ever reading, indexing, or processing your uploaded photos and device media files.</p>
+                        </div>
                       </div>
                     </div>
 
@@ -221,6 +226,14 @@ export default function LocationHintButton({ onLaunchUploader, isLoggedIn, onLog
                       <h5 className="text-xs font-bold text-black font-sans">Free Stock Images</h5>
                       <p className="text-gray-500 text-[11px] leading-relaxed">
                         Search any place on <span className="font-semibold text-gray-700">unsplash.com</span>, right-click any magnificent photo, copy its image link, and paste it into our Image URL slot for stunning visuals!
+                      </p>
+                    </div>
+
+                    <div className="p-4 bg-gray-50 rounded-2xl border border-[#5A5A40]/15 space-y-1.5">
+                      <span className="text-[9px] font-black uppercase tracking-wider text-[#5A5A40]">🔔 Live Bell Alerts</span>
+                      <h5 className="text-xs font-bold text-black font-sans">Instant Network Pop-ups</h5>
+                      <p className="text-gray-500 text-[11px] leading-relaxed">
+                        Whenever someone adds a location, an instant simulated mobile notification pops up on everyone's screen with a beautiful, synchronized synthetic chime sound! Enable your notification permissions inside the uploader to join the broadcast.
                       </p>
                     </div>
 

@@ -26,6 +26,7 @@ interface HeaderProps {
   notifications: ExplorerNotification[];
   onNotificationClick: (notif: ExplorerNotification) => void;
   onMarkAllAsRead: () => void;
+  onSimulateNotification?: () => void;
 }
 
 export default function Header({ 
@@ -38,7 +39,8 @@ export default function Header({
   onGuideClick,
   notifications = [],
   onNotificationClick,
-  onMarkAllAsRead
+  onMarkAllAsRead,
+  onSimulateNotification
 }: HeaderProps) {
   const [isNotifOpen, setIsNotifOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement | null>(null);
@@ -183,7 +185,7 @@ export default function Header({
 
                   <div className="max-h-60 overflow-y-auto flex flex-col gap-1.5 pr-1 scrollbar-thin">
                     {notifications.length === 0 ? (
-                      <div className="py-8 text-center text-xs opacity-50 px-2">
+                      <div className="py-8 text-center text-xs opacity-50 px-2 flex flex-col items-center">
                         <Bell className="w-8 h-8 mx-auto opacity-15 mb-2.5 text-[#5A5A40]" />
                         <p className="font-serif italic font-bold text-sm mb-1">Pristine Broadcast</p>
                         <p className="text-[9px] leading-relaxed max-w-[200px] mx-auto opacity-60">
@@ -225,6 +227,20 @@ export default function Header({
                       ))
                     )}
                   </div>
+
+                  {onSimulateNotification && (
+                    <div className="border-t border-[#141414]/5 pt-3 mt-1">
+                      <button
+                        onClick={() => {
+                          onSimulateNotification();
+                        }}
+                        className="w-full py-2.5 bg-[#141414] hover:bg-[#5A5A40] text-white rounded-xl text-[10px] font-black uppercase tracking-widest text-center transition-all flex items-center justify-center gap-1.5 active:scale-[0.98]"
+                      >
+                        <span className="animate-pulse w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                        Simulate Realtime Alert
+                      </button>
+                    </div>
+                  )}
                 </motion.div>
               )}
             </AnimatePresence>
