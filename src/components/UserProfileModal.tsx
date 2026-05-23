@@ -291,7 +291,7 @@ export default function UserProfileModal({ isOpen, onClose, user }: UserProfileM
                             <label className={labelClasses}>First Name</label>
                             <input
                               type="text"
-                              value={profile.firstName}
+                              value={profile.firstName || ''}
                               onChange={e => setProfile({...profile, firstName: e.target.value})}
                               className={inputClasses}
                               placeholder="e.g. Sabrina"
@@ -301,7 +301,7 @@ export default function UserProfileModal({ isOpen, onClose, user }: UserProfileM
                             <label className={labelClasses}>Last Name</label>
                             <input
                               type="text"
-                              value={profile.lastName}
+                              value={profile.lastName || ''}
                               onChange={e => setProfile({...profile, lastName: e.target.value})}
                               className={inputClasses}
                               placeholder="e.g. Aryan"
@@ -314,7 +314,7 @@ export default function UserProfileModal({ isOpen, onClose, user }: UserProfileM
                           <div className="relative">
                             <input
                               type="text"
-                              value={profile.username}
+                              value={profile.username || ''}
                               onChange={e => setProfile({...profile, username: e.target.value})}
                               className={inputClasses}
                               placeholder="@username"
@@ -328,7 +328,7 @@ export default function UserProfileModal({ isOpen, onClose, user }: UserProfileM
                           <div className="relative">
                             <input
                               type="email"
-                              value={profile.email}
+                              value={profile.email || ''}
                               readOnly
                               className={`${inputClasses} bg-[#f5f5f0] cursor-not-allowed`}
                             />
@@ -345,7 +345,7 @@ export default function UserProfileModal({ isOpen, onClose, user }: UserProfileM
                             </div>
                             <input
                               type="tel"
-                              value={profile.phoneNumber}
+                              value={profile.phoneNumber || ''}
                               onChange={e => setProfile({...profile, phoneNumber: e.target.value})}
                               className={`${inputClasses} pl-24`}
                               placeholder="904 6470"
@@ -360,7 +360,7 @@ export default function UserProfileModal({ isOpen, onClose, user }: UserProfileM
                             <div className="relative">
                               <input
                                 type="date"
-                                value={profile.birthDate}
+                                value={profile.birthDate || ''}
                                 onChange={e => setProfile({...profile, birthDate: e.target.value})}
                                 className={`${inputClasses} appearance-none`}
                               />
@@ -373,7 +373,7 @@ export default function UserProfileModal({ isOpen, onClose, user }: UserProfileM
                             <label className={labelClasses}>Gender</label>
                             <div className="relative">
                               <select
-                                value={profile.gender}
+                                value={profile.gender || ''}
                                 onChange={e => setProfile({...profile, gender: e.target.value})}
                                 className={`${inputClasses} appearance-none cursor-pointer`}
                               >

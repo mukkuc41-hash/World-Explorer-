@@ -504,7 +504,62 @@ export default function App() {
     }
   };
 
-  const handleAIAction = (action: string) => {
+  const handleAIAction = async (action: string) => {
+    if (action.startsWith('add_location_sync:')) {
+      const jsonStr = action.substring('add_location_sync:'.length);
+      try {
+        const data = JSON.parse(jsonStr);
+        if (user && db) {
+          const locId = data.id || `loc-${Date.now()}`;
+          
+          // Robust continent normalization so it always satisfies firestore rules (enum check)
+          const mapContinent = (c: string): "Africa" | "Asia" | "Europe" | "North America" | "South America" | "Oceania" | "Antarctica" => {
+            const normalized = (c || '').trim().toLowerCase();
+            if (normalized.includes('asia')) return 'Asia';
+            if (normalized.includes('europe')) return 'Europe';
+            if (normalized.includes('africa')) return 'Africa';
+            if (normalized.includes('america') && (normalized.includes('north') || normalized.includes('usa') || normalized.includes('canada') || normalized.includes('mexico'))) return 'North America';
+            if (normalized.includes('america') && (normalized.includes('south') || normalized.includes('brazil') || normalized.includes('argentina'))) return 'South America';
+            if (normalized.includes('oceania') || normalized.includes('australia') || normalized.includes('nz')) return 'Oceania';
+            if (normalized.includes('antarct')) return 'Antarctica';
+            
+            const allowed: Array<"Africa" | "Asia" | "Europe" | "North America" | "South America" | "Oceania" | "Antarctica"> = [
+              "Africa", "Asia", "Europe", "North America", "South America", "Oceania", "Antarctica"
+            ];
+            for (const item of allowed) {
+              if (item.toLowerCase() === normalized) return item;
+            }
+            return 'Europe'; // Safest fallback
+          };
+
+          const finalLocationPayload = {
+            name: (data.name || 'Mysterious Discovery').trim().substring(0, 200),
+            description: (data.description || 'A fascinating travel landmark mapped on World Explorer.').trim().substring(0, 5000),
+            imageUrl: (data.imageUrl || `https://images.unsplash.com/photo-1503220317375-aaad61436b1b?auto=format&fit=crop&q=80&w=800`).trim().substring(0, 250000),
+            continent: mapContinent(data.continent),
+            country: (data.country || '').trim().substring(0, 100),
+            state: (data.state || '').trim().substring(0, 100),
+            userId: user.uid,
+            userName: (user.displayName || user.email || "Explorer").substring(0, 100),
+            lat: typeof data.lat === 'number' && !isNaN(data.lat) ? data.lat : (typeof data.lat === 'string' && !isNaN(parseFloat(data.lat)) ? parseFloat(data.lat) : 0),
+            lng: typeof data.lng === 'number' && !isNaN(data.lng) ? data.lng : (typeof data.lng === 'string' && !isNaN(parseFloat(data.lng)) ? parseFloat(data.lng) : 0),
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+            isDeleted: false
+          };
+          try {
+            await setDoc(doc(db, 'locations', locId), finalLocationPayload);
+            console.log(`[AI Sync] Successfully saved location client-side: ${finalLocationPayload.name}`);
+          } catch (writeErr) {
+            handleFirestoreError(writeErr, OperationType.WRITE, `locations/${locId}`);
+          }
+        }
+      } catch (err) {
+        console.error("Failed to sync AI added location:", err);
+      }
+      return;
+    }
+
     switch (action) {
       case 'open_add_location':
         user ? setIsAddModalOpen(true) : handleLogin();
@@ -1224,6 +1279,8 @@ export default function App() {
         locationId={selectedLocationData?.id}
         userId={selectedLocationData?.userId}
         isDeleted={selectedLocationData?.isDeleted}
+        lat={selectedLocationData?.lat}
+        lng={selectedLocationData?.lng}
       />
       <GlobalRotatingEarth />
       <InteractiveBackground />
@@ -1238,19 +1295,24 @@ export default function App() {
       
       {/* World Explorer AI Trigger */}
       <motion.div 
+        drag
+        dragMomentum={false}
+        dragElastic={0.15}
+        whileDrag={{ scale: 1.06, cursor: 'grabbing' }}
         whileHover={{ scale: 1.05 }}
         whileTap={{ scale: 0.95 }}
-        className="fixed bottom-6 right-6 z-[95]"
+        className="fixed bottom-6 right-6 z-[95] select-none"
+        title="Drag me anywhere! Click to ask World Explorer AI"
       >
         <button
           onClick={() => setIsAIOpen(true)}
           className="px-5 py-3.5 bg-[#141414] text-white rounded-full shadow-2xl hover:shadow-[#141414]/25 flex items-center gap-2.5 border border-white/10 font-bold text-xs tracking-wider uppercase transition-all"
           title="World Explorer AI Chatbot"
         >
-          <div className="w-5 h-5 rounded-full bg-gradient-to-tr from-[#5A5A40] to-emerald-500 flex items-center justify-center">
+          <div className="w-5 h-5 rounded-full bg-gradient-to-tr from-emerald-800 via-emerald-600 to-emerald-400 flex items-center justify-center relative shrink-0">
             <Sparkles className="w-3.5 h-3.5 text-white animate-pulse" />
           </div>
-          <span>World Explorer AI</span>
+          <span className="font-sans font-bold tracking-wider">WORLD EXPLORER AI</span>
         </button>
       </motion.div>
 

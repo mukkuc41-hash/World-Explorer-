@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Bot, X, Send, Sparkles, MapPin, Compass, Search, Link as LinkIcon, ShieldAlert, CheckCircle2, AlertTriangle, Database, Info } from 'lucide-react';
+import { Bot, X, Send, Sparkles, MapPin, Compass, Search, Link as LinkIcon, ShieldAlert, CheckCircle2, AlertTriangle, Database, Info, Minimize2, Maximize2 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { User } from 'firebase/auth';
 
@@ -24,6 +24,73 @@ export default function WorldExplorerAI({ isOpen, onClose, onAction, user }: Wor
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Minimization & Edge Resizing States
+  const [isMinimized, setIsMinimized] = useState(false);
+  const [width, setWidth] = useState(500);
+  const [isResizing, setIsResizing] = useState(false);
+
+  // Listen to escape key or layout resizes
+  const startResizing = (mouseDownEvent: React.MouseEvent) => {
+    mouseDownEvent.preventDefault();
+    setIsResizing(true);
+  };
+
+  const startResizingTouch = (touchEvent: React.TouchEvent) => {
+    if (touchEvent.touches.length === 1) {
+      setIsResizing(true);
+    }
+  };
+
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isResizing) return;
+      const computedWidth = window.innerWidth - e.clientX;
+      const minWidth = 360;
+      const maxWidth = window.innerWidth * 0.85;
+      if (computedWidth >= minWidth && computedWidth <= maxWidth) {
+        setWidth(computedWidth);
+      }
+    };
+
+    const handleMouseUp = () => {
+      setIsResizing(false);
+    };
+
+    if (isResizing) {
+      window.addEventListener('mousemove', handleMouseMove);
+      window.addEventListener('mouseup', handleMouseUp);
+    }
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isResizing]);
+
+  useEffect(() => {
+    const handleTouchMove = (e: TouchEvent) => {
+      if (!isResizing) return;
+      const computedWidth = window.innerWidth - e.touches[0].clientX;
+      const minWidth = 320;
+      const maxWidth = window.innerWidth * 0.95;
+      if (computedWidth >= minWidth && computedWidth <= maxWidth) {
+        setWidth(computedWidth);
+      }
+    };
+
+    const handleTouchEnd = () => {
+      setIsResizing(false);
+    };
+
+    if (isResizing) {
+      window.addEventListener('touchmove', handleTouchMove);
+      window.addEventListener('touchend', handleTouchEnd);
+    }
+    return () => {
+      window.removeEventListener('touchmove', handleTouchMove);
+      window.removeEventListener('touchend', handleTouchEnd);
+    };
+  }, [isResizing]);
 
   // Initialize with a warm welcoming message from World Explorer AI
   useEffect(() => {
@@ -168,6 +235,53 @@ State: Arizona`
 
   if (!isOpen) return null;
 
+  if (isMinimized) {
+    return (
+      <div className="fixed bottom-6 right-6 z-[160]" id="world-explorer-ai-minimized-bubble">
+        <motion.div
+          drag
+          dragMomentum={false}
+          dragElastic={0.15}
+          whileDrag={{ scale: 1.05, cursor: 'grabbing' }}
+          initial={{ scale: 0.8, opacity: 0, y: 20 }}
+          animate={{ scale: 1, opacity: 1, y: 0 }}
+          exit={{ scale: 0.8, opacity: 0, y: 20 }}
+          onClick={() => setIsMinimized(false)}
+          className="flex items-center gap-2.5 px-5 py-3.5 bg-[#141414] text-white rounded-full shadow-2xl border border-white/10 transition-all cursor-pointer group hover:scale-[1.02] active:scale-[0.98] select-none"
+        >
+          <div className="w-5 h-5 rounded-full bg-gradient-to-tr from-emerald-800 via-emerald-600 to-emerald-400 flex items-center justify-center relative shrink-0">
+            <Sparkles className="w-3.5 h-3.5 text-white animate-pulse" />
+          </div>
+          <span className="font-sans font-bold tracking-wider text-xs">WORLD EXPLORER AI</span>
+          <div className="flex items-center gap-1 shrink-0 ml-1.5 border-l border-white/15 pl-1.5">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsMinimized(false);
+              }}
+              className="p-1 rounded bg-white/5 hover:bg-white/10 text-white/80 hover:text-white transition-colors"
+              title="Restore World Explorer AI"
+            >
+              <Maximize2 className="w-3 h-3" />
+            </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onClose();
+              }}
+              className="p-1 rounded hover:bg-red-500/20 text-red-400 hover:text-red-300 transition-colors"
+              title="Close Panel"
+            >
+              <X className="w-3 h-3" />
+            </button>
+          </div>
+        </motion.div>
+      </div>
+    );
+  }
+
+  const isMobile = typeof window !== 'undefined' && window.innerWidth < 640;
+
   return (
     <div className="fixed inset-0 z-[150] flex justify-end">
       {/* Backdrop */}
@@ -185,8 +299,27 @@ State: Arizona`
         animate={{ x: 0 }}
         exit={{ x: '100%' }}
         transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-        className="relative w-full md:w-[500px] h-full bg-[#fafafa] shadow-2xl flex flex-col z-10 border-l border-[#141414]/10 overflow-hidden"
+        style={{ width: isMobile ? '100vw' : `${width}px`, maxWidth: '100vw' }}
+        className="relative h-full bg-[#fafafa] shadow-2xl flex flex-col z-10 border-l border-[#141414]/10 overflow-hidden"
       >
+        {/* Resize Handle (Left edge) */}
+        {!isMobile && (
+          <div
+            onMouseDown={startResizing}
+            onTouchStart={startResizingTouch}
+            className={`absolute top-0 bottom-0 left-0 w-2.5 h-full cursor-col-resize group flex items-center justify-center transition-colors hover:bg-emerald-500/10 z-20 ${
+              isResizing ? 'bg-emerald-500/25 border-l border-emerald-500' : 'border-l border-transparent'
+            }`}
+            title="Drag from left margin to resize World Explorer AI"
+          >
+            <div className="absolute top-1/2 -translate-y-1/2 left-0.5 flex flex-col gap-1 opacity-10 group-hover:opacity-100 transition-opacity">
+              <div className="w-1 h-1 rounded-full bg-[#141414]/40" />
+              <div className="w-1 h-1 rounded-full bg-[#141414]/40" />
+              <div className="w-1 h-1 rounded-full bg-[#141414]/40" />
+            </div>
+          </div>
+        )}
+
         {/* Header */}
         <div className="p-6 bg-[#141414] text-white flex items-center justify-between relative">
           <div className="flex items-center gap-3">
@@ -201,12 +334,22 @@ State: Arizona`
               <p className="text-[10px] text-white/60 tracking-wider uppercase mt-1">Multi-Tool Intelligence & Synthesis Companion</p>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 transition-colors text-white/80 hover:text-white"
-          >
-            <X className="w-4 h-4" />
-          </button>
+          <div className="flex items-center gap-2.5">
+            <button
+              onClick={() => setIsMinimized(true)}
+              className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 transition-colors text-white/80 hover:text-white"
+              title="Minimize to Widget"
+            >
+              <Minimize2 className="w-4 h-4" />
+            </button>
+            <button
+              onClick={onClose}
+              className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 transition-colors text-white/80 hover:text-white"
+              title="Close Dialog"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
         </div>
 
         {/* Security Alert Header Strip */}

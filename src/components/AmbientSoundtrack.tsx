@@ -510,7 +510,14 @@ export default function AmbientSoundtrack({ onSoundStateChange }: SoundtrackProp
   const ActiveIcon = currentPresetInfo.icon;
 
   return (
-    <div className="fixed bottom-6 left-6 z-[90] flex flex-col items-start gap-3 pointer-events-none">
+    <motion.div
+      drag
+      dragMomentum={false}
+      dragElastic={0.1}
+      whileDrag={{ scale: 1.02, cursor: 'grabbing' }}
+      className="fixed bottom-6 left-6 z-[90] flex flex-col items-start gap-3 pointer-events-auto select-none"
+      title="Drag Sound Controller anywhere!"
+    >
       
       {/* Expanded Sound Dashboard */}
       <AnimatePresence>
@@ -652,15 +659,15 @@ export default function AmbientSoundtrack({ onSoundStateChange }: SoundtrackProp
         {/* Dashboard Expansion Control */}
         <button
           onClick={() => setIsExpanded(!isExpanded)}
-          className={`h-11 px-4 rounded-full shadow-lg border border-[#141414]/5 text-xs font-bold uppercase tracking-widest flex items-center gap-2 transition-all hover:scale-105 ${
+          className={`h-11 w-11 flex items-center justify-center rounded-full shadow-lg border border-[#141414]/5 transition-all hover:scale-110 active:scale-95 ${
             isExpanded 
               ? 'bg-[#141414] text-white' 
               : 'bg-white text-[#141414] hover:bg-[#f5f5f0]'
           }`}
           id="soundtrack-preset-toggle"
+          title="Sonic Atmosphere Settings"
         >
-          <ActiveIcon className="w-3.5 h-3.5" style={{ color: isPlaying ? currentPresetInfo.color : undefined }} />
-          <span className="hidden sm:inline font-serif italic text-xs lowercase pre-custom">{currentPresetInfo.name.split(' ')[0]} music</span>
+          <ActiveIcon className="w-4 h-4" style={{ color: isPlaying ? currentPresetInfo.color : undefined }} />
         </button>
 
         {/* Tooltip hint on hover */}
@@ -678,6 +685,6 @@ export default function AmbientSoundtrack({ onSoundStateChange }: SoundtrackProp
         </AnimatePresence>
       </div>
 
-    </div>
+    </motion.div>
   );
 }

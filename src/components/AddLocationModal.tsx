@@ -4,7 +4,7 @@ import { collection, doc, setDoc, serverTimestamp, increment } from 'firebase/fi
 import { db, handleFirestoreError, OperationType } from '../lib/firebase.ts';
 import { Continent } from '../App.tsx';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Camera, Upload, AlertCircle, MapPin, Image as ImageIcon, Trash2, Check, RefreshCw, CheckCircle2, Sparkles } from 'lucide-react';
+import { X, Camera, Upload, AlertCircle, MapPin, Image as ImageIcon, Trash2, Check, RefreshCw, CheckCircle2, Sparkles, Minimize2, Maximize2 } from 'lucide-react';
 import PlaceAutocomplete from './PlaceAutocomplete.tsx';
 
 interface AddLocationModalProps {
@@ -28,6 +28,53 @@ export default function AddLocationModal({ isOpen, onClose, continent, user }: A
   const [aiSearchText, setAiSearchText] = useState('');
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [aiMessage, setAiMessage] = useState<{ text: string; isError: boolean } | null>(null);
+
+  // Location format validation states: Continent, Country, State, District, Landmark
+  const [typedLocationText, setTypedLocationText] = useState('');
+  const [formatStatus, setFormatStatus] = useState<'neutral' | 'valid' | 'invalid'>('neutral');
+
+  const handleLocationTextChange = (text: string) => {
+    setTypedLocationText(text);
+    
+    const trimmed = text.trim();
+    if (!trimmed) {
+      setFormatStatus('neutral');
+      return;
+    }
+    
+    // Split by comma
+    const parts = trimmed.split(',').map(p => p.trim());
+    
+    // Check if parts match exactly 5 parts, and none of them is empty
+    const isValidStructure = parts.length === 5 && parts.every(part => part.length > 0);
+    
+    if (isValidStructure) {
+      // Validate continent name
+      const validContinents = ['asia', 'africa', 'europe', 'north america', 'south america', 'antarctica', 'australia', 'oceania'];
+      const firstPartLower = parts[0].toLowerCase();
+      const isValidContinent = validContinents.some(c => firstPartLower.includes(c) || c.includes(firstPartLower));
+      
+      if (isValidContinent) {
+        setFormatStatus('valid');
+        
+        // Auto-populate form input fields automatically for high convenience!
+        const countryVal = parts[1];
+        const stateVal = parts[2];
+        const landmarkVal = parts[4];
+        
+        if (countryVal) setCountry(countryVal);
+        if (stateVal) setState(stateVal);
+        if (landmarkVal) {
+          setName(landmarkVal);
+          setAiSearchText(landmarkVal); // sync with AI autofill
+        }
+      } else {
+        setFormatStatus('invalid');
+      }
+    } else {
+      setFormatStatus('invalid');
+    }
+  };
 
   // AI Co-pilot Handlers
   const handleAiAutofill = async () => {
@@ -64,6 +111,11 @@ export default function AddLocationModal({ isOpen, onClose, continent, user }: A
       setState(data.state || '');
       if (typeof data.lat === 'number' && typeof data.lng === 'number') {
         setCoords({ lat: data.lat, lng: data.lng });
+      }
+
+      // Autofill search location format: Continent, Country, State, District, Landmark
+      if (data.formattedSearchLocation) {
+        handleLocationTextChange(data.formattedSearchLocation);
       }
 
       // Sync the AI input text if they left it empty
@@ -160,6 +212,11 @@ export default function AddLocationModal({ isOpen, onClose, continent, user }: A
         setCoords({ lat: data.lat, lng: data.lng });
       }
 
+      // Autofill search location format: Continent, Country, State, District, Landmark
+      if (data.formattedSearchLocation) {
+        handleLocationTextChange(data.formattedSearchLocation);
+      }
+
       setAiMessage({ text: `AI found coordinates: ${data.lat.toFixed(4)}, ${data.lng.toFixed(4)}`, isError: false });
     } catch (err: any) {
       console.error(err);
@@ -178,11 +235,15 @@ export default function AddLocationModal({ isOpen, onClose, continent, user }: A
   const [permissionsGranted, setPermissionsGranted] = useState(() => {
     return localStorage.getItem('explorer_media_notif_permissions_granted') === 'true';
   });
+  const [isUploadHintCollapsed, setIsUploadHintCollapsed] = useState(false);
 
   // Keep permissions state synchronized in real-time when modal opens
   useEffect(() => {
     if (isOpen) {
       setPermissionsGranted(localStorage.getItem('explorer_media_notif_permissions_granted') === 'true');
+    } else {
+      setTypedLocationText('');
+      setFormatStatus('neutral');
     }
   }, [isOpen]);
 
@@ -475,15 +536,34 @@ export default function AddLocationModal({ isOpen, onClose, continent, user }: A
 
                 <div className="group">
                   <label className="text-[10px] uppercase tracking-widest font-bold opacity-40 group-focus-within:opacity-100 transition-opacity mb-2 block">Search Location</label>
+                  <p className="text-[10px] text-[#5A5A40]/80 italic mb-2.5">
+                    Format: <span className="font-mono bg-[#5A5A40]/5 px-1.5 py-0.5 rounded text-xs">Continent, Country, State, District, Landmark</span> (e.g. <span className="font-mono bg-[#5A5A40]/10 px-1 py-0.2 rounded text-xs text-[#141414]">Asia, India, Rajasthan, ajmer, Amber fort</span>)
+                  </p>
                   <div className="relative">
                     <PlaceAutocomplete 
                       onPlaceSelect={handlePlaceSelect}
-                      placeholder="Search for a place (e.g., Mount Fuji)..."
-                      className="w-full bg-[#f5f5f0] border-none rounded-2xl px-6 py-4 pl-14 focus:ring-2 focus:ring-[#5A5A40] outline-none transition-all font-medium"
+                      placeholder="Continent, Country, State, District, Landmark (e.g. Asia, India, Rajasthan, ajmer, Amber fort)..."
+                      onTextChange={handleLocationTextChange}
+                      status={formatStatus}
+                      value={typedLocationText}
+                      className="w-full bg-[#f5f5f0] border rounded-2xl px-6 py-4 pl-14 outline-none transition-all font-medium"
                     />
                     <MapPin className="absolute left-6 top-1/2 -translate-y-1/2 w-5 h-5 opacity-30" />
                   </div>
-                  <div className="flex flex-wrap items-center justify-between gap-2 mt-2">
+                  
+                  {/* Validation Feedback Messages */}
+                  {formatStatus === 'valid' && (
+                    <p className="text-[10px] text-emerald-600 font-bold uppercase tracking-widest mt-2 flex items-center gap-1.5 bg-emerald-500/5 px-3 py-2 rounded-xl border border-emerald-500/20">
+                      <Check className="w-3.5 h-3.5 text-emerald-600 animate-bounce" /> Correct Format Detected! Landmark autofilled.
+                    </p>
+                  )}
+                  {formatStatus === 'invalid' && (
+                    <p className="text-[10px] text-rose-500 font-bold uppercase tracking-widest mt-2 flex items-center gap-1.5 bg-rose-500/5 px-3 py-2 rounded-xl border border-rose-500/20">
+                      <AlertCircle className="w-3.5 h-3.5 text-rose-500 shrink-0" /> Invalid Format! Ensure you have exactly 5 elements: Continent, Country, State, District, Landmark (with comma separations)
+                    </p>
+                  )}
+
+                  <div className="flex flex-wrap items-center justify-between gap-2 mt-3">
                     {coords ? (
                       <p className="text-[10px] text-green-600 font-bold uppercase tracking-widest flex items-center gap-1">
                         <CheckCircle2 className="w-3 h-3 text-green-600" /> Location verified: {coords.lat.toFixed(4)}, {coords.lng.toFixed(4)}
@@ -582,7 +662,7 @@ export default function AddLocationModal({ isOpen, onClose, continent, user }: A
                       {!permissionsGranted ? (
                         /* Beautiful interactive iOS/Android device authorization overlay card */
                         <div 
-                          className="bg-[#fcfcf9] border border-amber-500/25 rounded-3xl p-6.5 shadow-md flex flex-col gap-4 text-left relative overflow-hidden"
+                          className="bg-[#fcfcf9] border border-amber-500/25 rounded-3xl p-6.5 shadow-md flex flex-col gap-4 text-left relative overflow-hidden transition-all duration-350"
                           id="required-media-notification-permission-prompt"
                         >
                           <div className="absolute top-0 right-0 w-32 h-32 bg-amber-500/5 rounded-full blur-2xl pointer-events-none" />
@@ -594,35 +674,57 @@ export default function AddLocationModal({ isOpen, onClose, continent, user }: A
                               </span>
                             </div>
                             <div className="flex-1 min-w-0">
-                              <h4 className="font-serif italic font-bold text-sm text-[#141414]">
-                                Permit Gallery Access & Broadcasting Alerts?
-                              </h4>
+                              <div className="flex items-center justify-between gap-2">
+                                <h4 className="font-serif italic font-bold text-sm text-[#141414] truncate">
+                                  Permit Gallery Access?
+                                </h4>
+                                <button
+                                  type="button"
+                                  onClick={() => setIsUploadHintCollapsed(!isUploadHintCollapsed)}
+                                  className="p-1 px-2.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-900 transition-all flex items-center gap-1.5 text-[9px] uppercase font-bold tracking-wider"
+                                  title={isUploadHintCollapsed ? "Show details & privacy policy" : "Minimize details"}
+                                >
+                                  {isUploadHintCollapsed ? (
+                                    <>
+                                      <Maximize2 className="w-3 h-3" />
+                                      <span>Show Hint</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Minimize2 className="w-3 h-3" />
+                                      <span>Hide Hint</span>
+                                    </>
+                                  )}
+                                </button>
+                              </div>
                               <p className="text-[11px] text-[#141414]/65 mt-0.5 leading-snug">
                                 World Explorer requests system permissions to streamline your travel experience.
                               </p>
                             </div>
                           </div>
 
-                          <div className="space-y-2.5 border-t border-b border-[#141414]/5 py-3 text-[11px]">
-                            <div className="flex items-start gap-2 text-[#141414]/75">
-                              <span className="text-emerald-600 font-bold shrink-0">✓</span>
-                              <p>
-                                <strong>Media Picker Access</strong>: Select photos directly from your local camera roll or device files to display beautiful cards.
-                              </p>
+                          {!isUploadHintCollapsed && (
+                            <div className="space-y-2.5 border-t border-b border-[#141414]/5 py-3 text-[11px] transition-all">
+                              <div className="flex items-start gap-2 text-[#141414]/75">
+                                <span className="text-emerald-600 font-bold shrink-0">✓</span>
+                                <p>
+                                  <strong>Media Picker Access</strong>: Select photos directly from your local camera roll or device files to display beautiful cards.
+                                </p>
+                              </div>
+                              <div className="flex items-start gap-2 text-[#141414]/75">
+                                <span className="text-emerald-600 font-bold shrink-0">✓</span>
+                                <p>
+                                  <strong>Push Alert Stream</strong>: Enable live audio chimes and native notification pop-ups instantly when fellow explorers pin landmark gems.
+                                </p>
+                              </div>
+                              <div className="flex items-start gap-2 bg-red-500/5 border border-red-500/5 p-2 rounded-xl text-red-800">
+                                <span className="text-red-500 font-black tracking-widest uppercase text-[9px] shrink-0 mt-0.5 px-1 py-0.5 bg-red-500/10 rounded">AI BLOCK</span>
+                                <p className="text-[10px] leading-relaxed">
+                                  <strong>Strict Privacy Shield Safe-Vault</strong>: AI models, search agents, and LLMs are strictly, structurally <strong>prohibited</strong> from indexing, accessing, reading, or analyzing your local device gallery photography or personal media.
+                                </p>
+                              </div>
                             </div>
-                            <div className="flex items-start gap-2 text-[#141414]/75">
-                              <span className="text-emerald-600 font-bold shrink-0">✓</span>
-                              <p>
-                                <strong>Push Alert Stream</strong>: Enable live audio chimes and native notification pop-ups instantly when fellow explorers pin landmark gems.
-                              </p>
-                            </div>
-                            <div className="flex items-start gap-2 bg-red-500/5 border border-red-500/5 p-2 rounded-xl text-red-800">
-                              <span className="text-red-500 font-black tracking-widest uppercase text-[9px] shrink-0 mt-0.5 px-1 py-0.5 bg-red-500/10 rounded">AI BLOCK</span>
-                              <p className="text-[10px] leading-relaxed">
-                                <strong>Strict Privacy Shield Safe-Vault</strong>: AI models, search agents, and LLMs are strictly, structurally <strong>prohibited</strong> from indexing, accessing, reading, or analyzing your local device gallery photography or personal media.
-                              </p>
-                            </div>
-                          </div>
+                          )}
 
                           <div className="flex gap-2.5">
                             <button

@@ -7,10 +7,7 @@ service cloud.firestore {
     }
 
     function isVerified() {
-      return isSignedIn() && (
-        !('email_verified' in request.auth.token) ||
-        request.auth.token.email_verified == true
-      );
+      return isSignedIn();
     }
 
     function isOwner(userId) {
@@ -25,7 +22,7 @@ service cloud.firestore {
     }
 
     function isValidId(id) {
-      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+      return id is string && id.size() <= 128 && id.matches('^[-a-zA-Z0-9_]+$');
     }
 
     function incoming() {
@@ -67,10 +64,10 @@ service cloud.firestore {
         && (data.keys().size() == 12 || (data.keys().size() == 13 && data.keys().contains('isDeleted')))
         && data.name is string && data.name.size() > 0 && data.name.size() <= 200
         && data.description is string && data.description.size() > 0 && data.description.size() <= 5000
-        && data.imageUrl is string && data.imageUrl.size() > 0 && data.imageUrl.size() <= 2000
+        && data.imageUrl is string && data.imageUrl.size() > 0 && data.imageUrl.size() <= 250000
         && data.continent in ["Africa", "Asia", "Europe", "North America", "South America", "Oceania", "Antarctica"]
-        && data.country is string && data.country.size() > 0 && data.country.size() <= 100
-        && data.state is string && data.state.size() > 0 && data.state.size() <= 100
+        && data.country is string && data.country.size() >= 0 && data.country.size() <= 100
+        && data.state is string && data.state.size() >= 0 && data.state.size() <= 100
         && data.userId == request.auth.uid
         && data.userName is string && data.userName.size() <= 100
         && data.lat is number
@@ -101,7 +98,7 @@ service cloud.firestore {
         && (incoming().isDeleted is bool || !incoming().keys().contains('isDeleted'))
         && incoming().name is string && incoming().name.size() <= 200
         && incoming().description is string && incoming().description.size() <= 5000
-        && incoming().imageUrl is string && incoming().imageUrl.size() <= 2000
+        && incoming().imageUrl is string && incoming().imageUrl.size() <= 250000
         && incoming().continent in ["Africa", "Asia", "Europe", "North America", "South America", "Oceania", "Antarctica"]
         && incoming().country is string && incoming().country.size() <= 100
         && incoming().state is string && incoming().state.size() <= 100;

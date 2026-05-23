@@ -46,7 +46,7 @@ export default function LocationHintButton({ onLaunchUploader, isLoggedIn, onLog
         dragMomentum={false}
         dragElastic={0.15}
         whileDrag={{ scale: 1.08, cursor: 'grabbing' }}
-        className="fixed bottom-24 right-6 z-[95] select-none"
+        className="fixed bottom-[84px] right-6 z-[95] select-none"
         title="Drag me anywhere! Click for Upload Guide & Help"
       >
         <div className="relative group">
@@ -60,10 +60,10 @@ export default function LocationHintButton({ onLaunchUploader, isLoggedIn, onLog
             <span className="flex items-center justify-center w-5 h-5 bg-white/20 rounded-full animate-bounce">
               <Lightbulb className="w-3.5 h-3.5" />
             </span>
-            <span>Upload Hint</span>
+            <span>UPLOAD HINT</span>
             
             {/* Grab HUD Indicator */}
-            <Grab className="w-3.5 h-3.5 opacity-45 group-hover:opacity-100 transition-opacity" />
+            <span className="text-sm opacity-90 group-hover:opacity-100 transition-opacity">🫱</span>
           </button>
         </div>
       </motion.div>
@@ -157,8 +157,13 @@ export default function LocationHintButton({ onLaunchUploader, isLoggedIn, onLog
                           <Search className="w-4 h-4 text-amber-500" /> Search for the Landmark
                         </h4>
                         <p className="text-gray-600 text-xs mt-1.5 leading-relaxed">
-                          In the "Search Location" box, start typing. Google Autocomplete fetches verified geocodes, automatically resolving the Country, State, and exact coordinates.
+                          Use our custom unified search. The uploader expects a strict 5-part comma-separated format:
                         </p>
+                        <div className="mt-2 text-[10px] text-amber-950 bg-amber-500/10 border border-amber-500/20 rounded-xl p-3 space-y-1.5">
+                          <p>📋 <strong>Mandatory Format:</strong> <code className="bg-[#141414]/5 px-1 py-0.5 rounded font-mono text-[9px] text-[#141414]">Continent, Country, State, District, Landmark</code></p>
+                          <p>👉 <em>Example:</em> <code className="bg-[#141414]/5 px-1 py-0.5 rounded font-mono text-[9px] text-[#141414]">Asia, India, Rajasthan, ajmer, Amber fort</code></p>
+                          <p>⚡ <strong>AI Co-pilot Shortcut:</strong> Just enter the name of your landmark (like <em>Amber Fort</em>) in the <strong>Smart Co-pilot Autofill</strong>, click **Autofill**, and the AI will dynamically build the perfect geography structure and write the search string for you instantly!</p>
+                        </div>
                       </div>
                     </div>
 
@@ -238,10 +243,10 @@ export default function LocationHintButton({ onLaunchUploader, isLoggedIn, onLog
                     </div>
 
                     <div className="p-4 bg-gray-50 rounded-2xl border border-gray-100 space-y-1.5">
-                      <span className="text-[9px] font-black uppercase tracking-wider text-blue-700 font-sans">State & Country Hierarchy</span>
+                      <span className="text-[9px] font-black uppercase tracking-wider text-blue-700 font-sans">Strict 5-Part Hierarchy</span>
                       <h5 className="text-xs font-bold text-black font-sans">Adding Local Regions</h5>
                       <p className="text-gray-500 text-[11px] leading-relaxed">
-                        Verify that the continent grid matches your country’s location. Our interactive region filters and cascading drop-downs makes navigation super smooth when states are structured correctly.
+                        To construct clean data structures for the global map, verify that your search matches: <code className="bg-[#141414]/5 px-1 py-0.5 rounded font-mono text-[10px] text-[#141414]">Continent, Country, State, District, Landmark</code>. This ensures the interactive region filters and continent categories are populated beautifully.
                       </p>
                     </div>
                   </div>
