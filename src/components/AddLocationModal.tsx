@@ -418,6 +418,7 @@ export default function AddLocationModal({ isOpen, onClose, continent, user }: A
         lng: coords.lng,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
+        isDeleted: false,
       });
 
       // Award points for discovery

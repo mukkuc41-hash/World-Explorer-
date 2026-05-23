@@ -8,6 +8,7 @@ import firebaseConfig from "./firebase-applet-config.json";
 
 // Initialize Firebase Admin lazily and safely
 let db: any = null;
+let isSearchGroundingDisabledGlobal = false;
 
 function getDb() {
   if (!db) {
@@ -874,31 +875,38 @@ Tone: Professional, highly responsive, objective, and deeply knowledgeable. 'Pow
 
       let response;
       let currentTools = tools;
-      let modelHasWebSearch = true;
+      let modelHasWebSearch = !isSearchGroundingDisabledGlobal;
 
-      try {
-        response = await callGemini(
-          () => ai.models.generateContent({
-            model: "gemini-3.5-flash",
-            contents,
-            config: {
-              tools: tools as any,
-              toolConfig: { includeServerSideToolInvocations: true } as any,
-              systemInstruction: systemInstructions
-            } as any
-          } as any),
-          () => ai.models.generateContent({
-            model: "gemini-flash-latest",
-            contents,
-            config: {
-              tools: tools as any,
-              toolConfig: { includeServerSideToolInvocations: true } as any,
-              systemInstruction: systemInstructions
-            } as any
-          } as any)
-        );
-      } catch (firstErr: any) {
-        console.warn("First chat invocation failed (likely search grounding or quota mismatch). Attempting fallback without third-party web search grounding...", firstErr);
+      if (!isSearchGroundingDisabledGlobal) {
+        try {
+          response = await callGemini(
+            () => ai.models.generateContent({
+              model: "gemini-3.5-flash",
+              contents,
+              config: {
+                tools: tools as any,
+                toolConfig: { includeServerSideToolInvocations: true } as any,
+                systemInstruction: systemInstructions
+              } as any
+            } as any),
+            () => ai.models.generateContent({
+              model: "gemini-flash-latest",
+              contents,
+              config: {
+                tools: tools as any,
+                toolConfig: { includeServerSideToolInvocations: true } as any,
+                systemInstruction: systemInstructions
+              } as any
+            } as any)
+          );
+        } catch (firstErr: any) {
+          console.warn("First chat invocation failed (likely search grounding or quota mismatch). Attempting fallback without third-party web search grounding...", firstErr);
+          isSearchGroundingDisabledGlobal = true;
+          modelHasWebSearch = false;
+        }
+      }
+
+      if (isSearchGroundingDisabledGlobal || !response) {
         // Fall back to a standard model call that does not include the tools/grounding config.
         const textOnlyTools = [{
           functionDeclarations: tools[1].functionDeclarations
@@ -1209,8 +1217,10 @@ Since I am running locally right now, you can perform these actions:
           model: "gemini-3.5-flash",
           contents: `Provide a detailed, highly accurate description of "${place}" including travel significance, historical facts, and key highlights. Feel free to use Google Search to ground the facts. Return as JSON with "description" and "imageKeywords" fields only.`,
           config: {
-            tools: [{ googleSearch: {} }],
-            toolConfig: { includeServerSideToolInvocations: true } as any,
+            ...(!isSearchGroundingDisabledGlobal ? {
+              tools: [{ googleSearch: {} }],
+              toolConfig: { includeServerSideToolInvocations: true } as any
+            } : {}),
             responseMimeType: "application/json",
             responseSchema: {
               type: "OBJECT",
@@ -1226,8 +1236,10 @@ Since I am running locally right now, you can perform these actions:
           model: "gemini-flash-latest",
           contents: `Provide a detailed, highly accurate description of "${place}" including travel significance. Feel free to use Google Search to ground the facts. Return as JSON with "description" and "imageKeywords" fields only.`,
           config: {
-            tools: [{ googleSearch: {} }],
-            toolConfig: { includeServerSideToolInvocations: true } as any,
+            ...(!isSearchGroundingDisabledGlobal ? {
+              tools: [{ googleSearch: {} }],
+              toolConfig: { includeServerSideToolInvocations: true } as any
+            } : {}),
             responseMimeType: "application/json",
             responseSchema: {
               type: "OBJECT",

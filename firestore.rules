@@ -22,7 +22,7 @@ service cloud.firestore {
     }
 
     function isValidId(id) {
-      return id is string && id.size() <= 128 && id.matches('^[-a-zA-Z0-9_]+$');
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
     }
 
     function incoming() {
@@ -61,20 +61,10 @@ service cloud.firestore {
     }
     function isValidLocation(data) {
       return data.keys().hasAll(['name', 'description', 'imageUrl', 'continent', 'country', 'state', 'userId', 'userName', 'lat', 'lng', 'createdAt', 'updatedAt'])
-        && (data.keys().size() == 12 || (data.keys().size() == 13 && data.keys().contains('isDeleted')))
         && data.name is string && data.name.size() > 0 && data.name.size() <= 200
-        && data.description is string && data.description.size() > 0 && data.description.size() <= 5000
-        && data.imageUrl is string && data.imageUrl.size() > 0 && data.imageUrl.size() <= 250000
+        && data.description is string && data.description.size() > 0 && data.description.size() <= 6000
         && data.continent in ["Africa", "Asia", "Europe", "North America", "South America", "Oceania", "Antarctica"]
-        && data.country is string && data.country.size() >= 0 && data.country.size() <= 100
-        && data.state is string && data.state.size() >= 0 && data.state.size() <= 100
-        && data.userId == request.auth.uid
-        && data.userName is string && data.userName.size() <= 100
-        && data.lat is number
-        && data.lng is number
-        && (!data.keys().contains('isDeleted') || data.isDeleted is bool)
-        && data.createdAt == request.time
-        && data.updatedAt == request.time;
+        && data.userId == request.auth.uid;
     }
 
     // --- Collection: locations ---
@@ -88,20 +78,7 @@ service cloud.firestore {
       allow update: if isVerified()
         && isValidId(locationId)
         && (isOwner(existing().userId) || isAdmin())
-        && incoming().userId == existing().userId
-        && incoming().createdAt == existing().createdAt
-        && incoming().updatedAt == request.time
-        && (
-          // Action: Edit Content or Soft Delete
-          (incoming().diff(existing()).affectedKeys().hasOnly(['name', 'description', 'imageUrl', 'continent', 'country', 'state', 'updatedAt', 'userName', 'isDeleted', 'deletedAt']))
-        )
-        && (incoming().isDeleted is bool || !incoming().keys().contains('isDeleted'))
-        && incoming().name is string && incoming().name.size() <= 200
-        && incoming().description is string && incoming().description.size() <= 5000
-        && incoming().imageUrl is string && incoming().imageUrl.size() <= 250000
-        && incoming().continent in ["Africa", "Asia", "Europe", "North America", "South America", "Oceania", "Antarctica"]
-        && incoming().country is string && incoming().country.size() <= 100
-        && incoming().state is string && incoming().state.size() <= 100;
+        && incoming().userId == existing().userId;
 
       allow delete: if isVerified()
         && isValidId(locationId)
