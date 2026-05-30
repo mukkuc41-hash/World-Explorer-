@@ -30,7 +30,7 @@ import WorldExplorerAI from './components/WorldExplorerAI.tsx';
 import AmbientSoundtrack from './components/AmbientSoundtrack.tsx';
 import PermissionsManager from './components/PermissionsManager.tsx';
 import { db, handleFirestoreError, OperationType } from './lib/firebase.ts';
-import { collection, query, where, getDocs, onSnapshot, doc, setDoc, serverTimestamp, orderBy } from 'firebase/firestore';
+import { collection, query, where, getDocs, onSnapshot, doc, setDoc, serverTimestamp, orderBy, increment } from 'firebase/firestore';
 import { LogIn } from 'lucide-react';
 
 export type Continent = "Africa" | "Asia" | "Europe" | "North America" | "South America" | "Oceania" | "Antarctica";
@@ -344,25 +344,55 @@ export default function App() {
         // Track last login and ensure profile exists
         const syncProfiles = async () => {
           try {
-            const { writeBatch, doc, serverTimestamp } = await import('firebase/firestore');
-            const batch = writeBatch(db);
+            const { doc, getDoc, setDoc, serverTimestamp, collection, query, where, getDocs } = await import('firebase/firestore');
             
+            const publicRef = doc(db, 'public_profiles', currentUser.uid);
             const userDoc = doc(db, 'users', currentUser.uid);
-            batch.set(userDoc, {
+
+            const publicSnap = await getDoc(publicRef);
+            const exists = publicSnap.exists();
+
+            // Reconcile user points strictly based on real counts of locations and reviews!
+            // This guarantees accurate live XP points upon login!
+            const locQ = query(collection(db, 'locations'), where('userId', '==', currentUser.uid));
+            const locSnap = await getDocs(locQ);
+            const activeLocs = locSnap.docs.filter(d => !d.data().isDeleted);
+            const locCount = activeLocs.length;
+
+            const revQ = query(collection(db, 'reviews'), where('userId', '==', currentUser.uid));
+            const revSnap = await getDocs(revQ);
+            const revCount = revSnap.size;
+
+            // Reconcile user points strictly based on real upload count!
+            // First Spot is 150 points, each subsequent spot adds +50 XP.
+            const finalXP = locCount > 0 ? (100 + (locCount * 50)) : 0;
+
+            const publicData: any = {
+              displayName: currentUser.displayName || 'Architectural Explorer',
+              photoURL: currentUser.photoURL || null,
+              points: finalXP,
+              totalDiscoveries: locCount,
+              totalReviews: revCount,
+              updatedAt: serverTimestamp()
+            };
+
+            if (!exists || !publicSnap.data()?.username) {
+              publicData.username = currentUser.displayName 
+                ? `@${currentUser.displayName.toLowerCase().replace(/\s+/g, '')}` 
+                : `@explorer_${currentUser.uid.substring(0, 5)}`;
+            }
+
+            await setDoc(publicRef, publicData, { merge: true });
+
+            await setDoc(userDoc, {
               lastLogin: serverTimestamp(),
               email: currentUser.email || '',
               displayName: currentUser.displayName || '',
+              points: finalXP,
+              totalDiscoveries: locCount,
+              totalReviews: revCount,
               updatedAt: serverTimestamp()
             }, { merge: true });
-
-            const publicRef = doc(db, 'public_profiles', currentUser.uid);
-            batch.set(publicRef, {
-              displayName: currentUser.displayName || 'Architectural Explorer',
-              photoURL: currentUser.photoURL || null,
-              updatedAt: serverTimestamp()
-            }, { merge: true });
-
-            await batch.commit();
           } catch (e: any) {
             console.error("Profile Sync Failed:", e.message || e);
           }
@@ -540,16 +570,39 @@ export default function App() {
             country: (data.country || '').trim().substring(0, 100),
             state: (data.state || '').trim().substring(0, 100),
             userId: user.uid,
-            userName: (user.displayName || user.email || "Explorer").substring(0, 100),
+            userName: (user.displayName || "Explorer").substring(0, 100),
             lat: typeof data.lat === 'number' && !isNaN(data.lat) ? data.lat : (typeof data.lat === 'string' && !isNaN(parseFloat(data.lat)) ? parseFloat(data.lat) : 0),
             lng: typeof data.lng === 'number' && !isNaN(data.lng) ? data.lng : (typeof data.lng === 'string' && !isNaN(parseFloat(data.lng)) ? parseFloat(data.lng) : 0),
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
-            isDeleted: false
+            isDeleted: false,
+            addedByAi: true
           };
           try {
             await setDoc(doc(db, 'locations', locId), finalLocationPayload);
             console.log(`[AI Sync] Successfully saved location client-side: ${finalLocationPayload.name}`);
+
+            // Award points for AI discovery
+            try {
+              const userRef = doc(db, 'users', user.uid);
+              await setDoc(userRef, {
+                points: increment(50), 
+                totalDiscoveries: increment(1),
+                updatedAt: serverTimestamp()
+              }, { merge: true });
+
+              const publicRef = doc(db, 'public_profiles', user.uid);
+              await setDoc(publicRef, {
+                displayName: user.displayName || 'Anonymous Explorer',
+                photoURL: user.photoURL,
+                points: increment(50),
+                totalDiscoveries: increment(1),
+                updatedAt: serverTimestamp()
+              }, { merge: true });
+              console.log("[AI Sync] Points awarded successfully client-side!");
+            } catch (pointsErr) {
+              console.error("[AI Sync] Error awarding points:", pointsErr);
+            }
           } catch (writeErr) {
             handleFirestoreError(writeErr, OperationType.WRITE, `locations/${locId}`);
           }
@@ -1336,6 +1389,7 @@ export default function App() {
       <LeaderboardModal 
         isOpen={isLeaderboardOpen} 
         onClose={() => setIsLeaderboardOpen(false)} 
+        user={user}
       />
       <AppGuideModal 
         isOpen={isGuideOpen} 

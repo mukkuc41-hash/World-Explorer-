@@ -68,11 +68,10 @@ export default function ReviewSection({ locationId }: ReviewSectionProps) {
         createdAt: serverTimestamp()
       });
 
-      // Award points for community insight
+      // Update review statistics
       try {
         const userRef = doc(db, 'users', user.uid);
         await setDoc(userRef, {
-          points: increment(10), // 10 points per community insight
           totalReviews: increment(1),
           updatedAt: serverTimestamp()
         }, { merge: true });
@@ -82,12 +81,11 @@ export default function ReviewSection({ locationId }: ReviewSectionProps) {
         await setDoc(publicRef, {
           displayName: user.displayName || 'Anonymous Explorer',
           photoURL: user.photoURL,
-          points: increment(10),
           totalReviews: increment(1),
           updatedAt: serverTimestamp()
         }, { merge: true });
       } catch (e) {
-        console.error("Error awarding review points:", e);
+        console.error("Error updating review stats:", e);
       }
 
       setNewComment('');

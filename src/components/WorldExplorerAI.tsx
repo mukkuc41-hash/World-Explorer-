@@ -147,7 +147,7 @@ To protect your privacy, I am strictly restricted to travel-related queries. I h
         message: text,
         history: historyPayload,
         currentUserId: user?.uid || null,
-        currentUserName: user?.displayName || user?.email || "Explorer"
+        currentUserName: user?.displayName || "Explorer"
       };
 
       const response = await fetch('/api/chat', {
