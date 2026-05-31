@@ -1455,50 +1455,67 @@ Adhere strictly to the explicit coordinates, country, state, continent, and name
         return res.json(dynamicCache.recommendations.get(normalizedPlace));
       }
 
-      const response = await callGemini(
-        () => ai.models.generateContent({
-          model: "gemini-3.5-flash",
-          contents: `Based on "${place}", suggest 3 similar remarkable travel destinations. Use Google Search to find outstanding real travel sites if needed. Return as JSON array of objects with "name", "reason", and "imageKeywords" fields.`,
-          config: {
-            tools: [{ googleSearch: {} }],
-            toolConfig: { includeServerSideToolInvocations: true } as any,
-            responseMimeType: "application/json",
-            responseSchema: {
-              type: "ARRAY",
-              items: {
-                type: "OBJECT",
-                properties: {
-                  name: { type: "STRING" },
-                  reason: { type: "STRING" },
-                  imageKeywords: { type: "STRING" }
-                },
-                required: ["name", "reason", "imageKeywords"]
-              }
+      let response;
+      const promptText = `Based on "${place}", suggest 3 similar remarkable travel destinations. Return as JSON array of objects with "name", "reason", and "imageKeywords" fields.`;
+
+      const getConfig = (useSearch: boolean) => {
+        const config: any = {
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: "ARRAY",
+            items: {
+              type: "OBJECT",
+              properties: {
+                name: { type: "STRING" },
+                reason: { type: "STRING" },
+                imageKeywords: { type: "STRING" }
+              },
+              required: ["name", "reason", "imageKeywords"]
             }
-          } as any
-        } as any),
-        () => ai.models.generateContent({
-          model: "gemini-flash-latest",
-          contents: `Based on "${place}", suggest 3 similar remarkable travel destinations. Use Google Search to find outstanding real travel sites if needed. Return as JSON array of objects with "name", "reason", and "imageKeywords" fields.`,
-          config: {
-            tools: [{ googleSearch: {} }],
-            toolConfig: { includeServerSideToolInvocations: true } as any,
-            responseMimeType: "application/json",
-            responseSchema: {
-              type: "ARRAY",
-              items: {
-                type: "OBJECT",
-                properties: {
-                  name: { type: "STRING" },
-                  reason: { type: "STRING" },
-                  imageKeywords: { type: "STRING" }
-                },
-                required: ["name", "reason", "imageKeywords"]
-              }
-            }
-          } as any
-        } as any)
-      );
+          }
+        };
+        if (useSearch) {
+          config.tools = [{ googleSearch: {} }];
+          config.toolConfig = { includeServerSideToolInvocations: true } as any;
+        }
+        return config;
+      };
+
+      if (!isSearchGroundingDisabledGlobal) {
+        try {
+          response = await callGemini(
+            () => ai.models.generateContent({
+              model: "gemini-3.5-flash",
+              contents: promptText,
+              config: getConfig(true)
+            } as any),
+            () => ai.models.generateContent({
+              model: "gemini-flash-latest",
+              contents: promptText,
+              config: getConfig(true)
+            } as any)
+          );
+        } catch (searchError: any) {
+          console.warn("Recommendations with Google Search grounding failed. Disabling search grounding globally & retrying without tools...", searchError);
+          isSearchGroundingDisabledGlobal = true;
+        }
+      }
+
+      if (isSearchGroundingDisabledGlobal || !response) {
+        // Retry standard Gemini call without search grounding
+        response = await callGemini(
+          () => ai.models.generateContent({
+            model: "gemini-3.5-flash",
+            contents: promptText,
+            config: getConfig(false)
+          } as any),
+          () => ai.models.generateContent({
+            model: "gemini-flash-latest",
+            contents: promptText,
+            config: getConfig(false)
+          } as any)
+        );
+      }
 
       const recommendationsData = JSON.parse(response.text);
       // Cache dynamic recommendations

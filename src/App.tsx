@@ -349,18 +349,37 @@ export default function App() {
             const publicRef = doc(db, 'public_profiles', currentUser.uid);
             const userDoc = doc(db, 'users', currentUser.uid);
 
-            const publicSnap = await getDoc(publicRef);
+            console.log("[Profile Sync] Fetching public profile for UID:", currentUser.uid);
+            let publicSnap;
+            try {
+              publicSnap = await getDoc(publicRef);
+            } catch (err: any) {
+              console.error("[Profile Sync Error] Failed to get public_profile document:", err.message || err);
+              throw err;
+            }
             const exists = publicSnap.exists();
 
-            // Reconcile user points strictly based on real counts of locations and reviews!
-            // This guarantees accurate live XP points upon login!
-            const locQ = query(collection(db, 'locations'), where('userId', '==', currentUser.uid));
-            const locSnap = await getDocs(locQ);
+            console.log("[Profile Sync] Querying active locations for UID:", currentUser.uid);
+            let locSnap;
+            try {
+              const locQ = query(collection(db, 'locations'), where('userId', '==', currentUser.uid));
+              locSnap = await getDocs(locQ);
+            } catch (err: any) {
+              console.error("[Profile Sync Error] Failed to query locations database:", err.message || err);
+              throw err;
+            }
             const activeLocs = locSnap.docs.filter(d => !d.data().isDeleted);
             const locCount = activeLocs.length;
 
-            const revQ = query(collection(db, 'reviews'), where('userId', '==', currentUser.uid));
-            const revSnap = await getDocs(revQ);
+            console.log("[Profile Sync] Querying reviews for UID:", currentUser.uid);
+            let revSnap;
+            try {
+              const revQ = query(collection(db, 'reviews'), where('userId', '==', currentUser.uid));
+              revSnap = await getDocs(revQ);
+            } catch (err: any) {
+              console.error("[Profile Sync Error] Failed to query reviews database:", err.message || err);
+              throw err;
+            }
             const revCount = revSnap.size;
 
             // Reconcile user points strictly based on real upload count!
@@ -382,9 +401,15 @@ export default function App() {
                 : `@explorer_${currentUser.uid.substring(0, 5)}`;
             }
 
-            await setDoc(publicRef, publicData, { merge: true });
+            console.log("[Profile Sync] Writing public profile data:", publicData);
+            try {
+              await setDoc(publicRef, publicData, { merge: true });
+            } catch (err: any) {
+              console.error("[Profile Sync Error] Failed to set public_profile document:", err.message || err);
+              throw err;
+            }
 
-            await setDoc(userDoc, {
+            const userProfileData = {
               lastLogin: serverTimestamp(),
               email: currentUser.email || '',
               displayName: currentUser.displayName || '',
@@ -392,7 +417,15 @@ export default function App() {
               totalDiscoveries: locCount,
               totalReviews: revCount,
               updatedAt: serverTimestamp()
-            }, { merge: true });
+            };
+            console.log("[Profile Sync] Writing user metadata profile:", userProfileData);
+            try {
+              await setDoc(userDoc, userProfileData, { merge: true });
+            } catch (err: any) {
+              console.error("[Profile Sync Error] Failed to set users document:", err.message || err);
+              throw err;
+            }
+            console.log("[Profile Sync] Sync successfully completed!");
           } catch (e: any) {
             console.error("Profile Sync Failed:", e.message || e);
           }
