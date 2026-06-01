@@ -108,8 +108,7 @@ I specialize in **comprehensive app support and travel place intelligence**:
 * 📍 **Add Sights Directly**: Ask me to add a location, and I will list it under your Explorer profile username (\`${displayName}\`).
 * 📜 **Explain Geography**: I can explain historical background, architectural designs, and physical geography.
 
-🛡️ **Privacy & Security Guarantee**:
-To protect your privacy, I am strictly restricted to travel-related queries. I have **zero access** to your credentials, emails, passwords, owner profile IDs, or any sensitive system configuration. No private profiling files are available to me.`
+🛡️ Privacy & Security Guarantee: To protect your privacy, I am strictly restricted to travel-related queries. I have zero access to your credentials, emails, passwords, owner profile IDs, or any sensitive system configuration. No private profiling files are available to me.`
         }
       ]);
     }

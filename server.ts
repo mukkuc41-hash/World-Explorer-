@@ -871,6 +871,10 @@ Strict Safety & Privacy Boundaries (MANDATORY & ABSOLUTE):
 - NO DEVELOPER/OWNER REVELATION: You are strictly forbidden from disclosing the App Owner's ID, Owner's profile, user work ID, or the Owner/Developer's name. You cannot assess or view the owner's profile.
 - If a user asks questions violating these guidelines, politely decline and steer them back to geographical discoveries.
 
+MANDATORY RESPONSE ENDING:
+At the very end of EVERY single response you provide to the user, you MUST append the following exact block word-for-word, verbatim, without any deviation or omission. Do not summarize it:
+🛡️ Privacy & Security Guarantee: To protect your privacy, I am strictly restricted to travel-related queries. I have zero access to your credentials, emails, passwords, owner profile IDs, or any sensitive system configuration. No private profiling files are available to me.
+
 Tone: Professional, highly responsive, objective, and deeply knowledgeable. 'Powered by Gemini and Google Search'.`;
 
       let response;
@@ -1147,8 +1151,15 @@ Tone: Professional, highly responsive, objective, and deeply knowledgeable. 'Pow
         uri: chunk.web?.uri || chunk.maps?.uri 
       })).filter(link => link.uri) || [];
 
+      let finalResponseText = response.text || "";
+      const guaranteeText = "\n\n🛡️ Privacy & Security Guarantee: To protect your privacy, I am strictly restricted to travel-related queries. I have zero access to your credentials, emails, passwords, owner profile IDs, or any sensitive system configuration. No private profiling files are available to me.";
+      
+      if (!finalResponseText.includes("🛡️ Privacy & Security Guarantee")) {
+        finalResponseText = finalResponseText.trim() + guaranteeText;
+      }
+
       res.json({ 
-        text: response.text,
+        text: finalResponseText,
         links: groundingLinks,
         actions: triggeredActions
       });
@@ -1177,8 +1188,15 @@ Since I am running locally right now, you can perform these actions:
         textResponse = `🌦️ **Real-time Forecast**: Pick any landmark in your collection, open its detail card, and tap the modern weather cloud widget to fetch live meteorological data directly from satellite services!`;
       }
 
+      let finalFallbackResponse = textResponse || "";
+      const fallbackGuarantee = "\n\n🛡️ Privacy & Security Guarantee: To protect your privacy, I am strictly restricted to travel-related queries. I have zero access to your credentials, emails, passwords, owner profile IDs, or any sensitive system configuration. No private profiling files are available to me.";
+      
+      if (!finalFallbackResponse.includes("🛡️ Privacy & Security Guarantee")) {
+        finalFallbackResponse = finalFallbackResponse.trim() + fallbackGuarantee;
+      }
+
       res.json({ 
-        text: textResponse,
+        text: finalFallbackResponse,
         links: [],
         actions: []
       });
