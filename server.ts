@@ -864,15 +864,15 @@ Key Features & Core Duties:
 6. ADD COMMUNITY DISCOVERIES: You can register new locations into the community archive via the 'add_location' tool. Crucially, the creator/explorer name under which the location is saved must appear as the username: '${explorerName}'.
 
 Strict Safety & Privacy Boundaries (MANDATORY & ABSOLUTE):
-- LIMITATION TO APP WORK: Your context is strictly bound to the World Explorer app, travel information, maps, geography, coordinates, and assisting the user.
+- LIMITATION TO TRAVEL-RELATED QUERIES: Your capability is strictly bound to travel queries, geographical landmarks, coordinates, directions, local history, weather, and assisting the user. If the user asks about general computing, unrelated code, passwords, or passwords recovery, you MUST politely refuse to answer and steer them back to travel matters.
 - STRICTLY PROHIBITED FROM ACCESSING PROFILE DETAILS: You cannot access or view any detailed user profile information (such as password, email, phone number, real credentials). You are ONLY allowed to know and output the current user's non-sensitive username: '${explorerName}'.
 - NO CREDENTIALS or AUTH WORK: You cannot display, manipulate, reset, or process user accounts, registration tokens, emails, or credentials.
 - NO DATA SHARING: You are strictly prohibited from sharing user personal data, search logs, IP information, or other confidential user stats.
 - NO DEVELOPER/OWNER REVELATION: You are strictly forbidden from disclosing the App Owner's ID, Owner's profile, user work ID, or the Owner/Developer's name. You cannot assess or view the owner's profile.
-- If a user asks questions violating these guidelines, politely decline and steer them back to geographical discoveries.
+- If a user asks questions violating these guidelines, politely decline and steer them back to travel discoveries and landmarks.
 
-MANDATORY RESPONSE ENDING:
-At the very end of EVERY single response you provide to the user, you MUST append the following exact block word-for-word, verbatim, without any deviation or omission. Do not summarize it:
+MANDATORY RESPONSE FOOTER:
+At the very end of EVERY single response, you must append this exact guarantee string:
 🛡️ Privacy & Security Guarantee: To protect your privacy, I am strictly restricted to travel-related queries. I have zero access to your credentials, emails, passwords, owner profile IDs, or any sensitive system configuration. No private profiling files are available to me.
 
 Tone: Professional, highly responsive, objective, and deeply knowledgeable. 'Powered by Gemini and Google Search'.`;
@@ -1151,20 +1151,22 @@ Tone: Professional, highly responsive, objective, and deeply knowledgeable. 'Pow
         uri: chunk.web?.uri || chunk.maps?.uri 
       })).filter(link => link.uri) || [];
 
-      let finalResponseText = response.text || "";
-      const guaranteeText = "\n\n🛡️ Privacy & Security Guarantee: To protect your privacy, I am strictly restricted to travel-related queries. I have zero access to your credentials, emails, passwords, owner profile IDs, or any sensitive system configuration. No private profiling files are available to me.";
+      let finalTextResponse = response.text || "";
+      const guaranteeNoticeText = "🛡️ Privacy & Security Guarantee: To protect your privacy, I am strictly restricted to travel-related queries. I have zero access to your credentials, emails, passwords, owner profile IDs, or any sensitive system configuration. No private profiling files are available to me.";
       
-      if (!finalResponseText.includes("🛡️ Privacy & Security Guarantee")) {
-        finalResponseText = finalResponseText.trim() + guaranteeText;
+      if (!finalTextResponse.includes("Privacy & Security Guarantee") && !finalTextResponse.includes("To protect your privacy, I am strictly restricted")) {
+        finalTextResponse = finalTextResponse.trim() + "\n\n" + guaranteeNoticeText;
       }
 
       res.json({ 
-        text: finalResponseText,
+        text: finalTextResponse,
         links: groundingLinks,
         actions: triggeredActions
       });
     } catch (error: any) {
       console.error("Gemini Error:", error);
+      
+      const guaranteeNoticeText = "🛡️ Privacy & Security Guarantee: To protect your privacy, I am strictly restricted to travel-related queries. I have zero access to your credentials, emails, passwords, owner profile IDs, or any sensitive system configuration. No private profiling files are available to me.";
       
       // Smart offline-mode fallback instead of raising 429 status code
       let textResponse = `Hello there! World Explorer AI here in Smart Energy-Saver Local Mode 🌍 (Our API server is catching its breath, but we are fully running with local fallback intelligence!). How can I help you explore today?
@@ -1188,15 +1190,12 @@ Since I am running locally right now, you can perform these actions:
         textResponse = `🌦️ **Real-time Forecast**: Pick any landmark in your collection, open its detail card, and tap the modern weather cloud widget to fetch live meteorological data directly from satellite services!`;
       }
 
-      let finalFallbackResponse = textResponse || "";
-      const fallbackGuarantee = "\n\n🛡️ Privacy & Security Guarantee: To protect your privacy, I am strictly restricted to travel-related queries. I have zero access to your credentials, emails, passwords, owner profile IDs, or any sensitive system configuration. No private profiling files are available to me.";
-      
-      if (!finalFallbackResponse.includes("🛡️ Privacy & Security Guarantee")) {
-        finalFallbackResponse = finalFallbackResponse.trim() + fallbackGuarantee;
+      if (!textResponse.includes("Privacy & Security Guarantee")) {
+        textResponse = textResponse.trim() + "\n\n" + guaranteeNoticeText;
       }
 
       res.json({ 
-        text: finalFallbackResponse,
+        text: textResponse,
         links: [],
         actions: []
       });

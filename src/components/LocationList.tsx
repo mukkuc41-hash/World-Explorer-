@@ -43,6 +43,20 @@ export default function LocationList({ continent, country, state, showFavoritesO
   const [userTour, setUserTour] = useState<Set<string>>(new Set());
   const [userArchive, setUserArchive] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
+  const [isOffline, setIsOffline] = useState(typeof navigator !== 'undefined' ? !navigator.onLine : false);
+
+  // Monitor the network online/offline state
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const handleOnline = () => setIsOffline(false);
+    const handleOffline = () => setIsOffline(true);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
 
   // Fetch favorites
   useEffect(() => {
@@ -52,16 +66,32 @@ export default function LocationList({ continent, country, state, showFavoritesO
       return;
     }
 
+    // Load instantly from localStorage cache if present to support offline
+    try {
+      const cached = localStorage.getItem(`cached_favs_${user.uid}`);
+      if (cached) {
+        setUserFavorites(new Set(JSON.parse(cached)));
+      }
+    } catch (e) {
+      console.warn("Could not load cached favorites:", e);
+    }
+
     const q = query(
       collection(db, 'favorites'),
       where('userId', '==', user.uid)
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const favs = new Set(snapshot.docs.map(doc => doc.data().locationId));
-      setUserFavorites(favs);
+      const favsList = snapshot.docs.map(doc => doc.data().locationId);
+      const favsSet = new Set(favsList);
+      setUserFavorites(favsSet);
+      try {
+        localStorage.setItem(`cached_favs_${user.uid}`, JSON.stringify(favsList));
+      } catch (e) {
+        console.warn("Could not write favorites to cache:", e);
+      }
     }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, 'favorites');
+      console.warn("Firestore favorites snapshot connection pending / offline:", error);
     });
 
     return () => unsubscribe();
@@ -75,16 +105,32 @@ export default function LocationList({ continent, country, state, showFavoritesO
       return;
     }
 
+    // Load instantly from localStorage cache if present to support offline
+    try {
+      const cached = localStorage.getItem(`cached_tours_${user.uid}`);
+      if (cached) {
+        setUserTour(new Set(JSON.parse(cached)));
+      }
+    } catch (e) {
+      console.warn("Could not load cached tours:", e);
+    }
+
     const q = query(
       collection(db, 'tours'),
       where('userId', '==', user.uid)
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const tour = new Set(snapshot.docs.map(doc => doc.data().locationId));
-      setUserTour(tour);
+      const tourList = snapshot.docs.map(doc => doc.data().locationId);
+      const tourSet = new Set(tourList);
+      setUserTour(tourSet);
+      try {
+        localStorage.setItem(`cached_tours_${user.uid}`, JSON.stringify(tourList));
+      } catch (e) {
+        console.warn("Could not write tours to cache:", e);
+      }
     }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, 'tours');
+      console.warn("Firestore tours snapshot connection pending / offline:", error);
     });
 
     return () => unsubscribe();
@@ -98,16 +144,32 @@ export default function LocationList({ continent, country, state, showFavoritesO
       return;
     }
 
+    // Load instantly from localStorage cache if present to support offline
+    try {
+      const cached = localStorage.getItem(`cached_archives_${user.uid}`);
+      if (cached) {
+        setUserArchive(new Set(JSON.parse(cached)));
+      }
+    } catch (e) {
+      console.warn("Could not load cached archives:", e);
+    }
+
     const q = query(
       collection(db, 'archives'),
       where('userId', '==', user.uid)
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const arch = new Set(snapshot.docs.map(doc => doc.data().locationId));
-      setUserArchive(arch);
+      const archList = snapshot.docs.map(doc => doc.data().locationId);
+      const archSet = new Set(archList);
+      setUserArchive(archSet);
+      try {
+        localStorage.setItem(`cached_archives_${user.uid}`, JSON.stringify(archList));
+      } catch (e) {
+        console.warn("Could not write archives to cache:", e);
+      }
     }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, 'archives');
+      console.warn("Firestore archives snapshot connection pending / offline:", error);
     });
 
     return () => unsubscribe();
@@ -118,6 +180,23 @@ export default function LocationList({ continent, country, state, showFavoritesO
     if (!continent && !showFavoritesOnly && !showTourOnly && !showArchiveOnly && !showTrashOnly && !showUserAddedOnly && !searchQuery) return;
 
     setLoading(true);
+
+    const cacheKey = `cached_locs_${continent || 'all'}_${country || 'all'}_${state || 'all'}_${showFavoritesOnly ? 'yes' : 'no'}_${showTourOnly ? 'yes' : 'no'}_${showArchiveOnly ? 'yes' : 'no'}_${showTrashOnly ? 'yes' : 'no'}_${showUserAddedOnly ? 'yes' : 'no'}_${searchQuery || ''}`;
+
+    // Attempt instant render from cache so the user sees locations without network
+    try {
+      const cached = localStorage.getItem(cacheKey);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setLocations(parsed);
+          setLoading(false);
+        }
+      }
+    } catch (e) {
+      console.warn("Could not load cached locations:", e);
+    }
+
     let q;
     
     // If searching, we fetch everything related to the current context or everything if no context
@@ -193,8 +272,28 @@ export default function LocationList({ continent, country, state, showFavoritesO
 
       setLocations(locs);
       setLoading(false);
+
+      // Save to cache
+      try {
+        localStorage.setItem(cacheKey, JSON.stringify(locs));
+      } catch (e) {
+        console.warn("Could not cache locations:", e);
+      }
     }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, 'locations');
+      console.warn("Firestore locations subscription error / offline:", error);
+      
+      // Attempt load from cache on snapshot subscription error
+      try {
+        const cached = localStorage.getItem(cacheKey);
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed)) {
+            setLocations(parsed);
+          }
+        }
+      } catch (e) {
+        console.warn("Could not retrieve cached locations on offline error:", e);
+      }
       setLoading(false);
     });
 
@@ -264,18 +363,29 @@ export default function LocationList({ continent, country, state, showFavoritesO
   }
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-12">
-      <AnimatePresence mode="popLayout">
-        {locations.map((loc, index) => (
-          <LocationCard 
-            key={loc.id} 
-            location={loc} 
-            index={index} 
-            isFavorite={userFavorites.has(loc.id)}
-            onSelect={onSelect}
-          />
-        ))}
-      </AnimatePresence>
+    <div className="space-y-6">
+      {isOffline && (
+        <div className="bg-[#5A5A40]/10 border border-[#5A5A40]/25 rounded-2xl p-4 flex items-center justify-between text-xs font-serif italic text-[#5A5A40] animate-pulse">
+          <div className="flex items-center gap-2">
+            <Compass className="w-4 h-4 text-[#5A5A40] animate-spin" style={{ animationDuration: '4s' }} />
+            <span><strong>Offline Mode Enabled:</strong> You are viewing previously fetched and saved explorer landmarks. Real-time updates will auto-resume once connection returns.</span>
+          </div>
+          <span className="font-mono text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 bg-[#5A5A40]/10 rounded shrink-0">Cached Data</span>
+        </div>
+      )}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-12">
+        <AnimatePresence mode="popLayout">
+          {locations.map((loc, index) => (
+            <LocationCard 
+              key={loc.id} 
+              location={loc} 
+              index={index} 
+              isFavorite={userFavorites.has(loc.id)}
+              onSelect={onSelect}
+            />
+          ))}
+        </AnimatePresence>
+      </div>
     </div>
   );
 }
