@@ -3,7 +3,7 @@ import {
   Tent, Mountain, Waves, Sun, Moon, Cloud, 
   Navigation, MapPin, Footprints, Backpack, Wallet, 
   Ticket, Trees, Wind, Thermometer, Flame, Anchor, 
-  Award, Heart, Star, Zap, Calendar, Bookmark
+  Award, Heart, Star, Zap, Calendar, Bookmark, Trophy, Gem
 } from 'lucide-react';
 import React from 'react';
 
@@ -288,5 +288,55 @@ export const TRAVEL_BADGES: Badge[] = [
     hint: 'Plan 10 items',
     category: 'explorer',
     requirement: (s) => s.planned >= 10
+  },
+  {
+    id: 'diamond_explorer',
+    name: 'Diamond Explorer Medal',
+    description: 'The supreme master of geographic logging and exploration.',
+    icon: <Gem className="w-5 h-5 text-cyan-400 animate-pulse" />,
+    color: '#0e3a5c',
+    hint: 'Contribute 40, Save 45, and Plan 30 locations',
+    category: 'explorer',
+    requirement: (s) => (s.contributed >= 40 && s.saved >= 45 && s.planned >= 30)
+  },
+  {
+    id: 'gold_explorer',
+    name: 'Gold Explorer Medal',
+    description: 'A world-class guide of uncharted territories.',
+    icon: <Award className="w-5 h-5 text-[#fbbf24]" />,
+    color: '#78350f',
+    hint: 'Contribute 25, Save 30, and Plan 20 locations',
+    category: 'explorer',
+    requirement: (s) => (s.contributed >= 25 && s.saved >= 30 && s.planned >= 20)
+  },
+  {
+    id: 'silver_explorer',
+    name: 'Silver Explorer Medal',
+    description: 'A celebrated pathway carver across oceans.',
+    icon: <Award className="w-5 h-5 text-[#e2e8f0]" />,
+    color: '#1e293b',
+    hint: 'Contribute 10, Save 15, and Plan 10 locations',
+    category: 'explorer',
+    requirement: (s) => (s.contributed >= 10 && s.saved >= 15 && s.planned >= 10)
+  },
+  {
+    id: 'bronze_explorer',
+    name: 'Bronze Explorer Medal',
+    description: 'A dedicated explorer starting to leave a mark.',
+    icon: <Award className="w-5 h-5 text-[#cd7f32]" />,
+    color: '#3d2511',
+    hint: 'Contribute 3 and Save 5 locations',
+    category: 'explorer',
+    requirement: (s) => (s.contributed >= 3 && s.saved >= 5)
+  },
+  {
+    id: 'world_champion_explorer',
+    name: 'World Champion Explorer',
+    description: 'The ultimate pinnacle of global discovery. Earned by 0.001% of adventurers.',
+    icon: <Trophy className="w-5 h-5 text-teal-400 animate-bounce" />,
+    color: '#0d1e3d',
+    hint: 'Legendary Status: Earned via Quest (50+ Add, 50+ Save, 35+ Plan) OR a lucky 0.001% Cosmic Scan!',
+    category: 'explorer',
+    requirement: (s) => (s.isWorldChampion || (s.contributed >= 50 && s.saved >= 50 && s.planned >= 35))
   }
 ];

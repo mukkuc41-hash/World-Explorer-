@@ -2,6 +2,7 @@ import { LocationData } from './LocationList.tsx';
 import { motion } from 'motion/react';
 import { MapPin, User, Calendar, Heart, Star, Award, Clock, Trash2 } from 'lucide-react';
 import { auth, db, handleFirestoreError, OperationType } from '../lib/firebase.ts';
+import { safelyConvertToDate } from '../lib/dateUtils.ts';
 import { doc, setDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
 
 interface LocationCardProps {
@@ -59,7 +60,7 @@ export default function LocationCard({ location, index, isFavorite, onSelect }: 
 
   const formatDate = (timestamp: any) => {
     if (!timestamp) return '';
-    const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+    const date = safelyConvertToDate(timestamp);
     return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).format(date);
   };
 

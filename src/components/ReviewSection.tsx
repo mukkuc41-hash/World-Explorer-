@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { collection, query, where, orderBy, onSnapshot, addDoc, deleteDoc, doc, serverTimestamp, setDoc, increment } from 'firebase/firestore';
 import { db, auth, handleFirestoreError, OperationType } from '../lib/firebase.ts';
+import { safelyConvertToDate } from '../lib/dateUtils.ts';
 import { motion, AnimatePresence } from 'motion/react';
 import { Star, MessageSquare, Send, Trash2, User } from 'lucide-react';
 
@@ -187,7 +188,7 @@ export default function ReviewSection({ locationId }: ReviewSectionProps) {
                   </div>
                   <div className="flex items-center gap-4">
                     <span className="text-[10px] font-black uppercase tracking-widest opacity-20">
-                      {review.createdAt ? new Date(review.createdAt.toDate()).toLocaleDateString() : 'Just now'}
+                      {review.createdAt ? safelyConvertToDate(review.createdAt).toLocaleDateString() : 'Just now'}
                     </span>
                     {(user?.uid === review.userId || isAdmin) && (
                       <button

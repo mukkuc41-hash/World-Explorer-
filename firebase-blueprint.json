@@ -97,6 +97,9 @@
         "phoneNumber": { "type": "string", "description": "User's phone number." },
         "birthDate": { "type": "string", "description": "User's date of birth." },
         "gender": { "type": "string", "description": "User's gender." },
+        "streakCount": { "type": "number", "description": "Current consecutive days of active app usage." },
+        "longestStreak": { "type": "number", "description": "The user's maximum recorded active streak." },
+        "lastActiveDate": { "type": "string", "description": "The last date (YYYY-MM-DD) the user was active." },
         "updatedAt": { "type": "string", "format": "date-time", "description": "When the profile was last updated." }
       },
       "required": ["email", "updatedAt"]

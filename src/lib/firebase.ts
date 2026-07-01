@@ -1,20 +1,15 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut } from 'firebase/auth';
-import { getFirestore, doc, getDocFromCache, getDocFromServer, enableIndexedDbPersistence } from 'firebase/firestore';
+import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, doc, getDocFromCache, getDocFromServer } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
 
 const app = initializeApp(firebaseConfig);
-// The app will break without specifying the firestoreDatabaseId
-export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId); 
-
-// Enable native offline capabilities
-try {
-  enableIndexedDbPersistence(db).catch((err) => {
-    console.warn("Firestore persistent local cache warning:", err.message);
-  });
-} catch (err) {
-  console.warn("Firestore offline persistent cache initialization failed:", err);
-}
+// Initialized with native offline capabilities using modern localCache settings
+export const db = initializeFirestore(app, {
+  localCache: persistentLocalCache({
+    tabManager: persistentMultipleTabManager()
+  })
+}, firebaseConfig.firestoreDatabaseId); 
 
 export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();

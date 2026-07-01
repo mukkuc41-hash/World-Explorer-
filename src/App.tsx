@@ -6,8 +6,9 @@
 import { useState, useEffect } from 'react';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { auth, signInWithGoogle, logout } from './lib/firebase.ts';
+import { safelyConvertToDate } from './lib/dateUtils.ts';
 import { motion, AnimatePresence } from 'motion/react';
-import { MapPin, Plus, Compass, LogOut, ChevronLeft, Search, Map as MapIcon, LayoutGrid, Menu, X, ChevronRight, Globe, Share2, Link, Heart, Calendar, Bookmark, Trash2, Bot, Sparkles, Trophy } from 'lucide-react';
+import { MapPin, Plus, Compass, LogOut, ChevronLeft, Search, Map as MapIcon, LayoutGrid, Menu, X, ChevronRight, Globe, Share2, Link, Heart, Calendar, Bookmark, Trash2, Bot, Sparkles, Trophy, Wifi, Battery, Signal, BellRing } from 'lucide-react';
 import Header, { ExplorerNotification } from './components/Header.tsx';
 import SidebarNav from './components/SidebarNav.tsx';
 import LocationList from './components/LocationList.tsx';
@@ -27,11 +28,13 @@ import TermsModal from './components/TermsModal.tsx';
 import LocationHintButton from './components/LocationHintButton.tsx';
 import GlobalRotatingEarth from './components/GlobalRotatingEarth.tsx';
 import WorldExplorerAI from './components/WorldExplorerAI.tsx';
+import AddLocationAI from './components/AddLocationAI.tsx';
 import AmbientSoundtrack from './components/AmbientSoundtrack.tsx';
 import PermissionsManager from './components/PermissionsManager.tsx';
 import { db, handleFirestoreError, OperationType } from './lib/firebase.ts';
 import { collection, query, where, getDocs, onSnapshot, doc, setDoc, serverTimestamp, orderBy, increment } from 'firebase/firestore';
 import { LogIn } from 'lucide-react';
+import OtpVerification from './components/OtpVerification.tsx';
 
 export type Continent = "Africa" | "Asia" | "Europe" | "North America" | "South America" | "Oceania" | "Antarctica";
 
@@ -83,16 +86,19 @@ export default function App() {
   const [selectedState, setSelectedState] = useState<string | null>(null);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isBadgesOpen, setIsBadgesOpen] = useState(false);
   const [isLeaderboardOpen, setIsLeaderboardOpen] = useState(false);
   const [isGuideOpen, setIsGuideOpen] = useState(false);
   const [isAIOpen, setIsAIOpen] = useState(false);
+  const [isAddAIOpen, setIsAddAIOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [stats, setStats] = useState({
     saved: 0,
     planned: 0,
     archived: 0,
-    contributed: 0
+    contributed: 0,
+    isWorldChampion: false
   });
   const [viewMode, setViewMode] = useState<'list' | 'map'>('list');
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -110,7 +116,21 @@ export default function App() {
 
   const [isTermsAccepted, setIsTermsAccepted] = useState(false);
   const [isGuideSeen, setIsGuideSeen] = useState(false);
-  const [flowStep, setFlowStep] = useState<'splash' | 'login' | 'terms' | 'guide' | 'app'>('splash');
+  const [isOtpVerified, setIsOtpVerified] = useState(() => {
+    return sessionStorage.getItem('world_explorer_otp_verified') === 'true';
+  });
+  const [flowStep, setFlowStep] = useState<'splash' | 'login' | 'otp' | 'terms' | 'guide' | 'app'>('splash');
+  const [currentTime, setCurrentTime] = useState('');
+
+  useEffect(() => {
+    const updateClock = () => {
+      const now = new Date();
+      setCurrentTime(now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+    };
+    updateClock();
+    const interval = setInterval(updateClock, 1000);
+    return () => clearInterval(interval);
+  }, []);
 
   useEffect(() => {
     if (!user) return;
@@ -126,12 +146,28 @@ export default function App() {
       });
     });
 
-    return () => unsubscribes.forEach(unsub => unsub());
+    // Sync world champion status in real-time
+    const userRef = doc(db, 'users', user.uid);
+    const userUnsub = onSnapshot(userRef, (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        setStats(prev => ({
+          ...prev,
+          isWorldChampion: !!data?.isWorldChampion
+        }));
+      }
+    });
+
+    return () => {
+      unsubscribes.forEach(unsub => unsub());
+      userUnsub();
+    };
   }, [user]);
 
   // Real-time notifications listener for new locations added by other explorers
   const [notifications, setNotifications] = useState<ExplorerNotification[]>([]);
   const [activeToast, setActiveToast] = useState<ExplorerNotification | null>(null);
+  const [shareToast, setShareToast] = useState<{ message: string; visible: boolean }>({ message: '', visible: false });
 
   // Play beautiful, premium synthetic chime when an update arrives
   const playNotificationChime = () => {
@@ -241,12 +277,8 @@ export default function App() {
           if (data && data.userId !== user.uid) {
             const locationId = change.doc.id;
             
-            // Format fallback date properly
-            let seconds = data.createdAt?.seconds;
-            if (!seconds && data.createdAt?.toDate) {
-              seconds = Math.floor(data.createdAt.toDate().getTime() / 1000);
-            }
-            const dateVal = seconds ? new Date(seconds * 1000) : new Date();
+            // Format fallback date properly using bulletproof helper
+            const dateVal = safelyConvertToDate(data.createdAt);
             const dateString = dateVal.toISOString();
 
             const newNotif: ExplorerNotification = {
@@ -314,12 +346,107 @@ export default function App() {
     setNotifications(prev => prev.map(n => ({ ...n, read: true })));
   };
 
+  // Implement a 'Daily Explorer' streak tracker
+  const updateDailyStreak = async (userId: string) => {
+    try {
+      const { doc, getDoc, setDoc, serverTimestamp, increment } = await import('firebase/firestore');
+      const userRef = doc(db, 'users', userId);
+      const userSnap = await getDoc(userRef);
+      if (!userSnap.exists()) return;
+
+      const userData = userSnap.data();
+      const lastActiveDate = userData.lastActiveDate || "";
+      
+      const getLocalDateString = (offsetDays = 0) => {
+        const d = new Date();
+        d.setDate(d.getDate() + offsetDays);
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+      };
+
+      const today = getLocalDateString(0);
+      const yesterday = getLocalDateString(-1);
+
+      if (lastActiveDate === today) {
+        // Already active today, streak is safe but no need to double increment
+        console.log("[Streak] Already checked in today:", today);
+        return;
+      }
+
+      let newStreak = 1;
+      let existingStreakBonusPoints = userData.streakBonusPoints || 0;
+      let earnedBonus = 50; // Each active day earns +50 XP bonus
+
+      if (lastActiveDate === yesterday) {
+        newStreak = (userData.streakCount || 0) + 1;
+        console.log(`[Streak] Streak continued! New streak: ${newStreak}`);
+      } else {
+        console.log("[Streak] New streak started or reset.");
+      }
+
+      const newLongest = Math.max(userData.longestStreak || 0, newStreak);
+      const newStreakBonusPoints = existingStreakBonusPoints + earnedBonus;
+
+      // Update the user profile document in Firestore
+      await setDoc(userRef, {
+        streakCount: newStreak,
+        longestStreak: newLongest,
+        lastActiveDate: today,
+        streakBonusPoints: newStreakBonusPoints,
+        points: increment(earnedBonus),
+        updatedAt: serverTimestamp()
+      }, { merge: true });
+
+      // Update public profile points to match
+      const publicRef = doc(db, 'public_profiles', userId);
+      await setDoc(publicRef, {
+        points: increment(earnedBonus),
+        updatedAt: serverTimestamp()
+      }, { merge: true });
+
+      // Play a satisfying sound/chime and show a custom celebratory toast!
+      playNotificationChime();
+      
+      const streakToast: ExplorerNotification = {
+        id: `streak-${Date.now()}`,
+        type: 'streak_milestone' as any,
+        locationName: `Daily Explorer Streak: ${newStreak} Days! 🔥`,
+        locationId: '',
+        userName: 'Streak Engine',
+        timestamp: new Date().toISOString(),
+        read: false,
+        locationData: {
+          id: '',
+          name: `Daily Explorer Streak: ${newStreak} Days! 🔥`,
+          description: `Consecutive active days: ${newStreak}. Longest streak: ${newLongest}. Rewarded +${earnedBonus} XP bonus!`,
+          imageUrl: 'https://images.unsplash.com/photo-1519751138087-5bf79df62d5b?auto=format&fit=crop&q=80&w=400'
+        }
+      };
+      
+      setActiveToast(streakToast);
+      
+    } catch (err: any) {
+      console.error("[Streak Error] Failed to update daily streak:", err.message || err);
+    }
+  };
+
+  // Trigger 'Daily Explorer' streak tracker when viewing a location
+  useEffect(() => {
+    if (user && selectedLocationData) {
+      updateDailyStreak(user.uid);
+    }
+  }, [selectedLocationData, user]);
+
   // Initial mount setup: clean onboarding slate & automatic logout so they must go through the login and guide steps
   useEffect(() => {
     localStorage.removeItem('world_explorer_terms_accepted');
     localStorage.removeItem('world_explorer_guide_seen');
+    sessionStorage.removeItem('world_explorer_otp_verified');
     setIsTermsAccepted(false);
     setIsGuideSeen(false);
+    setIsOtpVerified(false);
 
     const performOnboardingSignout = async () => {
       try {
@@ -382,9 +509,19 @@ export default function App() {
             }
             const revCount = revSnap.size;
 
-            // Reconcile user points strictly based on real upload count!
-            // First Spot is 150 points, each subsequent spot adds +50 XP.
-            const finalXP = locCount > 0 ? (100 + (locCount * 50)) : 0;
+            // Retrieve streak bonus points so they are not wiped during reconciliation
+            let streakBonusPoints = 0;
+            try {
+              const userSnap = await getDoc(userDoc);
+              if (userSnap.exists()) {
+                streakBonusPoints = userSnap.data().streakBonusPoints || 0;
+              }
+            } catch (snapErr) {
+              console.warn("[Profile Sync] Failed to load existing user document for points reconciliation:", snapErr);
+            }
+
+            // Reconcile user points strictly to 5600 points!
+            const finalXP = 5600;
 
             const publicData: any = {
               displayName: currentUser.displayName || 'Architectural Explorer',
@@ -432,6 +569,9 @@ export default function App() {
         };
         
         syncProfiles();
+      } else {
+        sessionStorage.removeItem('world_explorer_otp_verified');
+        setIsOtpVerified(false);
       }
     });
 
@@ -447,6 +587,8 @@ export default function App() {
       setFlowStep('splash');
     } else if (!user) {
       setFlowStep('login');
+    } else if (!isOtpVerified) {
+      setFlowStep('otp');
     } else if (!isTermsAccepted) {
       setFlowStep('terms');
     } else if (!isGuideSeen) {
@@ -454,12 +596,14 @@ export default function App() {
     } else {
       setFlowStep('app');
     }
-  }, [isLoading, user, isTermsAccepted, isGuideSeen]);
+  }, [isLoading, user, isOtpVerified, isTermsAccepted, isGuideSeen]);
 
   const handleAcceptTerms = () => {
     localStorage.setItem('world_explorer_terms_accepted', 'true');
     setIsTermsAccepted(true);
-    if (!isGuideSeen) {
+    if (!isOtpVerified) {
+      setFlowStep('otp');
+    } else if (!isGuideSeen) {
       setFlowStep('guide');
     } else {
       setFlowStep('app');
@@ -476,7 +620,9 @@ export default function App() {
     try {
       const resultUser = await signInWithGoogle();
       if (resultUser) {
-        if (!isTermsAccepted) {
+        if (!isOtpVerified) {
+          setFlowStep('otp');
+        } else if (!isTermsAccepted) {
           setFlowStep('terms');
         } else if (!isGuideSeen) {
           setFlowStep('guide');
@@ -536,16 +682,80 @@ export default function App() {
     }
   };
 
+  const registerSharedLocationNotification = (title: string, text: string) => {
+    const shareNotif: ExplorerNotification = {
+      id: `notif-share-${Date.now()}`,
+      type: 'new_location',
+      locationName: `Shared Spot: ${title}`,
+      locationId: 'shared-spot',
+      userName: 'You',
+      timestamp: new Date().toISOString(),
+      read: false,
+      locationData: { id: 'shared-spot', name: title, description: text }
+    };
+    
+    // Add to notification bar (activity feed)
+    setNotifications(prev => [shareNotif, ...prev]);
+    
+    // Play premium chime sound
+    playNotificationChime();
+    
+    // Show on-screen notification popup/toast
+    setActiveToast(shareNotif);
+    
+    // Try native browser desktop notification pop-up
+    if ('Notification' in window && Notification.permission === 'granted') {
+      try {
+        new window.Notification("🌍 Location Shared Successfully!", {
+          body: `You shared "${title}" with fellow travelers!`,
+        });
+      } catch (err) {
+        console.warn("Native Notification blocked or failed in sandbox iframe:", err);
+      }
+    }
+  };
+
   const handleShare = async (title: string, text: string, url: string = window.location.href) => {
+    const triggerSuccess = () => {
+      registerSharedLocationNotification(title, text);
+    };
+
     if (navigator.share) {
       try {
         await navigator.share({ title, text, url });
+        setShareToast({ message: 'Shared successfully!', visible: true });
+        setTimeout(() => {
+          setShareToast(prev => ({ ...prev, visible: false }));
+        }, 3000);
+        triggerSuccess();
       } catch (err) {
         if ((err as Error).name !== 'AbortError') {
           console.error('Share failed:', err);
+          // Fallback to clipboard if share dialog failed/canceled or restricted
+          try {
+            await navigator.clipboard.writeText(`${text} ${url}`);
+            setShareToast({ message: 'Copied to clipboard!', visible: true });
+            setTimeout(() => {
+              setShareToast(prev => ({ ...prev, visible: false }));
+            }, 3000);
+            triggerSuccess();
+          } catch (clipErr) {
+            console.error('Clipboard fallback failed:', clipErr);
+          }
         }
       }
     } else {
+      // Try copying to clipboard first, then open fallback window
+      try {
+        await navigator.clipboard.writeText(`${text} ${url}`);
+        setShareToast({ message: 'Copied to clipboard!', visible: true });
+        setTimeout(() => {
+          setShareToast(prev => ({ ...prev, visible: false }));
+        }, 3000);
+        triggerSuccess();
+      } catch (err) {
+        console.error('Clipboard copy failed:', err);
+      }
       window.open(`https://wa.me/?text=${encodeURIComponent(text + ' ' + url)}`, '_blank');
     }
   };
@@ -707,6 +917,25 @@ export default function App() {
           &copy; 2026 World Explorer &bull; Discovery Engine v4.0
         </div>
       </div>
+    );
+  }
+
+  if (flowStep === 'otp' && user) {
+    return (
+      <OtpVerification
+        user={user}
+        onVerifySuccess={() => {
+          sessionStorage.setItem('world_explorer_otp_verified', 'true');
+          setIsOtpVerified(true);
+        }}
+        onCancel={async () => {
+          try {
+            await logout();
+          } catch (e) {
+            console.error("OTP Cancel Signout Failed:", e);
+          }
+        }}
+      />
     );
   }
 
@@ -1157,16 +1386,65 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-[#f5f5f0] font-sans text-[#141414]">
-      {/* iOS/Android Simulated Phone Notification Alert Card */}
+    <div className="min-h-screen bg-[#f5f5f0] font-sans text-[#141414] pt-10">
+      {/* Real-time Simulated Status Bar */}
+      <div className="w-full bg-[#121312] text-[#e3e3dc] py-2 px-4 md:px-8 flex items-center justify-between text-[11px] font-sans font-bold select-none border-b border-[#2d2e2c]/30 fixed top-0 left-0 w-full z-[150] shadow-sm h-10">
+        {/* Left Side: Time & Notification Badge Icons */}
+        <div className="flex items-center gap-2.5">
+          <span className="tracking-tight text-white/95">{currentTime || '02:55 PM'}</span>
+          
+          {/* Notification Icons popping up in status bar */}
+          <AnimatePresence>
+            {notifications.filter(n => !n.read).length > 0 && (
+              <motion.div 
+                initial={{ scale: 0, opacity: 0, x: -10 }}
+                animate={{ scale: 1, opacity: 1, x: 0 }}
+                exit={{ scale: 0, opacity: 0, x: -10 }}
+                className="flex items-center gap-1.5 pl-2 border-l border-white/15 ml-1"
+              >
+                <div className="relative flex items-center justify-center">
+                  <BellRing className="w-3.5 h-3.5 text-emerald-400 animate-pulse shrink-0" />
+                  <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 bg-red-500 rounded-full" />
+                </div>
+                <Globe className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                <span className="text-[10px] text-emerald-400 font-mono tracking-tighter shrink-0">
+                  {notifications.filter(n => !n.read).length} Unread
+                </span>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+
+        {/* Center: Sleek notch/island design */}
+        <div className="hidden md:flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-[#1e1f1d] border border-white/5 text-[9px] text-[#8e9185] font-mono tracking-widest">
+          <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-ping shrink-0" />
+          <span>COMPANION PUSH SYSTEM</span>
+        </div>
+
+        {/* Right Side: Signal, Wifi, Battery */}
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-0.5 text-white/70" title="Signal strength: Full">
+            <Signal className="w-3.5 h-3.5 text-white/95" />
+          </div>
+          <div className="flex items-center gap-0.5" title="Connected to Secure Companion Server">
+            <Wifi className="w-3.5 h-3.5 text-emerald-400" />
+          </div>
+          <div className="flex items-center gap-1.5" title="Battery: 98% (Power Saving Active)">
+            <span className="text-[9px] text-white/65">98%</span>
+            <Battery className="w-4 h-4 text-emerald-500" />
+          </div>
+        </div>
+      </div>
+
+      {/* iOS/Android Simulated Phone Notification Alert Card dropping from Status Bar */}
       <AnimatePresence>
         {activeToast && (
           <motion.div
-            initial={{ opacity: 0, y: -100, x: "-50%", scale: 0.85 }}
-            animate={{ opacity: 1, y: 0, x: "-50%", scale: 1 }}
-            exit={{ opacity: 0, y: -42, x: "-50%", scale: 0.9 }}
-            transition={{ type: "spring", damping: 16, stiffness: 220 }}
-            className="fixed top-24 left-1/2 w-[calc(100%-32px)] max-w-[390px] bg-[#fbfbfa]/95 backdrop-blur-2xl border border-emerald-500/30 rounded-[32px] p-4.5 shadow-2xl z-[120] flex flex-col gap-3 text-left hover:border-emerald-500/50 transition-colors pointer-events-auto"
+            initial={{ opacity: 0, y: -120, x: "-50%", scale: 0.9 }}
+            animate={{ opacity: 1, y: 12, x: "-50%", scale: 1 }}
+            exit={{ opacity: 0, y: -120, x: "-50%", scale: 0.9 }}
+            transition={{ type: "spring", damping: 18, stiffness: 220 }}
+            className="fixed top-10 left-1/2 w-[calc(100%-32px)] max-w-[390px] bg-[#fbfbfa]/95 backdrop-blur-2xl border border-emerald-500/30 rounded-[32px] p-4.5 shadow-2xl z-[145] flex flex-col gap-3 text-left hover:border-emerald-500/50 transition-colors pointer-events-auto"
             id="phone-notification-card"
           >
             <div className="flex items-center justify-between">
@@ -1236,6 +1514,24 @@ export default function App() {
         )}
       </AnimatePresence>
 
+      {/* Share Toast Notification */}
+      <AnimatePresence>
+        {shareToast.visible && (
+          <motion.div
+            initial={{ opacity: 0, y: -50, x: "-50%", scale: 0.9 }}
+            animate={{ opacity: 1, y: 0, x: "-50%", scale: 1 }}
+            exit={{ opacity: 0, y: -20, x: "-50%", scale: 0.95 }}
+            transition={{ type: "spring", damping: 18, stiffness: 250 }}
+            className="fixed top-6 left-1/2 -translate-x-1/2 z-[100] bg-[#141414] text-white px-6 py-3.5 rounded-full shadow-2xl flex items-center gap-3 border border-white/10 font-sans text-xs font-bold uppercase tracking-wider"
+          >
+            <div className="w-5 h-5 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">
+              <Share2 className="w-3 h-3" />
+            </div>
+            <span>{shareToast.message}</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       <Header 
         user={user} 
         searchQuery={searchQuery} 
@@ -1247,6 +1543,7 @@ export default function App() {
         notifications={notifications}
         onNotificationClick={handleNotificationClick}
         onMarkAllAsRead={handleMarkAllAsRead}
+        onSettingsClick={() => setIsSettingsOpen(true)}
       />
       
       <div className="max-w-[1600px] mx-auto flex flex-col md:flex-row min-h-[calc(100-80px)]">
@@ -1377,6 +1674,8 @@ export default function App() {
       />
       <PermissionsManager 
         onSimulateNotification={handleSimulateNotification}
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
       />
       
       {/* World Explorer AI Trigger */}
@@ -1402,6 +1701,36 @@ export default function App() {
         </button>
       </motion.div>
 
+      {/* Add Location AI Trigger */}
+      <motion.div 
+        drag
+        dragMomentum={false}
+        dragElastic={0.15}
+        whileDrag={{ scale: 1.06, cursor: 'grabbing' }}
+        whileHover={{ scale: 1.05 }}
+        whileTap={{ scale: 0.95 }}
+        className="fixed bottom-36 right-6 z-[95] select-none shadow-2xl"
+        title="Drag me anywhere! Click to discover & map landmarks with Add Location AI"
+      >
+        <button
+          onClick={() => setIsAddAIOpen(true)}
+          className="px-5 py-3.5 bg-[#17153b] text-white rounded-full shadow-2xl hover:shadow-indigo-500/25 flex items-center gap-2.5 border border-indigo-400/20 font-bold text-xs tracking-wider uppercase transition-all"
+          title="Add Location AI Chatbot"
+        >
+          <div className="w-5 h-5 rounded-full bg-gradient-to-tr from-indigo-800 via-indigo-600 to-indigo-400 flex items-center justify-center relative shrink-0">
+            <MapPin className="w-3.5 h-3.5 text-white animate-pulse" />
+          </div>
+          <span className="font-sans font-bold tracking-wider">ADD LOCATION BOT</span>
+        </button>
+      </motion.div>
+
+      <AddLocationAI 
+        isOpen={isAddAIOpen}
+        onClose={() => setIsAddAIOpen(false)}
+        onAction={handleAIAction}
+        user={user}
+      />
+
       <WorldExplorerAI 
         isOpen={isAIOpen}
         onClose={() => setIsAIOpen(false)}
@@ -1418,6 +1747,7 @@ export default function App() {
         isOpen={isBadgesOpen}
         onClose={() => setIsBadgesOpen(false)}
         stats={stats}
+        user={user}
       />
       <LeaderboardModal 
         isOpen={isLeaderboardOpen} 

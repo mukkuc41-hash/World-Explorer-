@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { User } from 'firebase/auth';
 import { signInWithGoogle, logout } from '../lib/firebase.ts';
-import { LogIn, LogOut, Compass, Search, Info, Trophy, Bell, Check, MapPin } from 'lucide-react';
+import { LogIn, LogOut, Compass, Search, Info, Trophy, Bell, Check, MapPin, Settings } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 export interface ExplorerNotification {
@@ -27,6 +27,7 @@ interface HeaderProps {
   onNotificationClick: (notif: ExplorerNotification) => void;
   onMarkAllAsRead: () => void;
   onSimulateNotification?: () => void;
+  onSettingsClick?: () => void;
 }
 
 export default function Header({ 
@@ -40,7 +41,8 @@ export default function Header({
   notifications = [],
   onNotificationClick,
   onMarkAllAsRead,
-  onSimulateNotification
+  onSimulateNotification,
+  onSettingsClick
 }: HeaderProps) {
   const [isNotifOpen, setIsNotifOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement | null>(null);
@@ -245,6 +247,18 @@ export default function Header({
               )}
             </AnimatePresence>
           </div>
+
+          {/* Privacy & Notification Settings Gear */}
+          {onSettingsClick && (
+            <button
+              onClick={onSettingsClick}
+              className="p-2.5 hover:bg-[#141414]/5 text-[#141414]/70 hover:text-[#141414] rounded-xl transition-all h-10 w-10 flex items-center justify-center"
+              title="Privacy & Permission Settings"
+              id="header-settings-btn"
+            >
+              <Settings className="w-5 h-5" />
+            </button>
+          )}
 
           {user ? (
             <div className="flex items-center gap-4">

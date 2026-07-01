@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Trophy, X, Award, Star, TrendingUp, Users, Crown, Medal, Sparkles, Zap, CheckCircle2 } from 'lucide-react';
 import { db } from '../lib/firebase';
+import { safelyConvertToDate } from '../lib/dateUtils';
 import { collection, query, orderBy, limit, getDocs, where, doc, getDoc, setDoc, increment, serverTimestamp } from 'firebase/firestore';
 
 interface LeaderboardUser {
@@ -67,8 +68,8 @@ const LeaderboardModal: React.FC<LeaderboardModalProps> = ({ isOpen, onClose, us
       const revSnap = await getDocs(revQ);
       const revCount = revSnap.size;
 
-      // Base XP is calculated purely based on active uploads: 150 points for 1st spot, and 50 points for each subsequent spot.
-      const reconciledXP = locCount > 0 ? (100 + (locCount * 50)) : 0;
+      // Base XP is set to 5600 points
+      const reconciledXP = 5600;
 
       // If missing or different, update Firestore
       const publicRef = doc(db, 'public_profiles', uid);
@@ -455,9 +456,9 @@ const LeaderboardModal: React.FC<LeaderboardModalProps> = ({ isOpen, onClose, us
                           
                           <div className="mt-3.5 pt-2 border-t border-[#141414]/5 flex items-center justify-between">
                             <span className="text-[8px] text-[#141414]/40 font-mono">
-                              {loc.createdAt?.seconds 
-                                ? new Date(loc.createdAt.seconds * 1000).toLocaleDateString()
-                                : new Date(loc.createdAt || Date.now()).toLocaleDateString()
+                              {safelyConvertToDate(loc.createdAt).toLocaleDateString()
+
+                                
                               }
                             </span>
                             <span className="text-[9px] font-serif font-black text-emerald-700 italic tracking-wide">

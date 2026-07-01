@@ -35,9 +35,8 @@ service cloud.firestore {
 
     // --- Validation Helpers ---
     function isValidUserProfile(data) {
-      return data.keys().hasAll(['email', 'updatedAt'])
-        && data.email is string && data.email.size() <= 256
-        && data.updatedAt is timestamp
+      return (!data.keys().contains('email') || (data.email is string && data.email.size() <= 256))
+        && (!data.keys().contains('updatedAt') || data.updatedAt is timestamp)
         && (!data.keys().contains('lastLogin') || data.lastLogin is timestamp)
         && (!data.keys().contains('firstName') || (data.firstName is string && data.firstName.size() <= 100))
         && (!data.keys().contains('lastName') || (data.lastName is string && data.lastName.size() <= 100))
@@ -48,23 +47,28 @@ service cloud.firestore {
         && (!data.keys().contains('gender') || (data.gender is string && data.gender.size() <= 25))
         && (!data.keys().contains('points') || data.points is number)
         && (!data.keys().contains('totalDiscoveries') || data.totalDiscoveries is number)
-        && (!data.keys().contains('totalReviews') || data.totalReviews is number);
+        && (!data.keys().contains('totalReviews') || data.totalReviews is number)
+        && (!data.keys().contains('xpBoosts') || data.xpBoosts is number)
+        && (!data.keys().contains('streakCount') || data.streakCount is number)
+        && (!data.keys().contains('longestStreak') || data.longestStreak is number)
+        && (!data.keys().contains('lastActiveDate') || (data.lastActiveDate is string && data.lastActiveDate.size() <= 50));
     }
     function isValidPublicProfile(data) {
-      return data.keys().hasAll(['displayName', 'updatedAt'])
-        && data.displayName is string && data.displayName.size() <= 256
-        && data.updatedAt is timestamp
+      return (!data.keys().contains('displayName') || (data.displayName is string && data.displayName.size() <= 256))
+        && (!data.keys().contains('updatedAt') || data.updatedAt is timestamp)
         && (!data.keys().contains('photoURL') || data.photoURL == null || data.photoURL is string)
+        && (!data.keys().contains('username') || (data.username is string && data.username.size() <= 100))
         && (!data.keys().contains('points') || data.points is number)
         && (!data.keys().contains('totalDiscoveries') || data.totalDiscoveries is number)
-        && (!data.keys().contains('totalReviews') || data.totalReviews is number);
+        && (!data.keys().contains('totalReviews') || data.totalReviews is number)
+        && (!data.keys().contains('xpBoosts') || data.xpBoosts is number);
     }
     function isValidLocation(data) {
-      return data.keys().hasAll(['name', 'description', 'imageUrl', 'continent', 'country', 'state', 'userId', 'userName', 'lat', 'lng', 'createdAt', 'updatedAt'])
-        && data.name is string && data.name.size() > 0 && data.name.size() <= 200
-        && data.description is string && data.description.size() > 0 && data.description.size() <= 6000
-        && data.continent in ["Africa", "Asia", "Europe", "North America", "South America", "Oceania", "Antarctica"]
-        && data.userId == request.auth.uid;
+      return (!data.keys().contains('name') || (data.name is string && data.name.size() > 0 && data.name.size() <= 200))
+        && (!data.keys().contains('description') || (data.description is string && data.description.size() > 0 && data.description.size() <= 6000))
+        && (!data.keys().contains('continent') || (data.continent in ["Africa", "Asia", "Europe", "North America", "South America", "Oceania", "Antarctica"]))
+        && (!data.keys().contains('userId') || data.userId == request.auth.uid)
+        && (!data.keys().contains('isDeleted') || data.isDeleted is bool);
     }
 
     // --- Collection: locations ---
@@ -77,6 +81,7 @@ service cloud.firestore {
 
       allow update: if isVerified()
         && isValidId(locationId)
+        && isValidLocation(incoming())
         && (isOwner(existing().userId) || isAdmin())
         && incoming().userId == existing().userId;
 
@@ -143,13 +148,18 @@ service cloud.firestore {
 
     // --- Collection: users ---
     match /users/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+      allow read: if request.auth != null && request.auth.uid == userId;
+      allow write: if request.auth != null 
+        && request.auth.uid == userId 
+        && isValidUserProfile(incoming());
     }
 
     // --- Collection: public_profiles ---
     match /public_profiles/{userId} {
       allow read: if true;
-      allow write: if request.auth != null && request.auth.uid == userId;
+      allow write: if request.auth != null 
+        && request.auth.uid == userId 
+        && isValidPublicProfile(incoming());
     }
 
     // Default deny everything else (Global Fallback)
