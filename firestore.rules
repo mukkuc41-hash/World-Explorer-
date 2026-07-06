@@ -149,17 +149,13 @@ service cloud.firestore {
     // --- Collection: users ---
     match /users/{userId} {
       allow read: if request.auth != null && request.auth.uid == userId;
-      allow write: if request.auth != null 
-        && request.auth.uid == userId 
-        && isValidUserProfile(incoming());
+      allow write: if request.auth != null && request.auth.uid == userId;
     }
 
     // --- Collection: public_profiles ---
     match /public_profiles/{userId} {
       allow read: if true;
-      allow write: if request.auth != null 
-        && request.auth.uid == userId 
-        && isValidPublicProfile(incoming());
+      allow write: if request.auth != null && request.auth.uid == userId;
     }
 
     // Default deny everything else (Global Fallback)

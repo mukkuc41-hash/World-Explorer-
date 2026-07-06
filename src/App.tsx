@@ -9,6 +9,7 @@ import { auth, signInWithGoogle, logout } from './lib/firebase.ts';
 import { safelyConvertToDate } from './lib/dateUtils.ts';
 import { motion, AnimatePresence } from 'motion/react';
 import { MapPin, Plus, Compass, LogOut, ChevronLeft, Search, Map as MapIcon, LayoutGrid, Menu, X, ChevronRight, Globe, Share2, Link, Heart, Calendar, Bookmark, Trash2, Bot, Sparkles, Trophy, Wifi, Battery, Signal, BellRing } from 'lucide-react';
+import { Laptop, Smartphone, BatteryCharging, WifiOff, Volume2, Bluetooth, HelpCircle, Activity, HardDrive, Monitor, ShieldAlert } from 'lucide-react';
 import Header, { ExplorerNotification } from './components/Header.tsx';
 import SidebarNav from './components/SidebarNav.tsx';
 import LocationList from './components/LocationList.tsx';
@@ -27,6 +28,7 @@ import BadgesOverlay from './components/BadgesOverlay.tsx';
 import TermsModal from './components/TermsModal.tsx';
 import LocationHintButton from './components/LocationHintButton.tsx';
 import GlobalRotatingEarth from './components/GlobalRotatingEarth.tsx';
+import EarthSpeedSlider from './components/EarthSpeedSlider.tsx';
 import WorldExplorerAI from './components/WorldExplorerAI.tsx';
 import AddLocationAI from './components/AddLocationAI.tsx';
 import AmbientSoundtrack from './components/AmbientSoundtrack.tsx';
@@ -121,15 +123,114 @@ export default function App() {
   });
   const [flowStep, setFlowStep] = useState<'splash' | 'login' | 'otp' | 'terms' | 'guide' | 'app'>('splash');
   const [currentTime, setCurrentTime] = useState('');
+  const [backgroundEarthSpeed, setBackgroundEarthSpeed] = useState(1.0);
+  const [deviceType, setDeviceType] = useState<'auto' | 'ios' | 'android' | 'macos' | 'windows' | 'hybrid'>('auto');
+  const [resolvedDevice, setResolvedDevice] = useState<'ios' | 'android' | 'macos' | 'windows' | 'hybrid'>('hybrid');
+  const [realBatteryLevel, setRealBatteryLevel] = useState<number>(98);
+  const [realIsCharging, setRealIsCharging] = useState<boolean>(false);
+  const [realIsOnline, setRealIsOnline] = useState<boolean>(navigator.onLine);
+  const [realConnectionType, setRealConnectionType] = useState<string>('WiFi');
+  const [showDeviceDropdown, setShowDeviceDropdown] = useState<boolean>(false);
 
+  // Dynamic Device Detection
+  useEffect(() => {
+    if (deviceType !== 'auto') {
+      setResolvedDevice(deviceType);
+      return;
+    }
+
+    const ua = navigator.userAgent;
+    const isMobile = /Mobi|Android|iPhone|iPad|iPod/i.test(ua);
+    if (/iPhone|iPad|iPod/i.test(ua)) {
+      setResolvedDevice('ios');
+    } else if (/Android/i.test(ua)) {
+      setResolvedDevice('android');
+    } else if (/Macintosh|MacIntel|MacPPC|Mac68K/i.test(ua)) {
+      setResolvedDevice('macos');
+    } else if (/Windows/i.test(ua)) {
+      setResolvedDevice('windows');
+    } else if (isMobile) {
+      setResolvedDevice('android');
+    } else {
+      setResolvedDevice('hybrid');
+    }
+  }, [deviceType]);
+
+  // Real-time Clock (highly responsive & supports different formats)
   useEffect(() => {
     const updateClock = () => {
       const now = new Date();
-      setCurrentTime(now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+      let timeStr = '';
+      if (resolvedDevice === 'ios') {
+        timeStr = now.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: false });
+      } else if (resolvedDevice === 'macos') {
+        const dayStr = now.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
+        const tStr = now.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true });
+        timeStr = `${dayStr} ${tStr}`;
+      } else if (resolvedDevice === 'windows') {
+        timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      } else {
+        timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
+      }
+      setCurrentTime(timeStr);
     };
     updateClock();
     const interval = setInterval(updateClock, 1000);
     return () => clearInterval(interval);
+  }, [resolvedDevice]);
+
+  // Hardware integration (Battery, Network Status, Cellular speed)
+  useEffect(() => {
+    let batteryObj: any = null;
+    let onLevelChange: (() => void) | null = null;
+    let onChargingChange: (() => void) | null = null;
+
+    // Battery Status API
+    if ('getBattery' in navigator) {
+      (navigator as any).getBattery().then((battery: any) => {
+        batteryObj = battery;
+        setRealBatteryLevel(Math.round(battery.level * 100));
+        setRealIsCharging(battery.charging);
+
+        onLevelChange = () => setRealBatteryLevel(Math.round(battery.level * 100));
+        onChargingChange = () => setRealIsCharging(battery.charging);
+
+        battery.addEventListener('levelchange', onLevelChange);
+        battery.addEventListener('chargingchange', onChargingChange);
+      }).catch((e: any) => console.warn("Battery API unavailable or blocked:", e));
+    }
+
+    // Online/Offline status
+    const onOnline = () => setRealIsOnline(true);
+    const onOffline = () => setRealIsOnline(false);
+
+    window.addEventListener('online', onOnline);
+    window.addEventListener('offline', onOffline);
+
+    // Connection type (LTE, WiFi, etc.)
+    const conn = (navigator as any).connection || (navigator as any).mozConnection || (navigator as any).webkitConnection;
+    let updateConn: (() => void) | null = null;
+    if (conn) {
+      updateConn = () => {
+        if (conn.effectiveType) {
+          setRealConnectionType(conn.effectiveType.toUpperCase());
+        }
+      };
+      updateConn();
+      conn.addEventListener('change', updateConn);
+    }
+
+    return () => {
+      window.removeEventListener('online', onOnline);
+      window.removeEventListener('offline', onOffline);
+      if (conn && updateConn) {
+        conn.removeEventListener('change', updateConn);
+      }
+      if (batteryObj) {
+        if (onLevelChange) batteryObj.removeEventListener('levelchange', onLevelChange);
+        if (onChargingChange) batteryObj.removeEventListener('chargingchange', onChargingChange);
+      }
+    };
   }, []);
 
   useEffect(() => {
@@ -880,7 +981,7 @@ export default function App() {
   if (flowStep === 'login') {
     return (
       <div className="min-h-screen bg-[#f5f5f0] flex flex-col items-center justify-center p-6 text-[#141414] relative overflow-hidden">
-        <GlobalRotatingEarth />
+        <GlobalRotatingEarth speed={backgroundEarthSpeed} />
         <motion.div 
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -1095,14 +1196,12 @@ export default function App() {
           </div>
           
           <div className="flex items-center gap-4">
-             {hasMapsKey && (
-              <button
-                onClick={() => setViewMode(viewMode === 'list' ? 'map' : 'list')}
-                className="flex items-center gap-3 bg-[#5A5A40] text-white px-8 py-4 rounded-full shadow-xl shadow-[#5A5A40]/20 hover:bg-[#4a4a30] transition-all text-sm uppercase tracking-widest font-bold"
-              >
-                {viewMode === 'list' ? <><MapIcon className="w-4 h-4" /> Open Global Map</> : <><LayoutGrid className="w-4 h-4" /> View as Feed</>}
-              </button>
-            )}
+            <button
+              onClick={() => setViewMode(viewMode === 'list' ? 'map' : 'list')}
+              className="flex items-center gap-3 bg-[#5A5A40] text-white px-8 py-4 rounded-full shadow-xl shadow-[#5A5A40]/20 hover:bg-[#4a4a30] transition-all text-sm uppercase tracking-widest font-bold"
+            >
+              {viewMode === 'list' ? <><MapIcon className="w-4 h-4" /> Open Global Map</> : <><LayoutGrid className="w-4 h-4" /> View as Feed</>}
+            </button>
             <button
                onClick={() => user ? setIsAddModalOpen(true) : signInWithGoogle()}
                className="bg-white border border-[#141414]/10 px-8 py-4 rounded-full text-sm uppercase tracking-widest font-bold hover:bg-[#f5f5f0] transition-colors flex items-center gap-2"
@@ -1119,7 +1218,7 @@ export default function App() {
           </div>
 
           <AnimatePresence mode="wait">
-            {viewMode === 'map' && hasMapsKey ? (
+            {viewMode === 'map' ? (
               <motion.div key="global-map" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
                 <WorldView 
                   continent={null} 
@@ -1130,6 +1229,9 @@ export default function App() {
                   showUserAddedOnly={showUserWorldOnly}
                   searchQuery={searchQuery} 
                   onSelect={setSelectedLocationData} 
+                  onSelectContinent={(c) => handleSelection(c, null, null)}
+                  speed={backgroundEarthSpeed}
+                  onChangeSpeed={setBackgroundEarthSpeed}
                 />
               </motion.div>
             ) : (
@@ -1284,14 +1386,12 @@ export default function App() {
 
         <div className="flex items-center justify-end gap-4 pt-8">
           <div className="flex items-center gap-4">
-            {hasMapsKey && (
-              <button
-                onClick={() => setViewMode(viewMode === 'list' ? 'map' : 'list')}
-                className="p-4 rounded-full bg-white border border-[#141414]/10 shadow-sm hover:shadow-md transition-all text-[#5A5A40]"
-              >
-                {viewMode === 'list' ? <MapIcon className="w-5 h-5" /> : <LayoutGrid className="w-5 h-5" />}
-              </button>
-            )}
+            <button
+              onClick={() => setViewMode(viewMode === 'list' ? 'map' : 'list')}
+              className="p-4 rounded-full bg-white border border-[#141414]/10 shadow-sm hover:shadow-md transition-all text-[#5A5A40]"
+            >
+              {viewMode === 'list' ? <MapIcon className="w-5 h-5" /> : <LayoutGrid className="w-5 h-5" />}
+            </button>
             <button
                onClick={() => user ? setIsAddModalOpen(true) : signInWithGoogle()}
                className="bg-[#5A5A40] text-white px-8 py-4 rounded-full flex items-center gap-2 hover:bg-[#4a4a30] transition-colors shadow-xl shadow-[#5A5A40]/30 font-bold uppercase text-xs tracking-widest"
@@ -1316,7 +1416,7 @@ export default function App() {
         </div>
 
         <AnimatePresence mode="wait">
-          {viewMode === 'map' && hasMapsKey ? (
+          {viewMode === 'map' ? (
             <motion.div key="filtered-map" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
               <WorldView 
                 continent={selectedContinent} 
@@ -1327,6 +1427,9 @@ export default function App() {
                 showUserAddedOnly={showUserWorldOnly}
                 searchQuery={searchQuery} 
                 onSelect={setSelectedLocationData} 
+                onSelectContinent={(c) => handleSelection(c, null, null)}
+                speed={backgroundEarthSpeed}
+                onChangeSpeed={setBackgroundEarthSpeed}
               />
             </motion.div>
           ) : (
@@ -1385,55 +1488,301 @@ export default function App() {
     );
   };
 
+  const renderDeviceSelector = (isDarkTheme: boolean) => {
+    return (
+      <div className="relative shrink-0">
+        <button 
+          onClick={(e) => {
+            e.stopPropagation();
+            setShowDeviceDropdown(!showDeviceDropdown);
+          }}
+          className={`flex items-center gap-1 px-2.5 py-1 rounded-full border transition-all text-[9px] uppercase tracking-wider font-bold ${
+            isDarkTheme 
+              ? 'bg-white/10 hover:bg-white/20 text-white border-white/10' 
+              : 'bg-[#141414]/5 hover:bg-[#141414]/10 text-[#141414] border-[#141414]/15'
+          }`}
+          title="Change Status Bar Device Theme"
+        >
+          <Smartphone className="w-2.5 h-2.5 text-emerald-400 animate-pulse" />
+          <span>Bar: {deviceType === 'auto' ? `Auto (${resolvedDevice})` : deviceType}</span>
+        </button>
+        
+        {showDeviceDropdown && (
+          <>
+            <div className="fixed inset-0 z-40 cursor-default" onClick={(e) => {
+              e.stopPropagation();
+              setShowDeviceDropdown(false);
+            }} />
+            <div className="absolute right-0 mt-1.5 w-48 bg-[#121312] border border-white/10 rounded-2xl p-1.5 shadow-2xl z-50 flex flex-col gap-1 text-left text-white text-[10px] pointer-events-auto">
+              <div className="px-2 py-1 text-[#8e9185] font-black uppercase tracking-wider text-[8px] border-b border-white/5 font-sans">
+                Select Status Bar Style
+              </div>
+              {[
+                { id: 'auto', label: '📱 Auto-Detect Device', desc: 'Senses your actual browser' },
+                { id: 'ios', label: '🍎 Apple iOS (iPhone)', desc: 'iOS with Dynamic Island' },
+                { id: 'android', label: '🤖 Google Android', desc: 'Material Design bar' },
+                { id: 'macos', label: '🖥️ Apple macOS', desc: 'frosted crystal menubar' },
+                { id: 'windows', label: '💻 Microsoft Windows', desc: 'Windows 11 system tray' },
+                { id: 'hybrid', label: '🌐 Classic Hybrid', desc: 'Pristine Traveler style' },
+              ].map((opt) => (
+                <button
+                  key={opt.id}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setDeviceType(opt.id as any);
+                    setShowDeviceDropdown(false);
+                  }}
+                  className={`w-full text-left px-2 py-1.5 rounded-xl transition-all font-sans ${
+                    deviceType === opt.id 
+                      ? 'bg-emerald-500/20 text-emerald-400 font-bold border border-emerald-500/30' 
+                      : 'hover:bg-white/5 text-white/80'
+                  }`}
+                >
+                  <div className="font-semibold">{opt.label}</div>
+                  <div className="text-[8px] opacity-40 leading-none mt-0.5">{opt.desc}</div>
+                </button>
+              ))}
+            </div>
+          </>
+        )}
+      </div>
+    );
+  };
+
   return (
     <div className="min-h-screen bg-[#f5f5f0] font-sans text-[#141414] pt-10">
-      {/* Real-time Simulated Status Bar */}
-      <div className="w-full bg-[#121312] text-[#e3e3dc] py-2 px-4 md:px-8 flex items-center justify-between text-[11px] font-sans font-bold select-none border-b border-[#2d2e2c]/30 fixed top-0 left-0 w-full z-[150] shadow-sm h-10">
-        {/* Left Side: Time & Notification Badge Icons */}
-        <div className="flex items-center gap-2.5">
-          <span className="tracking-tight text-white/95">{currentTime || '02:55 PM'}</span>
-          
-          {/* Notification Icons popping up in status bar */}
-          <AnimatePresence>
-            {notifications.filter(n => !n.read).length > 0 && (
-              <motion.div 
-                initial={{ scale: 0, opacity: 0, x: -10 }}
-                animate={{ scale: 1, opacity: 1, x: 0 }}
-                exit={{ scale: 0, opacity: 0, x: -10 }}
-                className="flex items-center gap-1.5 pl-2 border-l border-white/15 ml-1"
-              >
-                <div className="relative flex items-center justify-center">
-                  <BellRing className="w-3.5 h-3.5 text-emerald-400 animate-pulse shrink-0" />
-                  <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 bg-red-500 rounded-full" />
-                </div>
-                <Globe className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-                <span className="text-[10px] text-emerald-400 font-mono tracking-tighter shrink-0">
-                  {notifications.filter(n => !n.read).length} Unread
+      {/* Real-time Simulated Status Bar (Device-Adaptive Layout) */}
+      <div className={`w-full py-2 px-4 md:px-8 flex items-center justify-between text-[11px] font-sans font-bold select-none fixed top-0 left-0 w-full z-[150] shadow-sm h-10 transition-all duration-300 ${
+        resolvedDevice === 'ios' ? 'bg-[#090a09] text-white border-b border-[#2d2e2c]/30' :
+        resolvedDevice === 'android' ? 'bg-[#121312] text-[#e3e3dc] border-b border-[#2d2e2c]/20' :
+        resolvedDevice === 'macos' ? 'bg-[#f5f5f0]/85 backdrop-blur-md text-[#141414] border-b border-[#141414]/10' :
+        resolvedDevice === 'windows' ? 'bg-[#202020] text-[#f3f3f3] border-b border-white/5' :
+        'bg-[#121312] text-[#e3e3dc] border-b border-[#2d2e2c]/30'
+      }`}>
+        
+        {/* ==================== iOS LAYOUT ==================== */}
+        {resolvedDevice === 'ios' && (
+          <>
+            {/* Left: Compact bold time & dynamic notification pulse indicator */}
+            <div className="flex items-center gap-2">
+              <span className="tracking-tight text-white text-[12px] font-black">{currentTime || '9:41'}</span>
+              {notifications.filter(n => !n.read).length > 0 && (
+                <span className="flex items-center justify-center gap-1 px-1.5 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-500/30 text-[9px] text-emerald-400 font-mono">
+                  <BellRing className="w-2.5 h-2.5 animate-bounce shrink-0" />
+                  {notifications.filter(n => !n.read).length}
                 </span>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
+              )}
+            </div>
 
-        {/* Center: Sleek notch/island design */}
-        <div className="hidden md:flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-[#1e1f1d] border border-white/5 text-[9px] text-[#8e9185] font-mono tracking-widest">
-          <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-ping shrink-0" />
-          <span>COMPANION PUSH SYSTEM</span>
-        </div>
+            {/* Center: Beautiful Dynamic Island */}
+            <div className="hidden md:flex items-center gap-2 px-3.5 py-1 rounded-full bg-black border border-white/10 text-[9px] text-white font-semibold shadow-inner group cursor-pointer relative hover:scale-105 transition-transform duration-200">
+              <div className="w-2.5 h-2.5 rounded-full bg-[#0d0e0d] border border-white/5 flex items-center justify-center">
+                <div className="w-1 h-1 rounded-full bg-blue-900/40" />
+              </div>
+              <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse shadow-[0_0_8px_#10b981]" />
+              <span className="tracking-widest uppercase text-[8px] font-mono">TRAVELER COMPANION</span>
+            </div>
 
-        {/* Right Side: Signal, Wifi, Battery */}
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-0.5 text-white/70" title="Signal strength: Full">
-            <Signal className="w-3.5 h-3.5 text-white/95" />
-          </div>
-          <div className="flex items-center gap-0.5" title="Connected to Secure Companion Server">
-            <Wifi className="w-3.5 h-3.5 text-emerald-400" />
-          </div>
-          <div className="flex items-center gap-1.5" title="Battery: 98% (Power Saving Active)">
-            <span className="text-[9px] text-white/65">98%</span>
-            <Battery className="w-4 h-4 text-emerald-500" />
-          </div>
-        </div>
+            {/* Right: iOS Cellular icons + custom horizontal battery */}
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-0.5" title="Signal: Excellent">
+                <div className="w-0.5 h-1 bg-white rounded-xs" />
+                <div className="w-0.5 h-1.5 bg-white rounded-xs" />
+                <div className="w-0.5 h-2 bg-white rounded-xs" />
+                <div className="w-0.5 h-2.5 bg-white rounded-xs" />
+              </div>
+              
+              {realIsOnline ? (
+                <Wifi className="w-3.5 h-3.5 text-white" />
+              ) : (
+                <WifiOff className="w-3.5 h-3.5 text-rose-500" />
+              )}
+
+              <div className="flex items-center gap-1.5" title={`Battery: ${realBatteryLevel}%`}>
+                <div className="relative w-6 h-3 border border-white/50 rounded p-0.5 flex items-center">
+                  <div className="h-full bg-emerald-500 rounded-xs transition-all duration-300" style={{ width: `${realBatteryLevel}%` }} />
+                  <div className="absolute -right-0.5 top-1/2 -translate-y-1/2 w-0.5 h-1 bg-white/50 rounded-r-2xs" />
+                </div>
+                {realIsCharging && <BatteryCharging className="w-3 h-3 text-emerald-400" />}
+              </div>
+
+              {/* Dynamic Interactive Controller Dropdown */}
+              {renderDeviceSelector(true)}
+            </div>
+          </>
+        )}
+
+        {/* ==================== ANDROID LAYOUT ==================== */}
+        {resolvedDevice === 'android' && (
+          <>
+            {/* Left: Time and standard Android notification icons */}
+            <div className="flex items-center gap-2">
+              <span className="text-white text-[12px] font-bold mr-1.5">{currentTime || '2:55 PM'}</span>
+              {notifications.filter(n => !n.read).length > 0 && (
+                <div className="flex items-center gap-1.5">
+                  <BellRing className="w-3 h-3 text-emerald-400 animate-pulse" />
+                  <Globe className="w-3 h-3 text-emerald-400" />
+                  <span className="text-[10px] text-[#8e9185] font-mono">+{notifications.filter(n => !n.read).length}</span>
+                </div>
+              )}
+            </div>
+
+            {/* Center: Punch-hole camera lens dot */}
+            <div className="hidden md:block w-3.5 h-3.5 bg-black rounded-full border border-white/10 shadow-inner" />
+
+            {/* Right: VoLTE/5G, cellular strength triangle, battery percentage + vertical block */}
+            <div className="flex items-center gap-3">
+              <span className="text-[9px] font-mono text-white/70">{realIsOnline ? realConnectionType : 'OFFLINE'}</span>
+              <Signal className="w-3.5 h-3.5 text-white" />
+              {realIsOnline ? <Wifi className="w-3.5 h-3.5 text-white" /> : <WifiOff className="w-3.5 h-3.5 text-rose-500" />}
+              
+              <div className="flex items-center gap-1" title={`Battery: ${realBatteryLevel}%`}>
+                <span className="text-[10px] text-white/90">{realBatteryLevel}%</span>
+                {realIsCharging ? (
+                  <BatteryCharging className="w-3.5 h-3.5 text-emerald-400" />
+                ) : (
+                  <div className="relative w-3.5 h-5 border border-white/60 rounded flex flex-col justify-end p-0.5">
+                    <div className="w-full bg-emerald-500 rounded-xs" style={{ height: `${realBatteryLevel}%` }} />
+                    <div className="absolute -top-0.5 left-1/2 -translate-x-1/2 w-1.5 h-0.5 bg-white/60 rounded-t-xs" />
+                  </div>
+                )}
+              </div>
+
+              {renderDeviceSelector(true)}
+            </div>
+          </>
+        )}
+
+        {/* ==================== macOS LAYOUT ==================== */}
+        {resolvedDevice === 'macos' && (
+          <>
+            {/* Left: Classic Apple logo Compass replacement and custom menubar links */}
+            <div className="flex items-center gap-4 text-[#141414] text-[12px]">
+              <Compass className="w-4 h-4 text-[#5a5a40] cursor-pointer hover:rotate-180 transition-all duration-500 animate-none" onClick={() => window.location.reload()} />
+              <span className="font-extrabold text-[#141414] hover:opacity-75 cursor-pointer" onClick={() => setIsGuideOpen(true)}>Traveler</span>
+              <span className="hidden lg:inline font-medium opacity-70 hover:opacity-100 cursor-pointer" onClick={() => setIsLeaderboardOpen(true)}>Leaderboard</span>
+              <span className="hidden lg:inline font-medium opacity-70 hover:opacity-100 cursor-pointer" onClick={() => setIsBadgesOpen(true)}>Achievements</span>
+              <span className="hidden lg:inline font-medium opacity-70 hover:opacity-100 cursor-pointer" onClick={() => setIsSettingsOpen(true)}>Settings</span>
+            </div>
+
+            {/* Center: Full long-form time and date */}
+            <div className="hidden sm:block text-[#141414] text-[11px] font-bold">
+              {currentTime}
+            </div>
+
+            {/* Right: Mac icons, battery percentage, dynamic Spotlight */}
+            <div className="flex items-center gap-3.5 text-[#141414]">
+              {realIsOnline ? <Wifi className="w-3.5 h-3.5 opacity-80" /> : <WifiOff className="w-3.5 h-3.5 text-red-600" />}
+              <Bluetooth className="w-3.5 h-3.5 opacity-60 hidden sm:inline" />
+              <Volume2 className="w-3.5 h-3.5 opacity-60 hidden sm:inline" />
+              
+              <div className="flex items-center gap-1.5" title={`Battery: ${realBatteryLevel}%`}>
+                <span className="text-[10px] opacity-70">{realBatteryLevel}%</span>
+                {realIsCharging ? (
+                  <BatteryCharging className="w-3.5 h-3.5 text-emerald-600" />
+                ) : (
+                  <Battery className="w-3.5 h-3.5 opacity-80" />
+                )}
+              </div>
+
+              {renderDeviceSelector(false)}
+            </div>
+          </>
+        )}
+
+        {/* ==================== WINDOWS LAYOUT ==================== */}
+        {resolvedDevice === 'windows' && (
+          <>
+            {/* Left: Quick Explorer menu and custom search widget */}
+            <div className="flex items-center gap-3">
+              <Compass className="w-4 h-4 text-emerald-400 rotate-45 cursor-pointer hover:rotate-180 transition-transform duration-500" onClick={() => window.location.reload()} />
+              <span className="text-white font-extrabold text-[12px] cursor-pointer" onClick={() => setIsGuideOpen(true)}>Start</span>
+              
+              <div className="hidden sm:flex items-center gap-1.5 bg-white/5 border border-white/10 rounded-md px-2 py-0.5 text-[10px] text-white/50 w-32 md:w-44 hover:bg-white/10 transition-colors">
+                <Search className="w-3 h-3" />
+                <span>Search Traveler...</span>
+              </div>
+            </div>
+
+            {/* Center: System Program title */}
+            <div className="hidden md:flex items-center gap-1.5 text-white/70 text-[10px] tracking-wider uppercase font-mono">
+              <Activity className="w-3.5 h-3.5 text-emerald-400" />
+              <span>World Explorer Companion v3.5</span>
+            </div>
+
+            {/* Right: System Tray & Stacked DateTime */}
+            <div className="flex items-center gap-4 text-white/80">
+              <div className="flex items-center gap-2 bg-white/5 border border-white/10 rounded px-2.5 py-0.5">
+                {realIsOnline ? <Wifi className="w-3 h-3 text-emerald-400" /> : <WifiOff className="w-3 h-3 text-red-400" />}
+                <Volume2 className="w-3 h-3 text-white/60 hidden sm:inline" />
+                <div className="flex items-center gap-1" title={`Battery: ${realBatteryLevel}%`}>
+                  {realIsCharging && <BatteryCharging className="w-3 h-3 text-emerald-400" />}
+                  <span className="text-[10px]">{realBatteryLevel}%</span>
+                </div>
+              </div>
+
+              {/* Stacked Time & Date */}
+              <div className="text-right text-[10px] leading-none font-mono">
+                <div>{currentTime}</div>
+                <div className="text-[8px] opacity-50 mt-0.5">{new Date().toLocaleDateString([], { month: 'numeric', day: 'numeric', year: 'numeric' })}</div>
+              </div>
+
+              {renderDeviceSelector(true)}
+            </div>
+          </>
+        )}
+
+        {/* ==================== HYBRID / DEFAULT LAYOUT ==================== */}
+        {resolvedDevice === 'hybrid' && (
+          <>
+            {/* Left Side: Time & Notification Badge Icons */}
+            <div className="flex items-center gap-2.5">
+              <span className="tracking-tight text-white/95">{currentTime || '02:55 PM'}</span>
+              
+              <AnimatePresence>
+                {notifications.filter(n => !n.read).length > 0 && (
+                  <motion.div 
+                    initial={{ scale: 0, opacity: 0, x: -10 }}
+                    animate={{ scale: 1, opacity: 1, x: 0 }}
+                    exit={{ scale: 0, opacity: 0, x: -10 }}
+                    className="flex items-center gap-1.5 pl-2 border-l border-white/15 ml-1"
+                  >
+                    <div className="relative flex items-center justify-center">
+                      <BellRing className="w-3.5 h-3.5 text-emerald-400 animate-pulse shrink-0" />
+                      <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 bg-red-500 rounded-full" />
+                    </div>
+                    <Globe className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                    <span className="text-[10px] text-emerald-400 font-mono tracking-tighter shrink-0">
+                      {notifications.filter(n => !n.read).length} Unread
+                    </span>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+
+            {/* Center: Sleek notch/island design */}
+            <div className="hidden md:flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-[#1e1f1d] border border-white/5 text-[9px] text-[#8e9185] font-mono tracking-widest">
+              <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-ping shrink-0" />
+              <span>COMPANION PUSH SYSTEM</span>
+            </div>
+
+            {/* Right Side: Signal, Wifi, Battery */}
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-0.5 text-white/70" title="Signal strength: Full">
+                <Signal className="w-3.5 h-3.5 text-white/95" />
+              </div>
+              <div className="flex items-center gap-0.5" title="Connected to Secure Companion Server">
+                <Wifi className="w-3.5 h-3.5 text-emerald-400" />
+              </div>
+              <div className="flex items-center gap-1.5" title={`Battery: ${realBatteryLevel}%`}>
+                <span className="text-[9px] text-white/65">{realBatteryLevel}%</span>
+                <Battery className="w-4 h-4 text-emerald-500" />
+              </div>
+
+              {renderDeviceSelector(true)}
+            </div>
+          </>
+        )}
       </div>
 
       {/* iOS/Android Simulated Phone Notification Alert Card dropping from Status Bar */}
@@ -1665,8 +2014,9 @@ export default function App() {
         lat={selectedLocationData?.lat}
         lng={selectedLocationData?.lng}
       />
-      <GlobalRotatingEarth />
+      <GlobalRotatingEarth speed={backgroundEarthSpeed} />
       <InteractiveBackground />
+      <EarthSpeedSlider speed={backgroundEarthSpeed} onChangeSpeed={setBackgroundEarthSpeed} />
       <LocationHintButton 
         onLaunchUploader={() => setIsAddModalOpen(true)}
         isLoggedIn={!!user}

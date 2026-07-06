@@ -1,9 +1,116 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Trophy, X, Award, Star, TrendingUp, Users, Crown, Medal, Sparkles, Zap, CheckCircle2 } from 'lucide-react';
+import { Trophy, X, Award, Star, TrendingUp, Users, Crown, Medal, Sparkles, Zap, CheckCircle2, MapPin, Compass, Globe, Heart, Gem } from 'lucide-react';
 import { db } from '../lib/firebase';
 import { safelyConvertToDate } from '../lib/dateUtils';
 import { collection, query, orderBy, limit, getDocs, where, doc, getDoc, setDoc, increment, serverTimestamp } from 'firebase/firestore';
+
+const PROCEDURAL_TIERS = [
+  { 
+    name: 'Beginning', 
+    threshold: 10, 
+    divisor: 1,
+    tagColor: 'bg-emerald-500/10 text-emerald-700 border-emerald-500/20 dark:bg-emerald-500/20 dark:text-emerald-300 dark:border-emerald-500/30',
+    iconColor: 'text-emerald-600 dark:text-emerald-400',
+    icon: MapPin
+  },
+  { 
+    name: 'Medium', 
+    threshold: 50, 
+    divisor: 1,
+    tagColor: 'bg-sky-500/10 text-sky-700 border-sky-500/20 dark:bg-sky-500/20 dark:text-sky-300 dark:border-sky-500/30',
+    iconColor: 'text-sky-600 dark:text-sky-400',
+    icon: Compass
+  },
+  { 
+    name: 'Top', 
+    threshold: 100, 
+    divisor: 1,
+    tagColor: 'bg-indigo-500/10 text-indigo-700 border-indigo-500/20 dark:bg-indigo-500/20 dark:text-indigo-300 dark:border-indigo-500/30',
+    iconColor: 'text-indigo-600 dark:text-indigo-400',
+    icon: Award
+  },
+  { 
+    name: 'Pro', 
+    threshold: 250, 
+    divisor: 1,
+    tagColor: 'bg-amber-500/10 text-amber-700 border-amber-500/20 dark:bg-amber-500/20 dark:text-amber-300 dark:border-amber-500/30',
+    iconColor: 'text-amber-600 dark:text-amber-400',
+    icon: Star
+  },
+  { 
+    name: 'God', 
+    threshold: 500, 
+    divisor: 1,
+    tagColor: 'bg-rose-500/10 text-rose-700 border-rose-500/20 dark:bg-rose-500/20 dark:text-rose-300 dark:border-rose-500/30',
+    iconColor: 'text-rose-600 dark:text-rose-400',
+    icon: Sparkles
+  },
+  { 
+    name: 'Extinct', 
+    threshold: 1000, 
+    divisor: 1,
+    tagColor: 'bg-slate-500/10 text-slate-700 border-slate-500/20 dark:bg-slate-500/20 dark:text-slate-300 dark:border-slate-500/30',
+    iconColor: 'text-slate-700 dark:text-slate-300',
+    icon: Globe
+  },
+  { 
+    name: 'Masters', 
+    threshold: 2500, 
+    divisor: 1,
+    tagColor: 'bg-violet-500/10 text-violet-700 border-violet-500/20 dark:bg-violet-500/20 dark:text-violet-300 dark:border-violet-500/30',
+    iconColor: 'text-violet-600 dark:text-violet-400',
+    icon: Trophy
+  },
+  { 
+    name: 'Enthusiastic', 
+    threshold: 5000, 
+    divisor: 1,
+    tagColor: 'bg-yellow-500/10 text-yellow-700 border-yellow-500/20 dark:bg-yellow-500/20 dark:text-yellow-300 dark:border-yellow-500/30',
+    iconColor: 'text-yellow-600 dark:text-yellow-400',
+    icon: Heart
+  },
+  { 
+    name: 'Amateurs World Explorer Champion', 
+    threshold: 10000, 
+    divisor: 1,
+    tagColor: 'bg-fuchsia-500/20 text-fuchsia-300 border-fuchsia-500/30',
+    iconColor: 'text-fuchsia-400',
+    icon: Gem
+  }
+];
+
+const calculateHighestBadge = (locations: any[]) => {
+  if (!locations || locations.length === 0) return null;
+
+  const counts: Record<string, number> = {};
+  locations.forEach(loc => {
+    const stateName = loc.state || loc.city || loc.country || 'Unknown Sector';
+    counts[stateName] = (counts[stateName] || 0) + 1;
+  });
+
+  const maxVisits = Math.max(...Object.values(counts));
+
+  let highestTier = null;
+  for (let i = PROCEDURAL_TIERS.length - 1; i >= 0; i--) {
+    if (maxVisits >= PROCEDURAL_TIERS[i].threshold) {
+      highestTier = PROCEDURAL_TIERS[i];
+      break;
+    }
+  }
+
+  if (!highestTier) return null;
+
+  const level = maxVisits - highestTier.threshold + 1;
+
+  return {
+    name: highestTier.name,
+    level,
+    tagColor: highestTier.tagColor,
+    iconColor: highestTier.iconColor,
+    icon: highestTier.icon
+  };
+};
 
 interface LeaderboardUser {
   id: string;
@@ -12,6 +119,13 @@ interface LeaderboardUser {
   username: string;
   photoURL?: string;
   xpBoosts?: number;
+  highestBadge?: {
+    name: string;
+    level: number;
+    tagColor: string;
+    iconColor: string;
+    icon: any;
+  } | null;
 }
 
 interface LeaderboardModalProps {
@@ -111,7 +225,35 @@ const LeaderboardModal: React.FC<LeaderboardModalProps> = ({ isOpen, onClose, us
       const q = query(collection(db, 'public_profiles'), orderBy('points', 'desc'), limit(10));
       const snap = await getDocs(q);
       const users = snap.docs.map(d => ({ id: d.id, ...d.data() } as LeaderboardUser));
-      setLeadingUsers(users);
+      
+      const userIds = users.map(u => u.id);
+      const userLocationsMap: Record<string, any[]> = {};
+      
+      if (userIds.length > 0) {
+        const locQ = query(collection(db, 'locations'), where('userId', 'in', userIds));
+        const locSnap = await getDocs(locQ);
+        locSnap.docs.forEach(docSnap => {
+          const loc = docSnap.data();
+          if (!loc.isDeleted) {
+            const uid = loc.userId;
+            if (!userLocationsMap[uid]) {
+              userLocationsMap[uid] = [];
+            }
+            userLocationsMap[uid].push(loc);
+          }
+        });
+      }
+
+      const usersWithBadges = users.map(userItem => {
+        const locations = userLocationsMap[userItem.id] || [];
+        const highestBadge = calculateHighestBadge(locations);
+        return {
+          ...userItem,
+          highestBadge
+        };
+      });
+
+      setLeadingUsers(usersWithBadges);
     } catch (e) {
       console.error("Error fetching leaderboard:", e);
     } finally {
@@ -346,9 +488,20 @@ const LeaderboardModal: React.FC<LeaderboardModalProps> = ({ isOpen, onClose, us
                 </div>
               ) : (
                 <div className="space-y-3.5">
+                  {/* Table Header */}
+                  {leadingUsers.length > 0 && (
+                    <div className="flex items-center gap-5 px-4 py-2 text-[9px] font-black uppercase tracking-[0.2em] text-[#141414]/40 select-none">
+                      <div className="w-10 text-center">Rank</div>
+                      <div className="flex-1">Explorer</div>
+                      <div className="hidden sm:block w-[160px] text-left">Badge Rank</div>
+                      <div className="text-right w-20">Points</div>
+                    </div>
+                  )}
+
                   {leadingUsers.length > 0 ? (
                     leadingUsers.map((userItem, index) => {
                       const isCurrentActiveUser = user && userItem.id === user.uid;
+                      const BadgeIcon = userItem.highestBadge?.icon;
                       return (
                         <motion.div 
                           initial={{ opacity: 0, x: -20 }}
@@ -383,7 +536,38 @@ const LeaderboardModal: React.FC<LeaderboardModalProps> = ({ isOpen, onClose, us
                             </div>
                           </div>
 
-                          <div className="text-right flex flex-col items-end">
+                          {/* Badge Rank Column */}
+                          <div className="hidden sm:flex items-center w-[160px] text-left">
+                            {userItem.highestBadge ? (
+                              <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[9px] font-black uppercase tracking-wider ${
+                                isCurrentActiveUser || index === 0
+                                  ? 'bg-white/10 border-white/25 text-white'
+                                  : userItem.highestBadge.tagColor
+                              }`}>
+                                {BadgeIcon && <BadgeIcon className={`w-3.5 h-3.5 shrink-0 ${
+                                  isCurrentActiveUser || index === 0
+                                    ? 'text-white'
+                                    : userItem.highestBadge.iconColor
+                                }`} />}
+                                <span className="truncate max-w-[85px]" title={userItem.highestBadge.name}>
+                                  {userItem.highestBadge.name}
+                                </span>
+                                <span className={`font-mono text-[8px] font-black ${
+                                  isCurrentActiveUser || index === 0 ? 'text-white/80' : 'text-[#141414]/60'
+                                }`}>
+                                  L{userItem.highestBadge.level}
+                                </span>
+                              </div>
+                            ) : (
+                              <span className={`text-[10px] font-bold uppercase tracking-widest ${
+                                isCurrentActiveUser || index === 0 ? 'text-white/30' : 'text-[#141414]/20'
+                              }`}>
+                                Novice
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="text-right flex flex-col items-end w-20">
                             <div className={`text-lg font-serif italic ${index === 0 || isCurrentActiveUser ? 'text-white font-black' : 'text-[#141414]'}`}>
                               {userItem.points || 0}
                             </div>

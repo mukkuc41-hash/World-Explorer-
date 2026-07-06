@@ -29,6 +29,23 @@ export default function WorldExplorerAI({ isOpen, onClose, onAction, user }: Wor
   const [isMinimized, setIsMinimized] = useState(false);
   const [width, setWidth] = useState(500);
   const [isResizing, setIsResizing] = useState(false);
+  const [userCoords, setUserCoords] = useState<{ latitude: number; longitude: number } | null>(null);
+
+  useEffect(() => {
+    if (isOpen && navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          setUserCoords({
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude
+          });
+        },
+        (error) => {
+          console.warn("Geolocation permission denied or failed:", error);
+        }
+      );
+    }
+  }, [isOpen]);
 
   // Listen to escape key or layout resizes
   const startResizing = (mouseDownEvent: React.MouseEvent) => {
@@ -147,7 +164,9 @@ To protect your privacy, I am strictly restricted to travel-related queries. I h
         message: text,
         history: historyPayload,
         currentUserId: user?.uid || null,
-        currentUserName: user?.displayName || "Explorer"
+        currentUserName: user?.displayName || "Explorer",
+        latitude: userCoords?.latitude || null,
+        longitude: userCoords?.longitude || null
       };
 
       const response = await fetch('/api/chat', {

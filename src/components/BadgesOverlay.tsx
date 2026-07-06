@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Trophy, Lock, Info, Gem, Award, Compass, Search, ChevronDown, Check, Globe, RefreshCw, Star, Heart, Calendar, Bookmark, Sparkles, MapPin } from 'lucide-react';
+import confetti from 'canvas-confetti';
+import { X, Trophy, Lock, Info, Gem, Award, Compass, Search, ChevronDown, Check, Globe, RefreshCw, Star, Heart, Calendar, Bookmark, Sparkles, MapPin, Sliders, Plus } from 'lucide-react';
 import { TRAVEL_BADGES, Badge } from '../constants/badges.tsx';
 import React from 'react';
 import { db } from '../lib/firebase.ts';
@@ -20,7 +21,7 @@ interface BadgesOverlayProps {
 }
 
 export default function BadgesOverlay({ isOpen, onClose, stats: initialStats, user }: BadgesOverlayProps) {
-  const [activeTab, setActiveTab] = useState<'showroom' | 'engine' | 'cosmic'>('showroom');
+  const [activeTab, setActiveTab] = useState<'showroom' | 'engine' | 'almanac' | 'cosmic'>('showroom');
   const [contributedCountries, setContributedCountries] = useState<string[]>([]);
   
   // Real-time stats with world champion state
@@ -38,6 +39,219 @@ export default function BadgesOverlay({ isOpen, onClose, stats: initialStats, us
   const [searchState, setSearchState] = useState('Historic Valley');
   const [searchActivity, setSearchActivity] = useState('Cultural Chronicler');
   const [searchRank, setSearchRank] = useState('Voyager (Lvl 4)');
+
+  // Universal Procedural Badge Engine State
+  const [userLocations, setUserLocations] = useState<any[]>([]);
+  const [engineSubTab, setEngineSubTab] = useState<'my_achievements' | 'simulator'>('simulator');
+  const [simRegion, setSimRegion] = useState('Jaipur, Rajasthan');
+  const [simVisits, setSimVisits] = useState(10);
+
+  // Confetti triggering trackers for mini-role unlocks
+  const [prevUnlockedCount, setPrevUnlockedCount] = useState<number | null>(null);
+  const [prevRealUnlockedCount, setPrevRealUnlockedCount] = useState<number | null>(null);
+
+  // Universal Procedural Tiers Configurations
+  const PROCEDURAL_TIERS = [
+    { 
+      name: 'Beginning', 
+      threshold: 10, 
+      divisor: 1,
+      color: 'from-emerald-50 to-emerald-100/60 border-emerald-200/50 text-emerald-950',
+      tagColor: 'bg-emerald-500/10 text-emerald-700 border-emerald-500/20',
+      iconColor: 'text-emerald-600',
+      progressColor: 'bg-emerald-500',
+      icon: MapPin
+    },
+    { 
+      name: 'Medium', 
+      threshold: 50, 
+      divisor: 1,
+      color: 'from-sky-50 to-sky-100/60 border-sky-200/50 text-sky-950',
+      tagColor: 'bg-sky-500/10 text-sky-700 border-sky-500/20',
+      iconColor: 'text-sky-600',
+      progressColor: 'bg-sky-500',
+      icon: Compass
+    },
+    { 
+      name: 'Top', 
+      threshold: 100, 
+      divisor: 1,
+      color: 'from-indigo-50 to-indigo-100/60 border-indigo-200/50 text-indigo-950',
+      tagColor: 'bg-indigo-500/10 text-indigo-700 border-indigo-500/20',
+      iconColor: 'text-indigo-600',
+      progressColor: 'bg-indigo-500',
+      icon: Award
+    },
+    { 
+      name: 'Pro', 
+      threshold: 250, 
+      divisor: 1,
+      color: 'from-amber-50 to-amber-100/60 border-amber-200/50 text-amber-950',
+      tagColor: 'bg-amber-500/10 text-amber-700 border-amber-500/20',
+      iconColor: 'text-amber-600',
+      progressColor: 'bg-amber-500',
+      icon: Star
+    },
+    { 
+      name: 'God', 
+      threshold: 500, 
+      divisor: 1,
+      color: 'from-rose-50 to-rose-100/60 border-rose-200/50 text-rose-950',
+      tagColor: 'bg-rose-500/10 text-rose-700 border-rose-500/20',
+      iconColor: 'text-rose-600',
+      progressColor: 'bg-rose-500',
+      icon: Sparkles
+    },
+    { 
+      name: 'Extinct', 
+      threshold: 1000, 
+      divisor: 1,
+      color: 'from-slate-100 to-slate-200/60 border-slate-300/50 text-slate-950',
+      tagColor: 'bg-slate-500/10 text-slate-700 border-slate-500/20',
+      iconColor: 'text-slate-700',
+      progressColor: 'bg-slate-600',
+      icon: Globe
+    },
+    { 
+      name: 'Masters', 
+      threshold: 2500, 
+      divisor: 1,
+      color: 'from-violet-50 to-violet-100/60 border-violet-200/50 text-violet-950',
+      tagColor: 'bg-violet-500/10 text-violet-700 border-violet-500/20',
+      iconColor: 'text-violet-600',
+      progressColor: 'bg-violet-500',
+      icon: Trophy
+    },
+    { 
+      name: 'Enthusiastic', 
+      threshold: 5000, 
+      divisor: 1,
+      color: 'from-yellow-50 to-yellow-100/60 border-yellow-200/50 text-yellow-950',
+      tagColor: 'bg-yellow-500/10 text-yellow-700 border-yellow-500/20',
+      iconColor: 'text-yellow-600',
+      progressColor: 'bg-yellow-500',
+      icon: Heart
+    },
+    { 
+      name: 'Amateurs World Explorer Champion', 
+      threshold: 10000, 
+      divisor: 1,
+      color: 'from-slate-950 via-fuchsia-950 to-slate-900 border-fuchsia-500/30 text-white relative overflow-hidden',
+      tagColor: 'bg-fuchsia-500/20 text-fuchsia-300 border-fuchsia-500/30',
+      iconColor: 'text-fuchsia-400',
+      progressColor: 'bg-fuchsia-500',
+      icon: Gem
+    },
+  ];
+
+  // Helper to generate the 6 dynamic mini-role titles for any tier
+  const getMiniRoleName = (tierName: string, roleIndex: number) => {
+    const isBeginning = tierName === 'Beginning';
+    const base = isBeginning ? 'Beginner' : tierName;
+    const roles = [
+      base,
+      `${base} explore`,
+      `${base} tourist`,
+      `${base} adventurers`,
+      `${base} wonderers`,
+      `${base} finder`
+    ];
+    return roles[roleIndex];
+  };
+
+  // Helper to calculate tier level based on visits
+  const getTierLevel = (visits: number, threshold: number, divisor: number) => {
+    if (visits < threshold) return 0;
+    const rawLvl = Math.floor((visits - threshold) / divisor) + 1;
+    return Math.min(rawLvl, 9999999);
+  };
+
+  // Helper to calculate progress percentage to next tier level
+  const getTierProgress = (visits: number, threshold: number, divisor: number) => {
+    if (visits < threshold) {
+      return (visits / threshold) * 100;
+    }
+    const currentLevelCount = (visits - threshold) % divisor;
+    return (currentLevelCount / divisor) * 100;
+  };
+
+  // Helper to aggregate real user locations from Firestore grouped by state/region
+  const getRealGroupedLocations = () => {
+    const counts: Record<string, number> = {};
+    userLocations.forEach(loc => {
+      const stateName = loc.state || loc.city || loc.country || 'Unknown Sector';
+      counts[stateName] = (counts[stateName] || 0) + 1;
+    });
+    return Object.entries(counts).map(([name, count]) => ({
+      name,
+      count
+    })).sort((a, b) => b.count - a.count);
+  };
+
+  // Helper to trigger confetti explosion
+  const triggerConfettiCelebration = () => {
+    const duration = 2 * 1000;
+    const animationEnd = Date.now() + duration;
+    const defaults = { startVelocity: 30, spread: 360, ticks: 60, zIndex: 10000 };
+
+    const randomInRange = (min: number, max: number) => Math.random() * (max - min) + min;
+
+    const interval = setInterval(() => {
+      const timeLeft = animationEnd - Date.now();
+
+      if (timeLeft <= 0) {
+        return clearInterval(interval);
+      }
+
+      const particleCount = 50 * (timeLeft / duration);
+      confetti({ ...defaults, particleCount, origin: { x: randomInRange(0.1, 0.3), y: Math.random() - 0.2 } });
+      confetti({ ...defaults, particleCount, origin: { x: randomInRange(0.7, 0.9), y: Math.random() - 0.2 } });
+    }, 250);
+  };
+
+  // Track Simulated Unlocks
+  useEffect(() => {
+    if (!isOpen) return;
+    
+    let simulatedUnlockedCount = 0;
+    PROCEDURAL_TIERS.forEach(tier => {
+      const level = getTierLevel(simVisits, tier.threshold, tier.divisor);
+      if (level > 0) {
+        simulatedUnlockedCount += Math.min(level, 6);
+      }
+    });
+
+    if (prevUnlockedCount !== null && simulatedUnlockedCount > prevUnlockedCount) {
+      triggerConfettiCelebration();
+    }
+    setPrevUnlockedCount(simulatedUnlockedCount);
+  }, [simVisits, isOpen]);
+
+  // Track Real Unlocks
+  useEffect(() => {
+    if (!isOpen || userLocations.length === 0) return;
+
+    const counts: Record<string, number> = {};
+    userLocations.forEach(loc => {
+      const stateName = loc.state || loc.city || loc.country || 'Unknown Sector';
+      counts[stateName] = (counts[stateName] || 0) + 1;
+    });
+
+    let realUnlockedCount = 0;
+    Object.values(counts).forEach(visits => {
+      PROCEDURAL_TIERS.forEach(tier => {
+        const level = getTierLevel(visits, tier.threshold, tier.divisor);
+        if (level > 0) {
+          realUnlockedCount += Math.min(level, 6);
+        }
+      });
+    });
+
+    if (prevRealUnlockedCount !== null && realUnlockedCount > prevRealUnlockedCount) {
+      triggerConfettiCelebration();
+    }
+    setPrevRealUnlockedCount(realUnlockedCount);
+  }, [userLocations, isOpen]);
 
   // Synchronize stats and track world champion status
   useEffect(() => {
@@ -61,17 +275,18 @@ export default function BadgesOverlay({ isOpen, onClose, stats: initialStats, us
     return () => unsub();
   }, [user]);
 
-  // Query contributed countries for the 1 Crore classic medal unlock checks
+  // Query contributed countries & all locations for the procedural check
   useEffect(() => {
     if (!isOpen || !user) return;
     
     const q = query(collection(db, 'locations'), where('userId', '==', user.uid));
     getDocs(q).then((snap) => {
       const locationsData = snap.docs.map(docSnap => docSnap.data());
+      setUserLocations(locationsData);
       const countries = Array.from(new Set(locationsData.map(loc => loc.country).filter(Boolean))) as string[];
       setContributedCountries(countries);
     }).catch(err => {
-      console.error("[BadgesOverlay] Failed to fetch contributed countries:", err);
+      console.error("[BadgesOverlay] Failed to fetch locations & countries:", err);
     });
   }, [isOpen, user, activeTab]);
 
@@ -205,6 +420,17 @@ export default function BadgesOverlay({ isOpen, onClose, stats: initialStats, us
                 onClick={() => setActiveTab('engine')}
                 className={`py-2.5 sm:py-3 px-4 sm:px-6 text-xs font-black uppercase tracking-widest rounded-2xl transition-all whitespace-nowrap flex items-center gap-2 ${
                   activeTab === 'engine'
+                    ? 'bg-[#141414] text-white shadow-md'
+                    : 'text-[#141414]/60 hover:text-[#141414] hover:bg-[#141414]/5'
+                }`}
+              >
+                <Sliders className="w-4 h-4" />
+                Procedural Badges
+              </button>
+              <button
+                onClick={() => setActiveTab('almanac')}
+                className={`py-2.5 sm:py-3 px-4 sm:px-6 text-xs font-black uppercase tracking-widest rounded-2xl transition-all whitespace-nowrap flex items-center gap-2 ${
+                  activeTab === 'almanac'
                     ? 'bg-[#141414] text-white shadow-md'
                     : 'text-[#141414]/60 hover:text-[#141414] hover:bg-[#141414]/5'
                 }`}
@@ -374,187 +600,496 @@ export default function BadgesOverlay({ isOpen, onClose, stats: initialStats, us
                 </div>
               )}
 
-              {/* TAB 2: 1 CRORE CLASSIC MEDALS */}
+              {/* TAB 2: UNIVERSAL PROCEDURAL BADGE ENGINE */}
               {activeTab === 'engine' && (
-                <div className="space-y-6">
-                  <div className="bg-[#141414]/5 border border-[#141414]/10 p-6 md:p-8 rounded-[36px] space-y-4">
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="space-y-6"
+                >
+                  <div className="bg-gradient-to-br from-indigo-900 to-slate-950 text-white p-6 rounded-[32px] border border-indigo-500/20 shadow-xl relative overflow-hidden">
+                    <div className="absolute top-0 right-0 p-8 opacity-10 pointer-events-none select-none">
+                      <Sliders className="w-40 h-40" />
+                    </div>
+                    <div className="relative z-10 space-y-2">
+                      <span className="text-[10px] font-black uppercase tracking-[0.2em] text-indigo-400">STATE LEVEL MULTI-TIER SYSTEM</span>
+                      <h3 className="text-xl sm:text-2xl font-black tracking-tight leading-none text-white">Universal Procedural Badge Engine</h3>
+                      <p className="text-xs text-slate-300 leading-relaxed max-w-2xl">
+                        Unlock legendary state-level badges on your travels. All 9 tiers start at Level 1 upon reaching their entry milestone and climb dynamically up to <span className="text-indigo-400 font-extrabold font-mono">Level 9,999,999</span>! Every single landmark/place visited adds exactly 1 level.
+                      </p>
+                    </div>
+
+                    <div className="flex gap-2 mt-4 select-none">
+                      <button
+                        onClick={() => setEngineSubTab('simulator')}
+                        className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all ${
+                          engineSubTab === 'simulator'
+                            ? 'bg-white text-slate-950 shadow-md'
+                            : 'bg-white/10 hover:bg-white/15 text-white'
+                        }`}
+                      >
+                        Quest Simulator
+                      </button>
+                      <button
+                        onClick={() => setEngineSubTab('my_achievements')}
+                        className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all ${
+                          engineSubTab === 'my_achievements'
+                            ? 'bg-white text-slate-950 shadow-md'
+                            : 'bg-white/10 hover:bg-white/15 text-white'
+                        }`}
+                      >
+                        My Real Achievements
+                      </button>
+                    </div>
+                  </div>
+
+                  {engineSubTab === 'simulator' ? (
+                    <div className="bg-slate-50 border border-[#141414]/5 rounded-[32px] p-6 space-y-6">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        {/* Target Region Input */}
+                        <div className="space-y-2">
+                          <label className="block text-[10px] font-black uppercase tracking-wider text-[#141414]/50">Target Travel Region / State</label>
+                          <div className="relative">
+                            <MapPin className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#141414]/40" />
+                            <input
+                              type="text"
+                              value={simRegion}
+                              onChange={e => setSimRegion(e.target.value)}
+                              placeholder="e.g. Jaipur, Rajasthan"
+                              className="w-full pl-10 pr-4 py-3 bg-white border border-[#141414]/15 rounded-2xl text-xs outline-none focus:border-indigo-500 transition-all text-[#141414]"
+                            />
+                          </div>
+                          <div className="flex flex-wrap gap-1.5 pt-1">
+                            {['Jaipur, Rajasthan', 'Tokyo, Japan', 'Paris, France', 'New York, USA', 'Cairo, Egypt'].map(r => (
+                              <button
+                                key={r}
+                                type="button"
+                                onClick={() => setSimRegion(r)}
+                                className={`text-[9px] font-extrabold uppercase px-2.5 py-1 rounded-md border transition-all ${
+                                  simRegion === r 
+                                    ? 'bg-indigo-600 border-indigo-600 text-white shadow-sm'
+                                    : 'bg-white border-[#141414]/10 text-[#141414]/60 hover:border-[#141414]/20'
+                                }`}
+                              >
+                                {r}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* Landmark Visits Input */}
+                        <div className="space-y-2">
+                          <div className="flex justify-between items-center">
+                            <label className="block text-[10px] font-black uppercase tracking-wider text-[#141414]/50">Visited Landmarks Count</label>
+                            <span className="font-mono text-xs font-black text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-md border border-indigo-100">{simVisits.toLocaleString()} Places Visited</span>
+                          </div>
+                          
+                          {/* Visits Slider */}
+                          <input
+                            type="range"
+                            min="0"
+                            max="10000"
+                            step="1"
+                            value={simVisits}
+                            onChange={e => setSimVisits(Number(e.target.value))}
+                            className="w-full h-1.5 bg-[#141414]/10 rounded-lg appearance-none cursor-pointer accent-indigo-600"
+                          />
+
+                          {/* Quick Accelerators */}
+                          <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5 pt-1">
+                            <button
+                              type="button"
+                              onClick={() => setSimVisits(prev => Math.max(0, prev - 10))}
+                              className="text-[9px] font-bold uppercase bg-white border border-[#141414]/10 hover:bg-[#141414]/5 rounded-md py-1 text-[#141414]/70"
+                            >
+                              -10
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setSimVisits(prev => prev + 1)}
+                              className="text-[9px] font-bold uppercase bg-white border border-[#141414]/10 hover:bg-[#141414]/5 rounded-md py-1 text-[#141414]/70"
+                            >
+                              +1 Place
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setSimVisits(10)}
+                              className="text-[9px] font-bold uppercase bg-white border border-[#141414]/10 hover:bg-[#141414]/5 rounded-md py-1 text-[#141414]/70"
+                            >
+                              Set 10 (Beg)
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setSimVisits(100)}
+                              className="text-[9px] font-bold uppercase bg-white border border-[#141414]/10 hover:bg-[#141414]/5 rounded-md py-1 text-[#141414]/70"
+                            >
+                              Set 100 (Top)
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setSimVisits(10000)}
+                              className="text-[9px] font-bold uppercase bg-white border border-[#141414]/10 hover:bg-[#141414]/5 rounded-md py-1 text-[#141414]/70"
+                            >
+                              Set 10k (Champ)
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setSimVisits(9999999)}
+                              className="text-[9px] font-bold uppercase bg-indigo-50 border border-indigo-200 text-indigo-700 hover:bg-indigo-100 rounded-md py-1"
+                            >
+                              Set Max
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Displaying Live Unlocked Badges based on simulator state */}
+                      <div className="space-y-4 pt-4 border-t border-[#141414]/5">
+                        <div className="flex items-center justify-between">
+                          <h4 className="text-[10px] font-black uppercase tracking-wider text-[#141414]/40">Active Badge Levels for {simRegion || 'Your Selected Region'}</h4>
+                          <span className="text-[9px] font-extrabold uppercase px-2 py-0.5 rounded bg-amber-500/10 text-amber-700 border border-amber-500/20">Simulation Live</span>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                          {PROCEDURAL_TIERS.map((tier) => {
+                            const level = getTierLevel(simVisits, tier.threshold, tier.divisor);
+                            const isUnlocked = level > 0;
+                            const progress = getTierProgress(simVisits, tier.threshold, tier.divisor);
+                            const Icon = tier.icon || Compass;
+
+                            // Mini-roles info
+                            const activeRoleIndex = Math.min(level - 1, 5);
+                            const activeRoleName = isUnlocked ? getMiniRoleName(tier.name, activeRoleIndex) : 'Locked';
+
+                            return (
+                              <div
+                                key={tier.name}
+                                className={`p-5 rounded-3xl border flex flex-col justify-between transition-all duration-300 relative overflow-hidden ${
+                                  isUnlocked 
+                                    ? `bg-gradient-to-br ${tier.color} shadow-sm border-solid`
+                                    : 'bg-white opacity-40 border-dashed border-[#141414]/15'
+                                }`}
+                              >
+                                <div>
+                                  <div className="flex justify-between items-start mb-3">
+                                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
+                                      isUnlocked ? 'bg-white/80 shadow-inner' : 'bg-slate-100'
+                                    }`}>
+                                      <Icon className={`w-5 h-5 ${tier.iconColor || 'text-slate-600'}`} />
+                                    </div>
+                                    {isUnlocked ? (
+                                      <span className={`text-[9px] font-black px-2.5 py-1 rounded-full border ${tier.tagColor}`}>
+                                        Level {level.toLocaleString()}
+                                      </span>
+                                    ) : (
+                                      <span className="text-[9px] font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded flex items-center gap-1">
+                                        <Lock className="w-2.5 h-2.5" /> Req: {tier.threshold}
+                                      </span>
+                                    )}
+                                  </div>
+
+                                  <h5 className="font-serif italic text-base leading-none text-[#141414] font-bold">
+                                    {tier.name}
+                                  </h5>
+                                  <p className="text-[10px] text-[#141414]/50 mt-1 uppercase font-black tracking-widest leading-none">
+                                    {simRegion}
+                                  </p>
+
+                                  {isUnlocked && (
+                                    <div className="mt-3.5 bg-white/60 p-2.5 rounded-xl border border-white/40 space-y-1.5">
+                                      <div className="flex justify-between items-center">
+                                        <span className="text-[8px] uppercase font-black tracking-widest text-[#141414]/40">Active Title:</span>
+                                        <span className="text-[10px] font-bold text-[#141414]">{activeRoleName}</span>
+                                      </div>
+                                      
+                                      {/* Mini Roles Progress Tracker */}
+                                      <div className="space-y-1">
+                                        <div className="flex justify-between items-center text-[7px] font-extrabold uppercase text-[#141414]/40">
+                                          <span>6 Mini Roles Unlock</span>
+                                          <span>{Math.min(level, 6)} / 6</span>
+                                        </div>
+                                        <div className="grid grid-cols-6 gap-0.5">
+                                          {[0, 1, 2, 3, 4, 5].map((idx) => {
+                                            const roleUnlocked = level > idx;
+                                            return (
+                                              <div 
+                                                key={idx}
+                                                title={getMiniRoleName(tier.name, idx)}
+                                                className={`h-1 rounded-full ${
+                                                  roleUnlocked ? tier.progressColor : 'bg-[#141414]/5'
+                                                }`}
+                                              />
+                                            );
+                                          })}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+
+                                {/* Progress Slider towards next tier */}
+                                <div className="mt-4 space-y-1">
+                                  <div className="flex justify-between items-center text-[8px] font-black uppercase text-[#141414]/40">
+                                    <span>Progress</span>
+                                    <span>{Math.floor(progress)}%</span>
+                                  </div>
+                                  <div className="w-full bg-[#141414]/5 rounded-full h-1 overflow-hidden">
+                                    <div 
+                                      className={`h-full rounded-full ${tier.progressColor}`} 
+                                      style={{ width: `${progress}%` }}
+                                    />
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    /* My Real Achievements */
+                    <div className="bg-slate-50 border border-[#141414]/5 rounded-[32px] p-6 space-y-6">
+                      {getRealGroupedLocations().length === 0 ? (
+                        <div className="text-center py-12 space-y-3">
+                          <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center mx-auto text-[#141414]/40">
+                            <Lock className="w-5 h-5" />
+                          </div>
+                          <h4 className="text-sm font-bold text-[#141414]">No Real Achievements Unlocked Yet</h4>
+                          <p className="text-xs text-[#141414]/50 max-w-sm mx-auto">
+                            Pins are evaluated grouped by state or region. Share discoveries on the main map to automatically earn your state-level procedural badges!
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="space-y-6">
+                          <div className="flex items-center justify-between">
+                            <h4 className="text-[10px] font-black uppercase tracking-wider text-[#141414]/40">Your Active Region Achievements</h4>
+                            <span className="text-[9px] font-extrabold uppercase px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-700 border border-emerald-500/20">Evaluation Live</span>
+                          </div>
+
+                          <div className="space-y-6">
+                            {getRealGroupedLocations().map((grouped) => {
+                              // Find all tiers that are unlocked for this group
+                              const unlockedTiers = PROCEDURAL_TIERS.filter(t => grouped.count >= t.threshold);
+
+                              return (
+                                <div key={grouped.name} className="bg-white p-5 rounded-3xl border border-[#141414]/5 shadow-sm space-y-4">
+                                  <div className="flex justify-between items-center border-b border-[#141414]/5 pb-3">
+                                    <div>
+                                      <h5 className="font-bold text-sm text-[#141414]">{grouped.name}</h5>
+                                      <p className="text-[10px] text-[#141414]/50 uppercase font-black tracking-widest">{grouped.count} shared locations evaluated</p>
+                                    </div>
+                                    <div className="text-xs font-bold text-indigo-600 bg-indigo-50 border border-indigo-100 px-3 py-1 rounded-xl">
+                                      {unlockedTiers.length} Badge(s) Unlocked
+                                    </div>
+                                  </div>
+
+                                  {unlockedTiers.length === 0 ? (
+                                    <div className="text-xs text-slate-400 py-2 italic">
+                                      Keep exploring {grouped.name}! You need at least 10 visits to unlock the "Beginning" Tier 1.
+                                    </div>
+                                  ) : (
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                                      {unlockedTiers.map(tier => {
+                                        const level = getTierLevel(grouped.count, tier.threshold, tier.divisor);
+                                        const roleIndex = Math.min(level - 1, 5);
+                                        const roleName = getMiniRoleName(tier.name, roleIndex);
+                                        const Icon = tier.icon || MapPin;
+
+                                        return (
+                                          <div key={tier.name} className={`p-3.5 rounded-2xl border bg-gradient-to-br ${tier.color} flex items-center gap-3`}>
+                                            <div className="w-8 h-8 rounded-lg bg-white/80 flex items-center justify-center shrink-0">
+                                              <Icon className={`w-4 h-4 ${tier.iconColor}`} />
+                                            </div>
+                                            <div className="min-w-0 flex-1">
+                                              <div className="text-[10px] font-black uppercase text-[#141414]/40 leading-none">Level {level}</div>
+                                              <div className="text-xs font-extrabold text-[#141414] truncate mt-1">{roleName}</div>
+                                            </div>
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </motion.div>
+              )}
+
+              {/* TAB 3: 1 CRORE CLASSIC MEDALS */}
+              {activeTab === 'almanac' && (
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="space-y-6"
+                >
+                  <div className="bg-[#141414]/5 border border-[#141414]/10 p-6 rounded-[32px] space-y-4">
                     <div>
-                      <h3 className="text-lg font-black tracking-tight text-[#141414] flex items-center gap-2">
-                        <Globe className="w-5 h-5 text-teal-600" />
-                        Universal Procedural Medal Engine
+                      <h3 className="text-base font-black text-[#141414] flex items-center gap-2">
+                        <Globe className="w-5 h-5 text-indigo-600" />
+                        Universal 1 Crore Classic Medals Engine
                       </h3>
-                      <p className="text-xs text-[#141414]/60 mt-1 leading-relaxed">
-                        Every unique geographic coordinate, sub-regional sector, and distinct activity style combination dynamically logs a unique classic explorer achievement. There are exactly <strong className="text-[#141414] font-black">10,000,000 (1 Crore)</strong> potential classic medal combinations proceduralized across our registries!
+                      <p className="text-xs text-[#141414]/60 mt-1.5 leading-relaxed">
+                        Every distinct coordinate, territory, and activity style combination produces a dynamically unique explorer achievement. There are exactly <strong className="text-[#141414] font-extrabold">10,000,000 (1 Crore)</strong> potential classic medals dynamically logged in the system!
                       </p>
                     </div>
 
                     <div className="border-t border-[#141414]/10 pt-4 space-y-3">
                       <h4 className="text-[10px] uppercase font-black tracking-widest text-[#141414]/40">
-                        Official Naming Scheme
+                        Decided Medal Naming Scheme
                       </h4>
-                      <div className="bg-white/80 p-4 rounded-2xl border border-[#141414]/5 text-xs text-center font-mono">
-                        <span className="text-[#141414] font-bold block">
-                          [Country] • [Sub-Region Sector] • [Explorer Style] • [Milestone Level]
+                      <div className="bg-white/80 p-3.5 rounded-2xl border border-[#141414]/5 text-xs">
+                        <span className="font-mono text-[#141414] font-bold block text-center mb-1">
+                          [Country] • [Sector Region] • [Explorer Style] • [Milestone Rank]
                         </span>
-                        <span className="text-[10px] text-[#141414]/50 block mt-1.5">
-                          E.g. <strong className="text-[#141414]">Japan Metropolis Sector Coastal Navigator Sovereign (Lvl 10)</strong>
+                        <span className="text-[10px] text-[#141414]/50 block text-center">
+                          Example: <strong className="text-[#141414]">India • Metropolis Sector • Scenic Spotter • Voyager (Lvl 4)</strong>
                         </span>
                       </div>
                     </div>
 
-                    <div className="space-y-2 pt-2 text-xs text-[#141414]/70">
+                    <div className="space-y-2 pt-2">
                       <h4 className="text-[10px] uppercase font-black tracking-widest text-[#141414]/40">
-                        How to secure any dynamically generated classic medal:
+                        How to Achieve Any Dynamic Medal:
                       </h4>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 mt-2">
-                        <div className="flex items-start gap-2 bg-white/50 p-3 rounded-xl border border-[#141414]/5">
-                          <span className="w-5 h-5 rounded-full bg-teal-500/10 text-teal-600 flex items-center justify-center font-bold text-[10px] mt-0.5 shrink-0">1</span>
-                          <span><strong>Map Country Territory:</strong> Post at least 1 discovery pin within the specified country bounds.</span>
-                        </div>
-                        <div className="flex items-start gap-2 bg-white/50 p-3 rounded-xl border border-[#141414]/5">
-                          <span className="w-5 h-5 rounded-full bg-teal-500/10 text-teal-600 flex items-center justify-center font-bold text-[10px] mt-0.5 shrink-0">2</span>
-                          <span><strong>Target Sector Region:</strong> Seek designated landscape sector attributes (e.g. Ridge, Valley, Peninsula).</span>
-                        </div>
-                        <div className="flex items-start gap-2 bg-white/50 p-3 rounded-xl border border-[#141414]/5">
-                          <span className="w-5 h-5 rounded-full bg-teal-500/10 text-teal-600 flex items-center justify-center font-bold text-[10px] mt-0.5 shrink-0">3</span>
-                          <span><strong>Practice Explorer Style:</strong> Align with style activities (e.g. Cultural Chronicler, Midnight Ranger).</span>
-                        </div>
-                        <div className="flex items-start gap-2 bg-white/50 p-3 rounded-xl border border-[#141414]/5">
-                          <span className="w-5 h-5 rounded-full bg-teal-500/10 text-teal-600 flex items-center justify-center font-bold text-[10px] mt-0.5 shrink-0">4</span>
-                          <span><strong>Ascend Rank Levels:</strong> Map more pins and expand saves to level up from Lvl 1 to Lvl 10 (Sovereign).</span>
-                        </div>
-                      </div>
+                      <ul className="text-xs text-[#141414]/70 space-y-2 list-none pl-1">
+                        <li className="flex items-start gap-2">
+                          <span className="w-4 h-4 rounded-full bg-teal-500/10 text-teal-600 flex items-center justify-center font-bold text-[9px] mt-0.5 shrink-0">1</span>
+                          <span><strong>Map the Country Domain:</strong> Share or contribute at least 1 discovery pin within the selected nation.</span>
+                        </li>
+                        <li className="flex items-start gap-2">
+                          <span className="w-4 h-4 rounded-full bg-teal-500/10 text-teal-600 flex items-center justify-center font-bold text-[9px] mt-0.5 shrink-0">2</span>
+                          <span><strong>Target the Sector Region:</strong> Match the sector traits (e.g. Ridge, Coastal, Woodland, Metropolis).</span>
+                        </li>
+                        <li className="flex items-start gap-2">
+                          <span className="w-4 h-4 rounded-full bg-teal-500/10 text-teal-600 flex items-center justify-center font-bold text-[9px] mt-0.5 shrink-0">3</span>
+                          <span><strong>Practice the Explorer Style:</strong> Align with style activities (e.g. Cultural Chronicler, Midnight Ranger).</span>
+                        </li>
+                        <li className="flex items-start gap-2">
+                          <span className="w-4 h-4 rounded-full bg-teal-500/10 text-teal-600 flex items-center justify-center font-bold text-[9px] mt-0.5 shrink-0">4</span>
+                          <span><strong>Level up your Rank:</strong> Rack up shared and saved coordinates to ascend from Aspirant (Lvl 1) to Sovereign (Lvl 10).</span>
+                        </li>
+                      </ul>
                     </div>
                   </div>
 
-                  {/* Dropdown interactive controls */}
-                  <div className="bg-[#fcfcf9] border border-[#141414]/5 p-6 rounded-[32px] space-y-6">
-                    <h4 className="text-[10px] uppercase font-black tracking-widest text-[#141414]/40">
-                      Classic Medal Simulator Preview
-                    </h4>
-                    
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                      <div>
-                        <label className="block text-[8px] font-black uppercase tracking-widest text-[#141414]/40 mb-1.5 ml-1">Country Territory</label>
-                        <select
-                          value={searchCountry}
-                          onChange={e => setSearchCountry(e.target.value)}
-                          className="w-full bg-white border border-[#141414]/10 focus:border-[#141414] p-3 rounded-xl text-xs font-bold outline-none transition-all cursor-pointer shadow-sm"
-                        >
-                          {["India", "USA", "France", "Japan", "Spain", "Brazil", "Australia", "United Kingdom", "Canada", "Thailand", "Egypt", "Germany", "Italy", "Singapore"].map(c => (
-                            <option key={c} value={c}>{c}</option>
-                          ))}
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block text-[8px] font-black uppercase tracking-widest text-[#141414]/40 mb-1.5 ml-1">Sector Region</label>
-                        <select
-                          value={searchState}
-                          onChange={e => setSearchState(e.target.value)}
-                          className="w-full bg-white border border-[#141414]/10 focus:border-[#141414] p-3 rounded-xl text-xs font-bold outline-none transition-all cursor-pointer shadow-sm"
-                        >
-                          {["Historic Valley", "Metropolis Sector", "High-Altitude Ridge", "Coastal Peninsula", "Northern Tundra", "Southern Woodlands"].map(s => (
-                            <option key={s} value={s}>{s}</option>
-                          ))}
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block text-[8px] font-black uppercase tracking-widest text-[#141414]/40 mb-1.5 ml-1">Explorer Style</label>
-                        <select
-                          value={searchActivity}
-                          onChange={e => setSearchActivity(e.target.value)}
-                          className="w-full bg-white border border-[#141414]/10 focus:border-[#141414] p-3 rounded-xl text-xs font-bold outline-none transition-all cursor-pointer shadow-sm"
-                        >
-                          {["Cultural Chronicler", "Wilderness Trailblazer", "Coastal Navigator", "Epicurean Scout", "Midnight Ranger", "Historic Archivist", "Scenic Spotter"].map(a => (
-                            <option key={a} value={a}>{a}</option>
-                          ))}
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block text-[8px] font-black uppercase tracking-widest text-[#141414]/40 mb-1.5 ml-1">Milestone Rank</label>
-                        <select
-                          value={searchRank}
-                          onChange={e => setSearchRank(e.target.value)}
-                          className="w-full bg-white border border-[#141414]/10 focus:border-[#141414] p-3 rounded-xl text-xs font-bold outline-none transition-all cursor-pointer shadow-sm"
-                        >
-                          {["Aspirant (Lvl 1)", "Pilgrim (Lvl 2)", "Wanderer (Lvl 3)", "Voyager (Lvl 4)", "Cartographer (Lvl 5)", "Sovereign (Lvl 10)"].map(r => (
-                            <option key={r} value={r}>{r}</option>
-                          ))}
-                        </select>
-                      </div>
+                  {/* Dropdown controls */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+                    <div>
+                      <label className="block text-[8px] font-black uppercase tracking-widest text-[#141414]/40 mb-1 ml-1">Country Domain</label>
+                      <select
+                        value={searchCountry}
+                        onChange={e => setSearchCountry(e.target.value)}
+                        className="w-full bg-[#fdfdfc] border border-[#141414]/10 focus:border-indigo-500 p-3 rounded-xl text-xs outline-none transition-all"
+                      >
+                        {["India", "USA", "France", "Japan", "Spain", "Brazil", "Australia", "United Kingdom", "Canada", "Thailand", "Egypt", "Germany", "Italy", "Singapore"].map(c => (
+                          <option key={c} value={c}>{c}</option>
+                        ))}
+                      </select>
                     </div>
-
-                    {/* Procedural Badge Live Result Box */}
-                    {(() => {
-                      const isUnlocked = contributedCountries.some(c => c?.toLowerCase() === searchCountry.toLowerCase());
-                      const seedHash = Math.abs(searchCountry.charCodeAt(0) * searchState.charCodeAt(0) * searchActivity.charCodeAt(0) * 11).toString().slice(0, 6);
-                      
-                      return (
-                        <div className={`relative border p-8 rounded-[32px] text-center select-none transition-all duration-500 overflow-hidden ${
-                          isUnlocked 
-                            ? 'bg-gradient-to-br from-[#0c2a26] via-[#112330] to-[#0e162a] text-white border-teal-500/20 shadow-xl' 
-                            : 'bg-slate-50 text-[#141414]/60 border-[#141414]/10'
-                        }`}>
-                          <div className={`absolute top-4 right-4 text-[8px] font-black uppercase tracking-[0.2em] px-2.5 py-1 rounded border ${
-                            isUnlocked ? 'bg-white/5 border-white/10 text-teal-400' : 'bg-[#141414]/5 border-[#141414]/5'
-                          }`}>
-                            Dynamic Registry ID: #{seedHash}
-                          </div>
-
-                          <div className={`mx-auto w-16 h-16 rounded-full flex items-center justify-center mb-4 shadow-lg ${
-                            isUnlocked ? 'bg-white/10 text-teal-300' : 'bg-[#141414]/5 text-[#141414]/40'
-                          }`}>
-                            <Compass className={`w-8 h-8 ${isUnlocked ? 'animate-spin [animation-duration:20s]' : ''}`} />
-                          </div>
-
-                          <h4 className="text-xl font-black uppercase tracking-wide">
-                            {isUnlocked ? `${searchCountry} ${searchActivity}` : '🔒 Dynamic Sector Locked'}
-                          </h4>
-                          
-                          <p className={`text-[10px] uppercase font-black tracking-[0.2em] mt-1.5 ${
-                            isUnlocked ? 'text-teal-400' : 'opacity-40'
-                          }`}>
-                            {searchState} • {searchRank}
-                          </p>
-
-                          <p className="text-xs mt-4 leading-relaxed max-w-lg mx-auto opacity-75">
-                            {isUnlocked 
-                              ? `Verification approved! Coordinates matching ${searchCountry} are validated in your local database log files.`
-                              : `To map this custom achievement, simply add any real landmark or discovery located in ${searchCountry}.`
-                            }
-                          </p>
-
-                          {isUnlocked && (
-                            <div className="mt-5 inline-flex items-center gap-1.5 bg-teal-500/15 text-teal-300 text-[10px] font-bold uppercase tracking-widest px-4 py-2 rounded-full border border-teal-500/30">
-                              <Check className="w-3.5 h-3.5" /> Registry Unlocked
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })()}
-
-                    {/* Progress tracker */}
-                    {(() => {
-                      const unlockedProceduralCount = (stats.contributed * 51) + (stats.saved * 12) + (stats.planned * 18);
-                      const progressPercentage = Math.min((unlockedProceduralCount / 10000000) * 100, 100);
-                      
-                      return (
-                        <div className="space-y-2.5 pt-2">
-                          <div className="flex justify-between items-center text-[10px] uppercase font-black tracking-wider text-[#141414]/50 font-bold">
-                            <span>Procedural Unlock Progress</span>
-                            <span className="font-mono text-[#141414] font-black">{unlockedProceduralCount.toLocaleString()} / 10,000,000</span>
-                          </div>
-                          <div className="w-full bg-[#141414]/5 rounded-full h-3 overflow-hidden border border-[#141414]/5">
-                            <div 
-                              className="bg-gradient-to-r from-teal-500 via-indigo-500 to-purple-500 h-full rounded-full transition-all duration-1000"
-                              style={{ width: `${Math.max(progressPercentage, 0.05)}%` }}
-                            />
-                          </div>
-                        </div>
-                      );
-                    })()}
+                    <div>
+                      <label className="block text-[8px] font-black uppercase tracking-widest text-[#141414]/40 mb-1 ml-1">Sector Region</label>
+                      <select
+                        value={searchState}
+                        onChange={e => setSearchState(e.target.value)}
+                        className="w-full bg-[#fdfdfc] border border-[#141414]/10 focus:border-indigo-500 p-3 rounded-xl text-xs outline-none transition-all"
+                      >
+                        {["Metropolis Sector", "High-Altitude Ridge", "Coastal Peninsula", "Historic Valley", "Northern Tundra", "Southern Woodlands", "State Alpha", "State Beta"].map(s => (
+                          <option key={s} value={s}>{s}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[8px] font-black uppercase tracking-widest text-[#141414]/40 mb-1 ml-1">Explorer Style</label>
+                      <select
+                        value={searchActivity}
+                        onChange={e => setSearchActivity(e.target.value)}
+                        className="w-full bg-[#fdfdfc] border border-[#141414]/10 focus:border-indigo-500 p-3 rounded-xl text-xs outline-none transition-all"
+                      >
+                        {["Wilderness Trailblazer", "Cultural Chronicler", "Coastal Navigator", "Epicurean Scout", "Midnight Ranger", "Historic Archivist", "Scenic Spotter"].map(a => (
+                          <option key={a} value={a}>{a}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[8px] font-black uppercase tracking-widest text-[#141414]/40 mb-1 ml-1">Milestone Rank</label>
+                      <select
+                        value={searchRank}
+                        onChange={e => setSearchRank(e.target.value)}
+                        className="w-full bg-[#fdfdfc] border border-[#141414]/10 focus:border-indigo-500 p-3 rounded-xl text-xs outline-none transition-all"
+                      >
+                        {["Aspirant (Lvl 1)", "Pilgrim (Lvl 2)", "Wanderer (Lvl 3)", "Voyager (Lvl 4)", "Cartographer (Lvl 5)", "Sovereign (Lvl 10)"].map(r => (
+                          <option key={r} value={r}>{r}</option>
+                        ))}
+                      </select>
+                    </div>
                   </div>
-                </div>
+
+                  {/* Live Procedural Badge Preview */}
+                  {(() => {
+                    const isUnlocked = contributedCountries.some(c => c?.toLowerCase() === searchCountry.toLowerCase());
+                    return (
+                      <div className={`relative border p-8 rounded-[36px] text-center select-none transition-all duration-300 ${
+                        isUnlocked 
+                          ? 'bg-gradient-to-br from-indigo-950 via-slate-900 to-slate-950 text-white border-indigo-500/30 shadow-lg scale-[1.01]' 
+                          : 'bg-slate-50 text-[#141414]/60 border-[#141414]/10'
+                      }`}>
+                        <div className="absolute top-4 right-4 text-[8px] font-black uppercase tracking-[0.2em] px-2.5 py-1 rounded bg-[#141414]/5 border border-[#141414]/5">
+                          Dynamic ID: #{Math.abs(searchCountry.charCodeAt(0) * searchState.charCodeAt(0) * searchActivity.charCodeAt(0) * 11).toString().slice(0, 6)}
+                        </div>
+
+                        <div className="mx-auto w-16 h-16 rounded-full flex items-center justify-center mb-4 bg-white/10 text-white shadow-md">
+                          <Compass className={`w-8 h-8 ${isUnlocked ? 'animate-spin [animation-duration:10s] text-indigo-400' : 'opacity-40 text-slate-400'}`} />
+                        </div>
+
+                        <h4 className={`text-lg font-black tracking-tight mb-1 ${isUnlocked ? 'text-white' : 'text-[#141414]'}`}>
+                          {isUnlocked ? `${searchCountry} ${searchActivity}` : '🔒 Procedural Sector Locked'}
+                        </h4>
+                        
+                        <p className={`text-[10px] uppercase font-black tracking-widest ${isUnlocked ? 'text-indigo-400' : 'text-slate-500'}`}>
+                          {searchState} • {searchRank}
+                        </p>
+
+                        <p className="text-xs mt-3.5 opacity-80 leading-relaxed max-w-md mx-auto">
+                          {isUnlocked 
+                            ? `Sector Complete! You have explored and marked locations within ${searchCountry}.`
+                            : `To unlock this sector badge, add a discovery location within ${searchCountry} on the main map.`
+                          }
+                        </p>
+
+                        {isUnlocked && (
+                          <div className="mt-4 inline-flex items-center gap-1.5 bg-indigo-500/20 text-indigo-300 text-[10px] font-bold uppercase tracking-wider px-4 py-1.5 rounded-full border border-indigo-400/30">
+                            <Check className="w-3.5 h-3.5" /> Dynamic Sector Unlocked
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
+
+                  {/* Progress Tracker */}
+                  {(() => {
+                    const unlockedProcedural = (stats.contributed * 51) + (stats.saved * 12) + (stats.planned * 18);
+                    const pct = Math.min((unlockedProcedural / 10000000) * 100, 100);
+                    return (
+                      <div className="space-y-2 pt-2">
+                        <div className="flex justify-between items-center text-[10px] uppercase font-black tracking-wider text-[#141414]/50">
+                          <span>1 Crore Unlocked Registry Progress</span>
+                          <span className="font-mono text-[#141414] font-bold">{unlockedProcedural.toLocaleString()} / 10,000,000</span>
+                        </div>
+                        <div className="w-full bg-[#141414]/5 rounded-full h-3 overflow-hidden border border-[#141414]/5">
+                          <div 
+                            className="bg-gradient-to-r from-teal-500 to-indigo-500 h-full rounded-full transition-all duration-1000"
+                            style={{ width: `${Math.max(pct, 0.05)}%` }}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </motion.div>
               )}
 
               {/* TAB 3: CHAMPION HOLD (0.001%) */}

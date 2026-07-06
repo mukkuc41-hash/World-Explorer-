@@ -767,7 +767,7 @@ async function startServer() {
   });
 
   app.post("/api/chat", async (req, res) => {
-    const { message, history, currentUserId, currentUserName, chatMode } = req.body || {};
+    const { message, history, currentUserId, currentUserName, chatMode, latitude, longitude } = req.body || {};
     try {
       if (!process.env.GEMINI_API_KEY) {
         return res.status(500).json({ error: "Gemini API key is missing on the server." });
@@ -775,8 +775,19 @@ async function startServer() {
 
       const firestore = getDb();
       
+      // Choose Google Maps Grounding for geographical or place-specific queries, otherwise Google Search
+      const lowerMessage = (message || "").toLowerCase();
+      const isGeographicalQuery = [
+        "map", "place", "location", "coords", "coordinate", "nearby", "near", 
+        "where is", "find ", "restaurant", "hotel", "cafe", "sightseeing", 
+        "attraction", "landmark", "tourist", "travel", "city", "country", "direction",
+        "route", "destination", "explore"
+      ].some(kw => lowerMessage.includes(kw));
+
+      const groundingTool = isGeographicalQuery ? { googleMaps: {} } : { googleSearch: {} };
+
       const tools = [
-        { googleSearch: {} },
+        groundingTool,
         {
           functionDeclarations: [
             {
@@ -902,6 +913,28 @@ At the very end of EVERY single response, you must append this exact guarantee s
 
 Tone: Professional, highly responsive, objective, and deeply knowledgeable. 'Powered by Gemini and Google Search'.`;
 
+      // Helper to build tools config with dynamic Google Maps / Search Grounding
+      const buildConfig = (currentToolsList: any[]) => {
+        const hasMaps = currentToolsList.some(t => t.googleMaps);
+        const configObj: any = {
+          tools: currentToolsList as any,
+          systemInstruction: systemInstructions
+        };
+
+        const toolConfigObj: any = { includeServerSideToolInvocations: true };
+        if (hasMaps && typeof latitude === 'number' && typeof longitude === 'number') {
+          toolConfigObj.retrievalConfig = {
+            latLng: {
+              latitude,
+              longitude
+            }
+          };
+        }
+        
+        configObj.toolConfig = toolConfigObj;
+        return configObj;
+      };
+
       let response;
       let currentTools = tools;
       let modelHasWebSearch = !isSearchGroundingDisabledGlobal;
@@ -912,20 +945,12 @@ Tone: Professional, highly responsive, objective, and deeply knowledgeable. 'Pow
             () => ai.models.generateContent({
               model: "gemini-3.5-flash",
               contents,
-              config: {
-                tools: tools as any,
-                toolConfig: { includeServerSideToolInvocations: true } as any,
-                systemInstruction: systemInstructions
-              } as any
+              config: buildConfig(tools) as any
             } as any),
             () => ai.models.generateContent({
               model: "gemini-flash-latest",
               contents,
-              config: {
-                tools: tools as any,
-                toolConfig: { includeServerSideToolInvocations: true } as any,
-                systemInstruction: systemInstructions
-              } as any
+              config: buildConfig(tools) as any
             } as any)
           );
         } catch (firstErr: any) {
@@ -938,7 +963,7 @@ Tone: Professional, highly responsive, objective, and deeply knowledgeable. 'Pow
       if (isSearchGroundingDisabledGlobal || !response) {
         // Fall back to a standard model call that does not include the tools/grounding config.
         const textOnlyTools = [{
-          functionDeclarations: tools[1].functionDeclarations
+          functionDeclarations: (tools[1] as any).functionDeclarations
         }];
         currentTools = textOnlyTools as any;
         modelHasWebSearch = false;
@@ -1155,26 +1180,46 @@ Tone: Professional, highly responsive, objective, and deeply knowledgeable. 'Pow
           () => ai.models.generateContent({
             model: "gemini-3.5-flash",
             contents,
-            config: {
-              tools: currentTools as any,
-              ...(modelHasWebSearch ? { toolConfig: { includeServerSideToolInvocations: true } } : {})
-            } as any
+            config: (modelHasWebSearch ? buildConfig(currentTools) : { tools: currentTools as any }) as any
           } as any),
           () => ai.models.generateContent({
             model: "gemini-flash-latest",
             contents,
-            config: {
-              tools: currentTools as any,
-              ...(modelHasWebSearch ? { toolConfig: { includeServerSideToolInvocations: true } } : {})
-            } as any
+            config: (modelHasWebSearch ? buildConfig(currentTools) : { tools: currentTools as any }) as any
           } as any)
         );
       }
 
-      const groundingLinks = response.candidates?.[0]?.groundingMetadata?.groundingChunks?.map(chunk => ({
-        title: chunk.web?.title || chunk.maps?.title || "Source",
-        uri: chunk.web?.uri || chunk.maps?.uri 
-      })).filter(link => link.uri) || [];
+      const groundingLinks: any[] = [];
+      const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
+      for (const chunk of chunks) {
+        if (chunk.web?.uri) {
+          groundingLinks.push({
+            title: chunk.web.title || "Web Source",
+            uri: chunk.web.uri
+          });
+        }
+        if (chunk.maps?.uri) {
+          groundingLinks.push({
+            title: chunk.maps.title || "Google Maps Location",
+            uri: chunk.maps.uri
+          });
+        }
+        if (chunk.maps?.placeAnswerSources?.reviewSnippets) {
+          const snippets = chunk.maps.placeAnswerSources.reviewSnippets;
+          if (Array.isArray(snippets)) {
+            snippets.forEach((snippet: any, idx: number) => {
+              const reviewUri = snippet.reviewUri || snippet.uri || snippet.url;
+              if (reviewUri) {
+                groundingLinks.push({
+                  title: `${chunk.maps?.title || 'Location'} Review Snippet ${idx + 1}`,
+                  uri: reviewUri
+                });
+              }
+            });
+          }
+        }
+      }
 
       let finalTextResponse = response.text || "";
       const guaranteeNoticeText = "🛡️ Privacy & Security Guarantee: To protect your privacy, I am strictly restricted to travel-related queries. I have zero access to your credentials, emails, passwords, owner profile IDs, or any sensitive system configuration. No private profiling files are available to me.";

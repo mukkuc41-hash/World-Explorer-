@@ -4,7 +4,9 @@ import { collection, onSnapshot, query, where, orderBy } from 'firebase/firestor
 import { db, handleFirestoreError, OperationType, auth } from '../lib/firebase.ts';
 import { LocationData } from './LocationList.tsx';
 import { motion, AnimatePresence } from 'motion/react';
-import { Map as MapIcon, Layers, Navigation, MapPin, Activity } from 'lucide-react';
+import { Map as MapIcon, Layers, Navigation, MapPin, Activity, Globe } from 'lucide-react';
+import { Continent } from '../App.tsx';
+import InteractiveGlobe from './InteractiveGlobe.tsx';
 
 // Polyline component for Google Maps
 function MapPolyline({ locations }: { locations: LocationData[] }) {
@@ -34,6 +36,7 @@ function MapPolyline({ locations }: { locations: LocationData[] }) {
 }
 
 const API_KEY = process.env.GOOGLE_MAPS_PLATFORM_KEY || '';
+const hasMapsKey = Boolean(API_KEY) && API_KEY !== 'YOUR_API_KEY';
 
 interface WorldViewProps {
   continent: string | null;
@@ -44,13 +47,29 @@ interface WorldViewProps {
   showUserAddedOnly?: boolean;
   searchQuery?: string;
   onSelect?: (location: LocationData) => void;
+  onSelectContinent?: (continent: Continent | null) => void;
+  speed?: number;
+  onChangeSpeed?: (speed: number) => void;
 }
 
-export default function WorldView({ continent, country, state, showFavoritesOnly, showTourOnly, showUserAddedOnly, searchQuery, onSelect }: WorldViewProps) {
+export default function WorldView({ 
+  continent, 
+  country, 
+  state, 
+  showFavoritesOnly, 
+  showTourOnly, 
+  showUserAddedOnly, 
+  searchQuery, 
+  onSelect,
+  onSelectContinent,
+  speed,
+  onChangeSpeed
+}: WorldViewProps) {
   const [locations, setLocations] = useState<LocationData[]>([]);
   const [selectedLocation, setSelectedLocation] = useState<LocationData | null>(null);
   const [userFavorites, setUserFavorites] = useState<Set<string>>(new Set());
   const [userTour, setUserTour] = useState<Set<string>>(new Set());
+  const [viewType, setViewType] = useState<'flat' | 'globe'>(hasMapsKey ? 'flat' : 'globe');
 
   const user = auth.currentUser;
 
@@ -123,65 +142,125 @@ export default function WorldView({ continent, country, state, showFavoritesOnly
   const zoom = state ? 11 : country ? 6 : continent ? 4 : 2;
 
   return (
-    <div className="relative w-full h-[600px] rounded-[40px] overflow-hidden shadow-2xl border border-[#141414]/10">
-      <APIProvider apiKey={API_KEY} version="weekly">
-        <Map
-          defaultCenter={mapCenter}
-          defaultZoom={zoom}
-          center={mapCenter}
-          zoom={zoom}
-          mapId="WORLD_EXPLORER_MAP"
-          gestureHandling="greedy"
-          disableDefaultUI={true}
-          style={{ width: '100%', height: '100%' }}
-          internalUsageAttributionIds={['gmp_mcp_codeassist_v1_aistudio']}
-        >
-          {locations.map((loc) => (
-            <LocationMarker 
-              key={loc.id} 
-              location={loc} 
-              isFavorite={userFavorites.has(loc.id)}
-              isTour={userTour.has(loc.id)}
-              onSelect={() => setSelectedLocation(loc)}
+    <div className="relative w-full h-[600px] rounded-[40px] overflow-hidden shadow-2xl border border-[#141414]/10 bg-[#f5f5f0] dark:bg-stone-950 flex items-center justify-center">
+      {/* View Mode Toggle Switch */}
+      {hasMapsKey && (
+        <div className="absolute top-6 right-6 flex items-center bg-white/95 dark:bg-[#141414]/95 backdrop-blur-sm p-1 rounded-full shadow-lg border border-[#141414]/10 dark:border-white/10 z-10 select-none">
+          <button
+            onClick={() => setViewType('flat')}
+            className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${
+              viewType === 'flat'
+                ? 'bg-[#5A5A40] text-white shadow-sm'
+                : 'text-[#141414]/60 dark:text-white/60 hover:text-[#141414] dark:hover:text-white'
+            }`}
+          >
+            <MapIcon className="w-3.5 h-3.5" />
+            Flat Map
+          </button>
+          <button
+            onClick={() => setViewType('globe')}
+            className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${
+              viewType === 'globe'
+                ? 'bg-[#5A5A40] text-white shadow-sm'
+                : 'text-[#141414]/60 dark:text-white/60 hover:text-[#141414] dark:hover:text-white'
+            }`}
+          >
+            <Globe className="w-3.5 h-3.5" />
+            3D Globe
+          </button>
+        </div>
+      )}
+
+      <AnimatePresence mode="wait">
+        {viewType === 'flat' && hasMapsKey ? (
+          <motion.div 
+            key="flat" 
+            initial={{ opacity: 0 }} 
+            animate={{ opacity: 1 }} 
+            exit={{ opacity: 0 }}
+            className="w-full h-full"
+          >
+            <APIProvider apiKey={API_KEY} version="weekly">
+              <Map
+                defaultCenter={mapCenter}
+                defaultZoom={zoom}
+                center={mapCenter}
+                zoom={zoom}
+                mapId="WORLD_EXPLORER_MAP"
+                gestureHandling="greedy"
+                disableDefaultUI={true}
+                style={{ width: '100%', height: '100%' }}
+                internalUsageAttributionIds={['gmp_mcp_codeassist_v1_aistudio']}
+              >
+                {locations.map((loc) => (
+                  <LocationMarker 
+                    key={loc.id} 
+                    location={loc} 
+                    isFavorite={userFavorites.has(loc.id)}
+                    isTour={userTour.has(loc.id)}
+                    onSelect={() => setSelectedLocation(loc)}
+                  />
+                ))}
+
+                {showTourOnly && <MapPolyline locations={locations} />}
+
+                {selectedLocation && (
+                  <InfoWindow
+                    position={{ lat: selectedLocation.lat, lng: selectedLocation.lng }}
+                    onCloseClick={() => setSelectedLocation(null)}
+                  >
+                    <div className="p-2 max-w-[200px]">
+                      <h4 className="font-serif italic text-lg tracking-tighter mb-1">{selectedLocation.name}</h4>
+                      <p className="text-[10px] text-[#141414]/60 mb-2 truncate">{selectedLocation.description}</p>
+                      <img 
+                        src={selectedLocation.imageUrl} 
+                        className="w-full h-24 object-cover rounded-lg mb-2" 
+                        referrerPolicy="no-referrer"
+                      />
+                      <button 
+                        className="w-full bg-[#141414] text-white py-2 rounded-full text-[10px] font-bold uppercase tracking-widest flex items-center justify-center gap-2"
+                        onClick={() => window.open(`https://www.google.com/maps/dir/?api=1&destination=${selectedLocation.lat},${selectedLocation.lng}`, '_blank')}
+                      >
+                        <Navigation className="w-3 h-3" /> Directions
+                      </button>
+                      <button 
+                        className="w-full mt-2 bg-[#f5f5f0] text-[#141414] py-2 rounded-full text-[10px] font-bold uppercase tracking-widest flex items-center justify-center gap-2 border border-[#141414]/5 hover:bg-[#141414] hover:text-white transition-all"
+                        onClick={() => onSelect && onSelect(selectedLocation)}
+                      >
+                        <MapPin className="w-3 h-3" /> View Details
+                      </button>
+                    </div>
+                  </InfoWindow>
+                )}
+              </Map>
+            </APIProvider>
+          </motion.div>
+        ) : (
+          <motion.div 
+            key="globe" 
+            initial={{ opacity: 0 }} 
+            animate={{ opacity: 1 }} 
+            exit={{ opacity: 0 }}
+            className="w-full h-full flex items-center justify-center bg-stone-50 dark:bg-stone-900/40 p-6"
+          >
+            <InteractiveGlobe 
+              selectedContinent={continent as Continent | null}
+              onSelectContinent={(c) => {
+                if (onSelectContinent) {
+                  onSelectContinent(c);
+                }
+              }}
+              locations={locations}
+              speed={speed}
+              onChangeSpeed={onChangeSpeed}
             />
-          ))}
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-          {showTourOnly && <MapPolyline locations={locations} />}
-
-          {selectedLocation && (
-            <InfoWindow
-              position={{ lat: selectedLocation.lat, lng: selectedLocation.lng }}
-              onCloseClick={() => setSelectedLocation(null)}
-            >
-              <div className="p-2 max-w-[200px]">
-                <h4 className="font-serif italic text-lg tracking-tighter mb-1">{selectedLocation.name}</h4>
-                <p className="text-[10px] text-[#141414]/60 mb-2 truncate">{selectedLocation.description}</p>
-                <img 
-                  src={selectedLocation.imageUrl} 
-                  className="w-full h-24 object-cover rounded-lg mb-2" 
-                  referrerPolicy="no-referrer"
-                />
-                <button 
-                  className="w-full bg-[#141414] text-white py-2 rounded-full text-[10px] font-bold uppercase tracking-widest flex items-center justify-center gap-2"
-                  onClick={() => window.open(`https://www.google.com/maps/dir/?api=1&destination=${selectedLocation.lat},${selectedLocation.lng}`, '_blank')}
-                >
-                  <Navigation className="w-3 h-3" /> Directions
-                </button>
-                <button 
-                  className="w-full mt-2 bg-[#f5f5f0] text-[#141414] py-2 rounded-full text-[10px] font-bold uppercase tracking-widest flex items-center justify-center gap-2 border border-[#141414]/5 hover:bg-[#141414] hover:text-white transition-all"
-                  onClick={() => onSelect && onSelect(selectedLocation)}
-                >
-                  <MapPin className="w-3 h-3" /> View Details
-                </button>
-              </div>
-            </InfoWindow>
-          )}
-        </Map>
-      </APIProvider>
-
-      <div className="absolute top-6 left-6 flex items-center gap-2 bg-white/90 backdrop-blur-md px-4 py-2 rounded-full shadow-lg border border-[#141414]/5">
+      <div className="absolute top-6 left-6 flex items-center gap-2 bg-white/90 dark:bg-[#141414]/90 backdrop-blur-md px-4 py-2 rounded-full shadow-lg border border-[#141414]/5 dark:border-white/5 z-10">
         <MapIcon className="w-4 h-4 text-[#5A5A40]" />
-        <span className="text-[10px] uppercase font-bold tracking-widest">
+        <span className="text-[10px] uppercase font-bold tracking-widest text-[#141414] dark:text-white font-mono">
           {continent ? `${continent} View` : 'Global View'}
         </span>
       </div>

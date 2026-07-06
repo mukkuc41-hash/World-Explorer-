@@ -1,11 +1,133 @@
 import React, { useState, useEffect } from 'react';
 import { User, deleteUser } from 'firebase/auth';
+import confetti from 'canvas-confetti';
 import { db, handleFirestoreError, OperationType, logout } from '../lib/firebase';
 import { safelyConvertToDate } from '../lib/dateUtils';
 import { collection, query, where, getDocs, doc, getDoc, setDoc, serverTimestamp, orderBy, limit, deleteDoc } from 'firebase/firestore';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, User as UserIcon, Calendar, Mail, Phone, ChevronDown, Check, Award, MapPin, Bookmark, Compass, Lock, Trophy, Clock, LogOut, Trash2, ShieldAlert, Camera, RefreshCw, Share2 } from 'lucide-react';
+import { X, User as UserIcon, Calendar, Mail, Phone, ChevronDown, Check, Award, MapPin, Bookmark, Compass, Lock, Trophy, Clock, LogOut, Trash2, ShieldAlert, Camera, RefreshCw, Share2, Sliders, Globe, Sparkles, Star, Heart, Gem } from 'lucide-react';
 import { TRAVEL_BADGES } from '../constants/badges.tsx';
+
+const PROCEDURAL_TIERS = [
+  { 
+    name: 'Beginning', 
+    threshold: 10, 
+    divisor: 1,
+    color: 'from-emerald-50 to-emerald-100/60 border-emerald-200/50 text-emerald-950',
+    tagColor: 'bg-emerald-500/10 text-emerald-700 border-emerald-500/20',
+    iconColor: 'text-emerald-600',
+    progressColor: 'bg-emerald-500',
+    icon: MapPin
+  },
+  { 
+    name: 'Medium', 
+    threshold: 50, 
+    divisor: 1,
+    color: 'from-sky-50 to-sky-100/60 border-sky-200/50 text-sky-950',
+    tagColor: 'bg-sky-500/10 text-sky-700 border-sky-500/20',
+    iconColor: 'text-sky-600',
+    progressColor: 'bg-sky-500',
+    icon: Compass
+  },
+  { 
+    name: 'Top', 
+    threshold: 100, 
+    divisor: 1,
+    color: 'from-indigo-50 to-indigo-100/60 border-indigo-200/50 text-indigo-950',
+    tagColor: 'bg-indigo-500/10 text-indigo-700 border-indigo-500/20',
+    iconColor: 'text-indigo-600',
+    progressColor: 'bg-indigo-500',
+    icon: Award
+  },
+  { 
+    name: 'Pro', 
+    threshold: 250, 
+    divisor: 1,
+    color: 'from-amber-50 to-amber-100/60 border-amber-200/50 text-amber-950',
+    tagColor: 'bg-amber-500/10 text-amber-700 border-amber-500/20',
+    iconColor: 'text-amber-600',
+    progressColor: 'bg-amber-500',
+    icon: Star
+  },
+  { 
+    name: 'God', 
+    threshold: 500, 
+    divisor: 1,
+    color: 'from-rose-50 to-rose-100/60 border-rose-200/50 text-rose-950',
+    tagColor: 'bg-rose-500/10 text-rose-700 border-rose-500/20',
+    iconColor: 'text-rose-600',
+    progressColor: 'bg-rose-500',
+    icon: Sparkles
+  },
+  { 
+    name: 'Extinct', 
+    threshold: 1000, 
+    divisor: 1,
+    color: 'from-slate-100 to-slate-200/60 border-slate-300/50 text-slate-950',
+    tagColor: 'bg-slate-500/10 text-slate-700 border-slate-500/20',
+    iconColor: 'text-slate-700',
+    progressColor: 'bg-slate-600',
+    icon: Globe
+  },
+  { 
+    name: 'Masters', 
+    threshold: 2500, 
+    divisor: 1,
+    color: 'from-violet-50 to-violet-100/60 border-violet-200/50 text-violet-950',
+    tagColor: 'bg-violet-500/10 text-violet-700 border-violet-500/20',
+    iconColor: 'text-violet-600',
+    progressColor: 'bg-violet-500',
+    icon: Trophy
+  },
+  { 
+    name: 'Enthusiastic', 
+    threshold: 5000, 
+    divisor: 1,
+    color: 'from-yellow-50 to-yellow-100/60 border-yellow-200/50 text-yellow-950',
+    tagColor: 'bg-yellow-500/10 text-yellow-700 border-yellow-500/20',
+    iconColor: 'text-yellow-600',
+    progressColor: 'bg-yellow-500',
+    icon: Heart
+  },
+  { 
+    name: 'Amateurs World Explorer Champion', 
+    threshold: 10000, 
+    divisor: 1,
+    color: 'from-slate-950 via-fuchsia-950 to-slate-900 border-fuchsia-500/30 text-white relative overflow-hidden',
+    tagColor: 'bg-fuchsia-500/20 text-fuchsia-300 border-fuchsia-500/30',
+    iconColor: 'text-fuchsia-400',
+    progressColor: 'bg-fuchsia-500',
+    icon: Gem
+  }
+];
+
+const getMiniRoleName = (tierName: string, roleIndex: number) => {
+  const isBeginning = tierName === 'Beginning';
+  const base = isBeginning ? 'Beginner' : tierName;
+  const roles = [
+    base,
+    `${base} explore`,
+    `${base} tourist`,
+    `${base} adventurers`,
+    `${base} wonderers`,
+    `${base} finder`
+  ];
+  return roles[roleIndex];
+};
+
+const getTierLevel = (visits: number, threshold: number, divisor: number) => {
+  if (visits < threshold) return 0;
+  const rawLvl = Math.floor((visits - threshold) / divisor) + 1;
+  return Math.min(rawLvl, 9999999);
+};
+
+const getTierProgress = (visits: number, threshold: number, divisor: number) => {
+  if (visits < threshold) {
+    return (visits / threshold) * 100;
+  }
+  const currentLevelCount = (visits - threshold) % divisor;
+  return (currentLevelCount / divisor) * 100;
+};
 
 interface UserProfile {
   firstName: string;
@@ -214,7 +336,15 @@ export default function UserProfileModal({ isOpen, onClose, user }: UserProfileM
   const [copiedShare, setCopiedShare] = useState(false);
   
   // 1 Crore Badges & Quest states
-  const [badgeTab, setBadgeTab] = useState<'standard' | 'almanac' | 'cosmic'>('standard');
+  const [badgeTab, setBadgeTab] = useState<'standard' | 'engine' | 'almanac' | 'cosmic'>('standard');
+  const [userLocations, setUserLocations] = useState<any[]>([]);
+  const [engineSubTab, setEngineSubTab] = useState<'my_achievements' | 'simulator'>('simulator');
+  const [simRegion, setSimRegion] = useState('Jaipur, Rajasthan');
+  const [simVisits, setSimVisits] = useState(10);
+
+  // Confetti triggering trackers for mini-role unlocks
+  const [prevUnlockedCount, setPrevUnlockedCount] = useState<number | null>(null);
+  const [prevRealUnlockedCount, setPrevRealUnlockedCount] = useState<number | null>(null);
   const [contributedCountries, setContributedCountries] = useState<string[]>([]);
   const [contributedStates, setContributedStates] = useState<string[]>([]);
   const [searchCountry, setSearchCountry] = useState('India');
@@ -226,6 +356,83 @@ export default function UserProfileModal({ isOpen, onClose, user }: UserProfileM
   const [scanSuccess, setScanSuccess] = useState(false);
   const [scanSector, setScanSector] = useState('');
   const [scanAttempts, setScanAttempts] = useState(0);
+
+  const getRealGroupedLocations = () => {
+    const counts: Record<string, number> = {};
+    userLocations.forEach(loc => {
+      const stateName = loc.state || loc.city || loc.country || 'Unknown Sector';
+      counts[stateName] = (counts[stateName] || 0) + 1;
+    });
+    return Object.entries(counts).map(([name, count]) => ({
+      name,
+      count
+    })).sort((a, b) => b.count - a.count);
+  };
+
+  // Helper to trigger confetti explosion
+  const triggerConfettiCelebration = () => {
+    const duration = 2 * 1000;
+    const animationEnd = Date.now() + duration;
+    const defaults = { startVelocity: 30, spread: 360, ticks: 60, zIndex: 10000 };
+
+    const randomInRange = (min: number, max: number) => Math.random() * (max - min) + min;
+
+    const interval = setInterval(() => {
+      const timeLeft = animationEnd - Date.now();
+
+      if (timeLeft <= 0) {
+        return clearInterval(interval);
+      }
+
+      const particleCount = 50 * (timeLeft / duration);
+      confetti({ ...defaults, particleCount, origin: { x: randomInRange(0.1, 0.3), y: Math.random() - 0.2 } });
+      confetti({ ...defaults, particleCount, origin: { x: randomInRange(0.7, 0.9), y: Math.random() - 0.2 } });
+    }, 250);
+  };
+
+  // Track Simulated Unlocks
+  useEffect(() => {
+    if (!isOpen) return;
+    
+    let simulatedUnlockedCount = 0;
+    PROCEDURAL_TIERS.forEach(tier => {
+      const level = getTierLevel(simVisits, tier.threshold, tier.divisor);
+      if (level > 0) {
+        simulatedUnlockedCount += Math.min(level, 6);
+      }
+    });
+
+    if (prevUnlockedCount !== null && simulatedUnlockedCount > prevUnlockedCount) {
+      triggerConfettiCelebration();
+    }
+    setPrevUnlockedCount(simulatedUnlockedCount);
+  }, [simVisits, isOpen]);
+
+  // Track Real Unlocks
+  useEffect(() => {
+    if (!isOpen || userLocations.length === 0) return;
+
+    const counts: Record<string, number> = {};
+    userLocations.forEach(loc => {
+      const stateName = loc.state || loc.city || loc.country || 'Unknown Sector';
+      counts[stateName] = (counts[stateName] || 0) + 1;
+    });
+
+    let realUnlockedCount = 0;
+    Object.values(counts).forEach(visits => {
+      PROCEDURAL_TIERS.forEach(tier => {
+        const level = getTierLevel(visits, tier.threshold, tier.divisor);
+        if (level > 0) {
+          realUnlockedCount += Math.min(level, 6);
+        }
+      });
+    });
+
+    if (prevRealUnlockedCount !== null && realUnlockedCount > prevRealUnlockedCount) {
+      triggerConfettiCelebration();
+    }
+    setPrevRealUnlockedCount(realUnlockedCount);
+  }, [userLocations, isOpen]);
 
   const handleDeleteAccount = async () => {
     if (!user) return;
@@ -300,6 +507,7 @@ export default function UserProfileModal({ isOpen, onClose, user }: UserProfileM
       const locationsData = results[3].docs.map(docSnap => docSnap.data());
       const countries = Array.from(new Set(locationsData.map(loc => loc.country).filter(Boolean))) as string[];
       const states = Array.from(new Set(locationsData.map(loc => loc.state).filter(Boolean))) as string[];
+      setUserLocations(locationsData);
       setContributedCountries(countries);
       setContributedStates(states);
 
@@ -1050,6 +1258,17 @@ export default function UserProfileModal({ isOpen, onClose, user }: UserProfileM
                       </button>
                       <button
                         type="button"
+                        onClick={() => setBadgeTab('engine')}
+                        className={`flex-1 py-3 text-[10px] font-black uppercase tracking-wider rounded-[18px] transition-all ${
+                          badgeTab === 'engine' 
+                            ? 'bg-white text-[#141414] shadow-sm border border-[#141414]/5' 
+                            : 'text-[#141414]/60 hover:text-[#141414] hover:bg-white/40'
+                        }`}
+                      >
+                        Procedural Badges
+                      </button>
+                      <button
+                        type="button"
                         onClick={() => setBadgeTab('almanac')}
                         className={`flex-1 py-3 text-[10px] font-black uppercase tracking-wider rounded-[18px] transition-all ${
                           badgeTab === 'almanac' 
@@ -1209,6 +1428,327 @@ export default function UserProfileModal({ isOpen, onClose, user }: UserProfileM
                         </motion.div>
                       );
                     })()}
+
+
+                    {/* Tab content: UNIVERSAL PROCEDURAL BADGE ENGINE */}
+                    {badgeTab === 'engine' && (
+                      <motion.div
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="space-y-6"
+                      >
+                        <div className="bg-gradient-to-br from-indigo-900 to-slate-950 text-white p-6 rounded-[32px] border border-indigo-500/20 shadow-md relative overflow-hidden">
+                          <div className="absolute top-0 right-0 p-8 opacity-10 pointer-events-none select-none">
+                            <Sliders className="w-40 h-40" />
+                          </div>
+                          <div className="relative z-10 space-y-2">
+                            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-indigo-400">STATE LEVEL MULTI-TIER SYSTEM</span>
+                            <h3 className="text-xl sm:text-2xl font-black tracking-tight leading-none text-white">Universal Procedural Badge Engine</h3>
+                            <p className="text-xs text-slate-300 leading-relaxed max-w-2xl">
+                              Unlock legendary state-level badges on your travels. All 9 tiers start at Level 1 upon reaching their entry milestone and climb dynamically up to <span className="text-indigo-400 font-extrabold font-mono">Level 9,999,999</span>! Every single landmark/place visited adds exactly 1 level.
+                            </p>
+                          </div>
+
+                          <div className="flex gap-2 mt-4 select-none">
+                            <button
+                              onClick={() => setEngineSubTab('simulator')}
+                              className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all ${
+                                engineSubTab === 'simulator'
+                                  ? 'bg-white text-slate-950 shadow-md'
+                                  : 'bg-white/10 hover:bg-white/15 text-white'
+                              }`}
+                            >
+                              Quest Simulator
+                            </button>
+                            <button
+                              onClick={() => setEngineSubTab('my_achievements')}
+                              className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all ${
+                                engineSubTab === 'my_achievements'
+                                  ? 'bg-white text-slate-950 shadow-md'
+                                  : 'bg-white/10 hover:bg-white/15 text-white'
+                              }`}
+                            >
+                              My Real Achievements
+                            </button>
+                          </div>
+                        </div>
+
+                        {engineSubTab === 'simulator' ? (
+                          <div className="bg-slate-50 border border-[#141414]/5 rounded-[32px] p-6 space-y-6">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                              {/* Target Region Input */}
+                              <div className="space-y-2">
+                                <label className="block text-[10px] font-black uppercase tracking-wider text-[#141414]/50">Target Travel Region / State</label>
+                                <div className="relative">
+                                  <MapPin className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#141414]/40" />
+                                  <input
+                                    type="text"
+                                    value={simRegion}
+                                    onChange={e => setSimRegion(e.target.value)}
+                                    placeholder="e.g. Jaipur, Rajasthan"
+                                    className="w-full pl-10 pr-4 py-3 bg-white border border-[#141414]/15 rounded-2xl text-xs outline-none focus:border-indigo-500 transition-all text-[#141414]"
+                                  />
+                                </div>
+                                <div className="flex flex-wrap gap-1.5 pt-1">
+                                  {['Jaipur, Rajasthan', 'Tokyo, Japan', 'Paris, France', 'New York, USA', 'Cairo, Egypt'].map(r => (
+                                    <button
+                                      key={r}
+                                      type="button"
+                                      onClick={() => setSimRegion(r)}
+                                      className={`text-[9px] font-extrabold uppercase px-2.5 py-1 rounded-md border transition-all ${
+                                        simRegion === r 
+                                          ? 'bg-indigo-600 border-indigo-600 text-white shadow-sm'
+                                          : 'bg-white border-[#141414]/10 text-[#141414]/60 hover:border-[#141414]/20'
+                                      }`}
+                                    >
+                                      {r}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+
+                              {/* Landmark Visits Input */}
+                              <div className="space-y-2">
+                                <div className="flex justify-between items-center">
+                                  <label className="block text-[10px] font-black uppercase tracking-wider text-[#141414]/50">Visited Landmarks Count</label>
+                                  <span className="font-mono text-xs font-black text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-md border border-indigo-100">{simVisits.toLocaleString()} Places Visited</span>
+                                </div>
+                                
+                                {/* Visits Slider */}
+                                <input
+                                  type="range"
+                                  min="0"
+                                  max="10000"
+                                  step="1"
+                                  value={simVisits}
+                                  onChange={e => setSimVisits(Number(e.target.value))}
+                                  className="w-full h-1.5 bg-[#141414]/10 rounded-lg appearance-none cursor-pointer accent-indigo-600"
+                                />
+
+                                {/* Quick Accelerators */}
+                                <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5 pt-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => setSimVisits(prev => Math.max(0, prev - 10))}
+                                    className="text-[9px] font-bold uppercase bg-white border border-[#141414]/10 hover:bg-[#141414]/5 rounded-md py-1 text-[#141414]/70"
+                                  >
+                                    -10
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setSimVisits(prev => prev + 1)}
+                                    className="text-[9px] font-bold uppercase bg-white border border-[#141414]/10 hover:bg-[#141414]/5 rounded-md py-1 text-[#141414]/70"
+                                  >
+                                    +1 Place
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setSimVisits(10)}
+                                    className="text-[9px] font-bold uppercase bg-white border border-[#141414]/10 hover:bg-[#141414]/5 rounded-md py-1 text-[#141414]/70"
+                                  >
+                                    Set 10 (Beg)
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setSimVisits(100)}
+                                    className="text-[9px] font-bold uppercase bg-white border border-[#141414]/10 hover:bg-[#141414]/5 rounded-md py-1 text-[#141414]/70"
+                                  >
+                                    Set 100 (Top)
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setSimVisits(10000)}
+                                    className="text-[9px] font-bold uppercase bg-white border border-[#141414]/10 hover:bg-[#141414]/5 rounded-md py-1 text-[#141414]/70"
+                                  >
+                                    Set 10k (Champ)
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setSimVisits(9999999)}
+                                    className="text-[9px] font-bold uppercase bg-indigo-50 border border-indigo-200 text-indigo-700 hover:bg-indigo-100 rounded-md py-1"
+                                  >
+                                    Set Max
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Displaying Live Unlocked Badges based on simulator state */}
+                            <div className="space-y-4 pt-4 border-t border-[#141414]/5">
+                              <div className="flex items-center justify-between">
+                                <h4 className="text-[10px] font-black uppercase tracking-wider text-[#141414]/40">Active Badge Levels for {simRegion || 'Your Selected Region'}</h4>
+                                <span className="text-[9px] font-extrabold uppercase px-2 py-0.5 rounded bg-amber-500/10 text-amber-700 border border-amber-500/20">Simulation Live</span>
+                              </div>
+
+                              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                {PROCEDURAL_TIERS.map((tier) => {
+                                  const level = getTierLevel(simVisits, tier.threshold, tier.divisor);
+                                  const isUnlocked = level > 0;
+                                  const progress = getTierProgress(simVisits, tier.threshold, tier.divisor);
+                                  const Icon = tier.icon || Compass;
+
+                                  // Mini-roles info
+                                  const activeRoleIndex = Math.min(level - 1, 5);
+                                  const activeRoleName = isUnlocked ? getMiniRoleName(tier.name, activeRoleIndex) : 'Locked';
+
+                                  return (
+                                    <div
+                                      key={tier.name}
+                                      className={`p-5 rounded-3xl border flex flex-col justify-between transition-all duration-300 relative overflow-hidden ${
+                                        isUnlocked 
+                                          ? `bg-gradient-to-br ${tier.color} shadow-sm border-solid`
+                                          : 'bg-white opacity-40 border-dashed border-[#141414]/15'
+                                      }`}
+                                    >
+                                      <div>
+                                        <div className="flex justify-between items-start mb-3">
+                                          <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
+                                            isUnlocked ? 'bg-white/80 shadow-inner' : 'bg-slate-100'
+                                          }`}>
+                                            <Icon className={`w-5 h-5 ${tier.iconColor || 'text-slate-600'}`} />
+                                          </div>
+                                          {isUnlocked ? (
+                                            <span className={`text-[9px] font-black px-2.5 py-1 rounded-full border ${tier.tagColor}`}>
+                                              Level {level.toLocaleString()}
+                                            </span>
+                                          ) : (
+                                            <span className="text-[9px] font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded flex items-center gap-1">
+                                              <Lock className="w-2.5 h-2.5" /> Req: {tier.threshold}
+                                            </span>
+                                          )}
+                                        </div>
+
+                                        <h5 className="font-serif italic text-base leading-none text-[#141414] font-bold">
+                                          {tier.name}
+                                        </h5>
+                                        <p className="text-[10px] text-[#141414]/50 mt-1 uppercase font-black tracking-widest leading-none">
+                                          {simRegion}
+                                        </p>
+
+                                        {isUnlocked && (
+                                          <div className="mt-3.5 bg-white/60 p-2.5 rounded-xl border border-white/40 space-y-1.5">
+                                            <div className="flex justify-between items-center">
+                                              <span className="text-[8px] uppercase font-black tracking-widest text-[#141414]/40">Active Title:</span>
+                                              <span className="text-[10px] font-bold text-[#141414]">{activeRoleName}</span>
+                                            </div>
+                                            
+                                            {/* Mini Roles Progress Tracker */}
+                                            <div className="space-y-1">
+                                              <div className="flex justify-between items-center text-[7px] font-extrabold uppercase text-[#141414]/40">
+                                                <span>6 Mini Roles Unlock</span>
+                                                <span>{Math.min(level, 6)} / 6</span>
+                                              </div>
+                                              <div className="grid grid-cols-6 gap-0.5">
+                                                {[0, 1, 2, 3, 4, 5].map((idx) => {
+                                                  const roleUnlocked = level > idx;
+                                                  return (
+                                                    <div 
+                                                      key={idx}
+                                                      title={getMiniRoleName(tier.name, idx)}
+                                                      className={`h-1 rounded-full ${
+                                                        roleUnlocked ? tier.progressColor : 'bg-[#141414]/5'
+                                                      }`}
+                                                    />
+                                                  );
+                                                })}
+                                              </div>
+                                            </div>
+                                          </div>
+                                        )}
+                                      </div>
+
+                                      {/* Progress Slider towards next tier */}
+                                      <div className="mt-4 space-y-1">
+                                        <div className="flex justify-between items-center text-[8px] font-black uppercase text-[#141414]/40">
+                                          <span>Progress</span>
+                                          <span>{Math.floor(progress)}%</span>
+                                        </div>
+                                        <div className="w-full bg-[#141414]/5 rounded-full h-1 overflow-hidden">
+                                          <div 
+                                            className={`h-full rounded-full ${tier.progressColor}`} 
+                                            style={{ width: `${progress}%` }}
+                                          />
+                                        </div>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          </div>
+                        ) : (
+                          /* My Real Achievements */
+                          <div className="bg-slate-50 border border-[#141414]/5 rounded-[32px] p-6 space-y-6">
+                            {getRealGroupedLocations().length === 0 ? (
+                              <div className="text-center py-12 space-y-3">
+                                <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center mx-auto text-[#141414]/40">
+                                  <Lock className="w-5 h-5" />
+                                </div>
+                                <h4 className="text-sm font-bold text-[#141414]">No Real Achievements Unlocked Yet</h4>
+                                <p className="text-xs text-[#141414]/50 max-w-sm mx-auto">
+                                  Pins are evaluated grouped by state or region. Share discoveries on the main map to automatically earn your state-level procedural badges!
+                                </p>
+                              </div>
+                            ) : (
+                              <div className="space-y-6">
+                                <div className="flex items-center justify-between">
+                                  <h4 className="text-[10px] font-black uppercase tracking-wider text-[#141414]/40">Your Active Region Achievements</h4>
+                                  <span className="text-[9px] font-extrabold uppercase px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-700 border border-emerald-500/20">Evaluation Live</span>
+                                </div>
+
+                                <div className="space-y-6">
+                                  {getRealGroupedLocations().map((grouped) => {
+                                    // Find all tiers that are unlocked for this group
+                                    const unlockedTiers = PROCEDURAL_TIERS.filter(t => grouped.count >= t.threshold);
+
+                                    return (
+                                      <div key={grouped.name} className="bg-white p-5 rounded-3xl border border-[#141414]/5 shadow-sm space-y-4">
+                                        <div className="flex justify-between items-center border-b border-[#141414]/5 pb-3">
+                                          <div>
+                                            <h5 className="font-bold text-sm text-[#141414]">{grouped.name}</h5>
+                                            <p className="text-[10px] text-[#141414]/50 uppercase font-black tracking-widest">{grouped.count} shared locations evaluated</p>
+                                          </div>
+                                          <div className="text-xs font-bold text-indigo-600 bg-indigo-50 border border-indigo-100 px-3 py-1 rounded-xl">
+                                            {unlockedTiers.length} Badge(s) Unlocked
+                                          </div>
+                                        </div>
+
+                                        {unlockedTiers.length === 0 ? (
+                                          <div className="text-xs text-slate-400 py-2 italic">
+                                            Keep exploring {grouped.name}! You need at least 10 visits to unlock the "Beginning" Tier 1.
+                                          </div>
+                                        ) : (
+                                          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                                            {unlockedTiers.map(tier => {
+                                              const level = getTierLevel(grouped.count, tier.threshold, tier.divisor);
+                                              const roleIndex = Math.min(level - 1, 5);
+                                              const roleName = getMiniRoleName(tier.name, roleIndex);
+                                              const Icon = tier.icon || MapPin;
+
+                                              return (
+                                                <div key={tier.name} className={`p-3.5 rounded-2xl border bg-gradient-to-br ${tier.color} flex items-center gap-3`}>
+                                                  <div className="w-8 h-8 rounded-lg bg-white/80 flex items-center justify-center shrink-0">
+                                                    <Icon className={`w-4 h-4 ${tier.iconColor}`} />
+                                                  </div>
+                                                  <div className="min-w-0 flex-1">
+                                                    <div className="text-[10px] font-black uppercase text-[#141414]/40 leading-none">Level {level}</div>
+                                                    <div className="text-xs font-extrabold text-[#141414] truncate mt-1">{roleName}</div>
+                                                  </div>
+                                                </div>
+                                              );
+                                            })}
+                                          </div>
+                                        )}
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </motion.div>
+                    )}
 
 
                     {/* Tab content 2: 1 Crore Procedural Registry */}

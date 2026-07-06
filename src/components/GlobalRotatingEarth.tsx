@@ -2,7 +2,16 @@ import React from 'react';
 import { motion } from 'motion/react';
 import { Globe } from 'lucide-react';
 
-const GlobalRotatingEarth: React.FC = () => {
+interface GlobalRotatingEarthProps {
+  speed?: number;
+}
+
+const GlobalRotatingEarth: React.FC<GlobalRotatingEarthProps> = ({ speed = 1.0 }) => {
+  // Compute dynamic speeds
+  const rotateDuration1 = speed <= 0 ? 9999999 : 160 / speed;
+  const rotateDuration2 = speed <= 0 ? 9999999 : 240 / speed;
+  const rotateDuration3 = speed <= 0 ? 9999999 : 400 / speed;
+
   return (
     <div className="fixed inset-0 pointer-events-none overflow-hidden -z-10 opacity-[0.2] md:opacity-[0.15] select-none">
       <motion.div
@@ -11,7 +20,7 @@ const GlobalRotatingEarth: React.FC = () => {
           scale: [1, 1.1, 1],
         }}
         transition={{ 
-          rotate: { duration: 160, repeat: Infinity, ease: "linear" },
+          rotate: { duration: rotateDuration1, repeat: Infinity, ease: "linear" },
           scale: { duration: 30, repeat: Infinity, ease: "easeInOut" }
         }}
         className="absolute -bottom-64 -right-64 w-[1000px] h-[1000px] flex items-center justify-center blur-[1px]"
@@ -25,7 +34,7 @@ const GlobalRotatingEarth: React.FC = () => {
           scale: [1.1, 1, 1.1],
         }}
         transition={{ 
-          rotate: { duration: 240, repeat: Infinity, ease: "linear" },
+          rotate: { duration: rotateDuration2, repeat: Infinity, ease: "linear" },
           scale: { duration: 40, repeat: Infinity, ease: "easeInOut" }
         }}
         className="absolute -top-48 -left-48 w-[800px] h-[800px] flex items-center justify-center blur-[2px]"
@@ -37,7 +46,7 @@ const GlobalRotatingEarth: React.FC = () => {
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[1400px] h-[1400px] opacity-[0.2]">
         <motion.div
           animate={{ rotate: 360 }}
-          transition={{ duration: 400, repeat: Infinity, ease: "linear" }}
+          transition={{ duration: rotateDuration3, repeat: Infinity, ease: "linear" }}
           className="w-full h-full flex items-center justify-center"
         >
           <Globe className="w-full h-full text-[#0369a1]" strokeWidth={0.03} />
