@@ -15,12 +15,14 @@ interface SidebarNavProps {
   showArchiveOnly?: boolean;
   showTrashOnly?: boolean;
   showUserWorldOnly?: boolean;
+  showDualDashboard?: boolean;
   onSelect: (continent: Continent | null, country: string | null, state: string | null, showFavorites?: boolean, showTour?: boolean, showArchive?: boolean, showTrash?: boolean, showUserWorld?: boolean) => void;
+  onSelectDualDashboard?: (show: boolean) => void;
 }
 
 const CONTINENTS: Continent[] = ["Africa", "Asia", "Europe", "North America", "South America", "Oceania", "Antarctica"];
 
-export default function SidebarNav({ selectedContinent, selectedCountry, selectedState, showFavoritesOnly, showTourOnly, showArchiveOnly, showTrashOnly, showUserWorldOnly, onSelect }: SidebarNavProps) {
+export default function SidebarNav({ selectedContinent, selectedCountry, selectedState, showFavoritesOnly, showTourOnly, showArchiveOnly, showTrashOnly, showUserWorldOnly, showDualDashboard, onSelect, onSelectDualDashboard }: SidebarNavProps) {
   // Internal expansion state to allow browsing without changing the main view
   const [expandedContinent, setExpandedContinent] = useState<Continent | null>(selectedContinent);
   const [expandedCountry, setExpandedCountry] = useState<string | null>(selectedCountry);
@@ -113,6 +115,21 @@ export default function SidebarNav({ selectedContinent, selectedCountry, selecte
         >
           <Compass className="w-4 h-4" />
           <span className="text-sm font-bold">Community Discoveries</span>
+        </button>
+
+        <button 
+          onClick={() => {
+            if (onSelectDualDashboard) {
+              onSelectDualDashboard(true);
+            }
+          }}
+          className={`flex items-center gap-3 w-full p-3 rounded-2xl transition-all mt-1 ${showDualDashboard ? 'bg-cyan-600 text-white shadow-lg shadow-cyan-600/30 font-bold' : 'hover:bg-white/50 text-[#141414]/60'}`}
+        >
+          <Globe className="w-4 h-4 animate-spin" style={{ animationDuration: '8s' }} />
+          <span className="text-sm font-bold flex items-center gap-2">
+            <span>Dual Map & Globe</span>
+            <span className="bg-cyan-500/10 text-cyan-500 border border-cyan-500/20 text-[7px] uppercase tracking-widest font-black px-1.5 py-0.5 rounded-md leading-none">NEW</span>
+          </span>
         </button>
 
         <button 

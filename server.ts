@@ -67,6 +67,8 @@ Using secure fallback in-memory stores for background AI features. Client-side c
         imageUrl: 'https://images.unsplash.com/photo-1564507592333-c60657eea023?auto=format&fit=crop&q=80&w=1200',
         userId: 'system',
         userName: 'World Explorer',
+        lat: 27.1751,
+        lng: 78.0421,
         isDeleted: false
       },
       {
@@ -79,6 +81,36 @@ Using secure fallback in-memory stores for background AI features. Client-side c
         imageUrl: 'https://images.unsplash.com/photo-1627891395562-f67fce533b66?auto=format&fit=crop&q=80&w=1200',
         userId: 'system',
         userName: 'World Explorer',
+        lat: 26.9239,
+        lng: 75.8267,
+        isDeleted: false
+      },
+      {
+        id: 'city-palace-jaipur',
+        name: 'City Palace, Jaipur',
+        description: 'A magnificent palace complex in the heart of Jaipur, Rajasthan, India. Built by Maharaja Sawai Jai Singh II, it showcases a perfect blend of Rajasthani and Mughal architecture, adorned with ornate courtyards, palaces, pavilions, and galleries.',
+        continent: 'Asia',
+        country: 'India',
+        state: 'Rajasthan',
+        imageUrl: 'https://images.unsplash.com/photo-1599661046289-e31897846e41?auto=format&fit=crop&q=80&w=1200',
+        userId: 'system',
+        userName: 'World Explorer',
+        lat: 26.9258,
+        lng: 75.8236,
+        isDeleted: false
+      },
+      {
+        id: 'jal-mahal',
+        name: 'Jal Mahal',
+        description: 'The breathtaking "Water Palace" floating in the middle of Man Sagar Lake in Jaipur, Rajasthan, India. Built in red sandstone, its lower four stories remain submerged underwater, creating an ethereal, floating spectacle of Rajput architecture.',
+        continent: 'Asia',
+        country: 'India',
+        state: 'Rajasthan',
+        imageUrl: 'https://images.unsplash.com/photo-1590422119958-86811fc7b98d?auto=format&fit=crop&q=80&w=1200',
+        userId: 'system',
+        userName: 'World Explorer',
+        lat: 26.9656,
+        lng: 75.8456,
         isDeleted: false
       },
       {
@@ -91,6 +123,8 @@ Using secure fallback in-memory stores for background AI features. Client-side c
         imageUrl: 'https://images.unsplash.com/photo-1561361513-2d000a50f0dc?auto=format&fit=crop&q=80&w=1200',
         userId: 'system',
         userName: 'World Explorer',
+        lat: 25.3018,
+        lng: 83.0090,
         isDeleted: false
       },
       {
@@ -103,6 +137,8 @@ Using secure fallback in-memory stores for background AI features. Client-side c
         imageUrl: 'https://images.unsplash.com/photo-1602216056096-3b40cc0c9944?auto=format&fit=crop&q=80&w=1200',
         userId: 'system',
         userName: 'World Explorer',
+        lat: 9.4981,
+        lng: 76.3388,
         isDeleted: false
       },
       {
@@ -115,6 +151,8 @@ Using secure fallback in-memory stores for background AI features. Client-side c
         imageUrl: 'https://images.unsplash.com/photo-1587595431973-160d0d94add1?auto=format&fit=crop&q=80&w=1200',
         userId: 'system',
         userName: 'World Explorer',
+        lat: -13.1631,
+        lng: -72.5450,
         isDeleted: false
       },
       {
@@ -127,6 +165,8 @@ Using secure fallback in-memory stores for background AI features. Client-side c
         imageUrl: 'https://images.unsplash.com/photo-1552832230-c0197dd311b5?auto=format&fit=crop&q=80&w=1200',
         userId: 'system',
         userName: 'World Explorer',
+        lat: 41.8902,
+        lng: 12.4922,
         isDeleted: false
       }
     ];
@@ -160,6 +200,8 @@ const inMemoryLocations: Array<any> = [
     imageUrl: 'https://images.unsplash.com/photo-1564507592333-c60657eea023?auto=format&fit=crop&q=80&w=1200',
     userId: 'system',
     userName: 'World Explorer',
+    lat: 27.1751,
+    lng: 78.0421,
     isDeleted: false,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString()
@@ -174,6 +216,40 @@ const inMemoryLocations: Array<any> = [
     imageUrl: 'https://images.unsplash.com/photo-1627891395562-f67fce533b66?auto=format&fit=crop&q=80&w=1200',
     userId: 'system',
     userName: 'World Explorer',
+    lat: 26.9239,
+    lng: 75.8267,
+    isDeleted: false,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  },
+  {
+    id: 'city-palace-jaipur',
+    name: 'City Palace, Jaipur',
+    description: 'A magnificent palace complex in the heart of Jaipur, Rajasthan, India. Built by Maharaja Sawai Jai Singh II, it showcases a perfect blend of Rajasthani and Mughal architecture, adorned with ornate courtyards, palaces, pavilions, and galleries.',
+    continent: 'Asia',
+    country: 'India',
+    state: 'Rajasthan',
+    imageUrl: 'https://images.unsplash.com/photo-1599661046289-e31897846e41?auto=format&fit=crop&q=80&w=1200',
+    userId: 'system',
+    userName: 'World Explorer',
+    lat: 26.9258,
+    lng: 75.8236,
+    isDeleted: false,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  },
+  {
+    id: 'jal-mahal',
+    name: 'Jal Mahal',
+    description: 'The breathtaking "Water Palace" floating in the middle of Man Sagar Lake in Jaipur, Rajasthan, India. Built in red sandstone, its lower four stories remain submerged underwater, creating an ethereal, floating spectacle of Rajput architecture.',
+    continent: 'Asia',
+    country: 'India',
+    state: 'Rajasthan',
+    imageUrl: 'https://images.unsplash.com/photo-1590422119958-86811fc7b98d?auto=format&fit=crop&q=80&w=1200',
+    userId: 'system',
+    userName: 'World Explorer',
+    lat: 26.9656,
+    lng: 75.8456,
     isDeleted: false,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString()
@@ -188,6 +264,8 @@ const inMemoryLocations: Array<any> = [
     imageUrl: 'https://images.unsplash.com/photo-1561361513-2d000a50f0dc?auto=format&fit=crop&q=80&w=1200',
     userId: 'system',
     userName: 'World Explorer',
+    lat: 25.3018,
+    lng: 83.0090,
     isDeleted: false,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString()
@@ -202,6 +280,8 @@ const inMemoryLocations: Array<any> = [
     imageUrl: 'https://images.unsplash.com/photo-1602216056096-3b40cc0c9944?auto=format&fit=crop&q=80&w=1200',
     userId: 'system',
     userName: 'World Explorer',
+    lat: 9.4981,
+    lng: 76.3388,
     isDeleted: false,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString()
@@ -216,6 +296,8 @@ const inMemoryLocations: Array<any> = [
     imageUrl: 'https://images.unsplash.com/photo-1587595431973-160d0d94add1?auto=format&fit=crop&q=80&w=1200',
     userId: 'system',
     userName: 'World Explorer',
+    lat: -13.1631,
+    lng: -72.5450,
     isDeleted: false,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString()
@@ -230,6 +312,8 @@ const inMemoryLocations: Array<any> = [
     imageUrl: 'https://images.unsplash.com/photo-1552832230-c0197dd311b5?auto=format&fit=crop&q=80&w=1200',
     userId: 'system',
     userName: 'World Explorer',
+    lat: 41.8902,
+    lng: 12.4922,
     isDeleted: false,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString()
@@ -295,6 +379,30 @@ const staticLocationsCache: Record<string, {
       { name: "Jantar Mantar, Jaipur", reason: "A collection of nineteen architectural astronomical instruments built by the Rajput king Sawai Jai Singh II.", imageKeywords: "jantar mantar jaipur" }
     ],
     geo: { lat: 26.9239, lng: 75.8267 }
+  },
+  "city palace, jaipur": {
+    details: {
+      description: "The City Palace of Jaipur is a magnificent royal residence and administrative seat of the rulers of Jaipur in Rajasthan, India. Constructed by Maharaja Sawai Jai Singh II in 1727, the complex features a spectacular blend of Rajput, Mughal, and European architecture. It includes several palaces like Chandra Mahal and Mubarak Mahal, stunning inner courtyards decorated with peacock motifs, and extensive museums displaying royal collections.",
+      imageKeywords: "city palace jaipur courtyard peacock gate"
+    },
+    recommendations: [
+      { name: "Hawa Mahal, Jaipur", reason: "The iconic Palace of Winds situated right on the edge of the palace complex.", imageKeywords: "hawa mahal jaipur" },
+      { name: "Jal Mahal, Jaipur", reason: "The magnificent floating water palace on Man Sagar Lake.", imageKeywords: "jal mahal jaipur" },
+      { name: "Amer Fort, Jaipur", reason: "The hilltop fortress featuring the spectacular Sheesh Mahal mirror palace.", imageKeywords: "amer fort jaipur" }
+    ],
+    geo: { lat: 26.9258, lng: 75.8236 }
+  },
+  "jal mahal": {
+    details: {
+      description: "Jal Mahal, meaning 'Water Palace', is an exquisite palace floating in the center of Man Sagar Lake in Jaipur, Rajasthan, India. Originally constructed as a pleasure pavilion for hunting ducks by Maharaja Madho Singh in 1750, the five-story red sandstone structure exhibits classic Indo-Islamic and Rajput styles. When the lake is full, four of its stories are completely submerged underwater, leaving only the top terrace and decorated arches visible.",
+      imageKeywords: "jal mahal jaipur floating palace lake"
+    },
+    recommendations: [
+      { name: "Hawa Mahal, Jaipur", reason: "The iconic Palace of Winds constructed of pink and red sandstone.", imageKeywords: "hawa mahal jaipur" },
+      { name: "City Palace, Jaipur", reason: "The majestic royal complex at the center of the pink city of Jaipur.", imageKeywords: "city palace jaipur" },
+      { name: "Nahargarh Fort, Jaipur", reason: "Standing on the edge of the Aravalli Hills, providing panoramic views of Sagar Lake and Jal Mahal.", imageKeywords: "nahargarh fort jaipur" }
+    ],
+    geo: { lat: 26.9656, lng: 75.8456 }
   },
   "varanasi ghats": {
     details: {

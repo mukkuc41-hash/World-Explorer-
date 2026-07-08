@@ -67,7 +67,7 @@ service cloud.firestore {
       return (!data.keys().contains('name') || (data.name is string && data.name.size() > 0 && data.name.size() <= 200))
         && (!data.keys().contains('description') || (data.description is string && data.description.size() > 0 && data.description.size() <= 6000))
         && (!data.keys().contains('continent') || (data.continent in ["Africa", "Asia", "Europe", "North America", "South America", "Oceania", "Antarctica"]))
-        && (!data.keys().contains('userId') || data.userId == request.auth.uid)
+        && (!data.keys().contains('userId') || (request.auth != null && data.userId == request.auth.uid) || data.userId.startsWith('guest_'))
         && (!data.keys().contains('isDeleted') || data.isDeleted is bool);
     }
 
@@ -75,87 +75,87 @@ service cloud.firestore {
     match /locations/{locationId} {
       allow read: if true; // Publicly viewable
 
-      allow create: if isVerified() 
+      allow create: if (isVerified() || (incoming().userId is string && incoming().userId.startsWith('guest_')))
         && isValidId(locationId)
         && isValidLocation(incoming());
 
-      allow update: if isVerified()
+      allow update: if (isVerified() || (incoming().userId is string && incoming().userId.startsWith('guest_')))
         && isValidId(locationId)
         && isValidLocation(incoming())
-        && (isOwner(existing().userId) || isAdmin())
+        && (isOwner(existing().userId) || existing().userId.startsWith('guest_') || isAdmin())
         && incoming().userId == existing().userId;
 
-      allow delete: if isVerified()
+      allow delete: if (isVerified() || (existing().userId is string && existing().userId.startsWith('guest_')))
         && isValidId(locationId)
-        && (isOwner(existing().userId) || isAdmin());
+        && (isOwner(existing().userId) || existing().userId.startsWith('guest_') || isAdmin());
     }
 
     // --- Collection: favorites ---
     match /favorites/{favoriteId} {
-      allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow read: if (isSignedIn() && resource.data.userId == request.auth.uid) || resource.data.userId.startsWith('guest_');
       
-      allow create: if isVerified() 
+      allow create: if (isVerified() || request.resource.data.userId.startsWith('guest_'))
         && isValidId(favoriteId)
-        && request.resource.data.userId == request.auth.uid
+        && (request.resource.data.userId == request.auth.uid || request.resource.data.userId.startsWith('guest_'))
         && request.resource.data.locationId is string
         && request.resource.data.createdAt == request.time;
       
-      allow delete: if isVerified()
-        && (isOwner(existing().userId) || isAdmin());
+      allow delete: if (isVerified() || existing().userId.startsWith('guest_'))
+        && (isOwner(existing().userId) || existing().userId.startsWith('guest_') || isAdmin());
     }
 
     // --- Collection: reviews ---
     match /reviews/{reviewId} {
       allow read: if true;
       
-      allow create: if isVerified()
+      allow create: if (isVerified() || request.resource.data.userId.startsWith('guest_'))
         && isValidId(reviewId)
-        && request.resource.data.userId == request.auth.uid
+        && (request.resource.data.userId == request.auth.uid || request.resource.data.userId.startsWith('guest_'))
         && request.resource.data.createdAt == request.time
         && request.resource.data.rating >= 1 && request.resource.data.rating <= 5;
         
-      allow delete: if isVerified()
-        && (isOwner(existing().userId) || isAdmin());
+      allow delete: if (isVerified() || existing().userId.startsWith('guest_'))
+        && (isOwner(existing().userId) || existing().userId.startsWith('guest_') || isAdmin());
     }
 
     // --- Collection: tours (Planned Visits) ---
     match /tours/{tourId} {
-      allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow read: if (isSignedIn() && resource.data.userId == request.auth.uid) || resource.data.userId.startsWith('guest_');
       
-      allow create: if isVerified()
+      allow create: if (isVerified() || request.resource.data.userId.startsWith('guest_'))
         && isValidId(tourId)
-        && request.resource.data.userId == request.auth.uid
+        && (request.resource.data.userId == request.auth.uid || request.resource.data.userId.startsWith('guest_'))
         && request.resource.data.locationId is string
         && request.resource.data.createdAt == request.time;
       
-      allow delete: if isVerified()
-        && (isOwner(existing().userId) || isAdmin());
+      allow delete: if (isVerified() || existing().userId.startsWith('guest_'))
+        && (isOwner(existing().userId) || existing().userId.startsWith('guest_') || isAdmin());
     }
 
     // --- Collection: archives ---
     match /archives/{archiveId} {
-      allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow read: if (isSignedIn() && resource.data.userId == request.auth.uid) || resource.data.userId.startsWith('guest_');
       
-      allow create: if isVerified()
+      allow create: if (isVerified() || request.resource.data.userId.startsWith('guest_'))
         && isValidId(archiveId)
-        && request.resource.data.userId == request.auth.uid
+        && (request.resource.data.userId == request.auth.uid || request.resource.data.userId.startsWith('guest_'))
         && request.resource.data.locationId is string
         && request.resource.data.createdAt == request.time;
       
-      allow delete: if isVerified()
-        && (isOwner(existing().userId) || isAdmin());
+      allow delete: if (isVerified() || existing().userId.startsWith('guest_'))
+        && (isOwner(existing().userId) || existing().userId.startsWith('guest_') || isAdmin());
     }
 
     // --- Collection: users ---
     match /users/{userId} {
-      allow read: if request.auth != null && request.auth.uid == userId;
-      allow write: if request.auth != null && request.auth.uid == userId;
+      allow read: if (request.auth != null && request.auth.uid == userId) || userId.startsWith('guest_');
+      allow write: if (request.auth != null && request.auth.uid == userId) || userId.startsWith('guest_');
     }
 
     // --- Collection: public_profiles ---
     match /public_profiles/{userId} {
       allow read: if true;
-      allow write: if request.auth != null && request.auth.uid == userId;
+      allow write: if (request.auth != null && request.auth.uid == userId) || userId.startsWith('guest_');
     }
 
     // Default deny everything else (Global Fallback)

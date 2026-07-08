@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase/app';
-import { getAuth, GoogleAuthProvider, signInWithPopup, signOut } from 'firebase/auth';
+import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, signInAnonymously } from 'firebase/auth';
 import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, doc, getDocFromCache, getDocFromServer } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
 
@@ -24,9 +24,21 @@ export async function signInWithGoogle() {
   }
 }
 
+export async function signInAsGuest() {
+  try {
+    const result = await signInAnonymously(auth);
+    return result.user;
+  } catch (error) {
+    console.error("Error signing in as Guest:", error);
+    throw error;
+  }
+}
+
 export async function logout() {
   try {
     await signOut(auth);
+    // Dispatch custom event to notify listeners (essential for client-side guest cleanup)
+    window.dispatchEvent(new Event('explorer-logout'));
   } catch (error) {
     console.error("Error signing out:", error);
     throw error;

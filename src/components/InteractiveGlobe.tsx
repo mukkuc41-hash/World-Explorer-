@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import * as d3 from 'd3';
 import { motion, AnimatePresence } from 'motion/react';
-import { Globe, RefreshCw, Compass, MapPin, ZoomIn, ZoomOut, Target, Cpu, Activity, Shield } from 'lucide-react';
+import { Globe, RefreshCw, Compass, MapPin, ZoomIn, ZoomOut, Target, Cpu, Activity, Shield, X } from 'lucide-react';
 import { Continent } from '../App.tsx';
 import { LocationData } from './LocationList.tsx';
 
@@ -362,6 +362,7 @@ interface InteractiveGlobeProps {
   locations: LocationData[];
   speed?: number;
   onChangeSpeed?: (speed: number) => void;
+  onSelectLocation?: (location: LocationData) => void;
 }
 
 export default function InteractiveGlobe({ 
@@ -369,7 +370,8 @@ export default function InteractiveGlobe({
   onSelectContinent, 
   locations,
   speed: speedProp,
-  onChangeSpeed
+  onChangeSpeed,
+  onSelectLocation
 }: InteractiveGlobeProps) {
   const [worldData, setWorldData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -378,6 +380,7 @@ export default function InteractiveGlobe({
   const [hoveredContinent, setHoveredContinent] = useState<Continent | null>(null);
   const [isRotating, setIsRotating] = useState(true);
   const [localSpeed, setLocalSpeed] = useState(1.0); // Interactive rotation speed multiplier (0.1x to 4.0x)
+  const [selectedLocation, setSelectedLocation] = useState<LocationData | null>(null);
 
   const speed = speedProp !== undefined ? speedProp : localSpeed;
 
@@ -397,8 +400,9 @@ export default function InteractiveGlobe({
   const [cloudOffset, setCloudOffset] = useState(0);
   const [cloudOpacity, setCloudOpacity] = useState(0.48);
   const [atmosphereEnabled, setAtmosphereEnabled] = useState(true);
-  const [atmosphereGlow, setAtmosphereGlow] = useState(2.0);
+  const [atmosphereGlow, setAtmosphereGlow] = useState(0.8);
   const [cyberHudEnabled, setCyberHudEnabled] = useState(false); // Default to false for a clean realistic satellite globe
+  const [isHoloEngineExpanded, setIsHoloEngineExpanded] = useState(true);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -410,15 +414,31 @@ export default function InteractiveGlobe({
   const containerRef = useRef<HTMLDivElement>(null);
   const [dimensions, setDimensions] = useState({ width: 500, height: 500 });
 
-  // Auto-rotate the globe slowly when the user is not interacting
+  // Auto-rotate the globe slowly using a high-performance, frame-rate independent requestAnimationFrame loop
   useEffect(() => {
     if (!isRotating) return;
-    const interval = setInterval(() => {
-      setRotation(prev => [prev[0] + 0.65 * speed, prev[1]]);
-      setOrbitOffset(prev => (prev + 1.8 * speed) % 360);
-      setCloudOffset(prev => (prev + 0.28 * speed) % 360); // Clouds rotate slowly for dynamic wind effect
-    }, 30);
-    return () => clearInterval(interval);
+
+    let animationFrameId: number;
+    let lastTime = performance.now();
+
+    const animate = (time: number) => {
+      const delta = time - lastTime;
+      // Cap delta to 100ms to prevent huge jumps when the tab is inactive or suspended
+      const cappedDelta = Math.min(delta, 100);
+      lastTime = time;
+
+      // Maintain original speed targets (calibrated for 30ms step size: 0.65, 1.8, 0.28 degrees per step respectively)
+      const stepFactor = speed * (cappedDelta / 30);
+
+      setRotation(prev => [prev[0] + 0.65 * stepFactor, prev[1]]);
+      setOrbitOffset(prev => (prev + 1.8 * stepFactor) % 360);
+      setCloudOffset(prev => (prev + 0.28 * stepFactor) % 360); // Clouds rotate slowly for dynamic wind effect
+
+      animationFrameId = requestAnimationFrame(animate);
+    };
+
+    animationFrameId = requestAnimationFrame(animate);
+    return () => cancelAnimationFrame(animationFrameId);
   }, [isRotating, speed]);
 
   // Load standard light-weight GeoJSON map
@@ -524,7 +544,7 @@ export default function InteractiveGlobe({
       console.error("Failed to generate day/night geo circles:", err);
       return null;
     }
-  }, [utcDate, rotation, scale]);
+  }, [utcDate]);
 
   // Direct pointer drag listeners
   const handlePointerDown = (e: React.PointerEvent) => {
@@ -580,142 +600,162 @@ export default function InteractiveGlobe({
       </div>
 
       {/* Bloom Shader & Projection HUD Tuning Deck */}
-      <div className="absolute bottom-16 left-6 z-10 flex flex-col gap-2.5 bg-black/85 backdrop-blur-md p-3.5 rounded-2xl border border-cyan-500/30 max-w-[200px] shadow-[0_0_20px_rgba(6,182,212,0.15)] transition-all">
-        <div className="flex items-center gap-1.5 border-b border-cyan-500/20 pb-1.5 text-cyan-400 font-mono text-[9px] font-bold uppercase tracking-widest">
-          <Cpu className="w-3 h-3 text-cyan-400 animate-pulse" />
-          <span>HOLO_ENGINE</span>
+      <div className="absolute bottom-16 left-6 z-10 flex flex-col bg-black/85 backdrop-blur-md p-3.5 rounded-2xl border border-cyan-500/30 max-w-[200px] shadow-[0_0_20px_rgba(6,182,212,0.15)] transition-all">
+        <div className="flex items-center justify-between gap-1.5 border-b border-cyan-500/20 pb-1.5 text-cyan-400 font-mono text-[9px] font-bold uppercase tracking-widest">
+          <div className="flex items-center gap-1.5">
+            <Cpu className="w-3 h-3 text-cyan-400 animate-pulse" />
+            <span>HOLO_ENGINE</span>
+          </div>
+          <button
+            onClick={() => setIsHoloEngineExpanded(!isHoloEngineExpanded)}
+            className="p-1 rounded hover:bg-cyan-500/10 transition-colors text-cyan-400 font-mono text-[8px] font-bold border border-cyan-500/20 cursor-pointer"
+          >
+            {isHoloEngineExpanded ? 'HIDE' : 'SHOW'}
+          </button>
         </div>
         
-        {/* Bloom Toggle */}
-        <div className="flex items-center justify-between gap-4">
-          <span className="text-white/70 font-mono text-[8px] uppercase tracking-wider">POST_BLOOM:</span>
-          <button
-            onClick={() => setBloomEnabled(!bloomEnabled)}
-            className={`px-2 py-0.5 rounded text-[8px] font-mono border transition-all ${
-              bloomEnabled 
-                ? 'bg-cyan-500/20 border-cyan-400 text-cyan-300 font-bold shadow-[0_0_8px_rgba(6,182,212,0.3)]' 
-                : 'bg-black/50 border-cyan-500/10 text-cyan-500/50 hover:bg-cyan-500/5'
-            }`}
-          >
-            {bloomEnabled ? 'ON' : 'OFF'}
-          </button>
-        </div>
+        <AnimatePresence initial={false}>
+          {isHoloEngineExpanded && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="overflow-hidden mt-2.5 space-y-2.5 flex flex-col"
+            >
+              {/* Bloom Toggle */}
+              <div className="flex items-center justify-between gap-4">
+                <span className="text-white/70 font-mono text-[8px] uppercase tracking-wider">POST_BLOOM:</span>
+                <button
+                  onClick={() => setBloomEnabled(!bloomEnabled)}
+                  className={`px-2 py-0.5 rounded text-[8px] font-mono border transition-all ${
+                    bloomEnabled 
+                      ? 'bg-cyan-500/20 border-cyan-400 text-cyan-300 font-bold shadow-[0_0_8px_rgba(6,182,212,0.3)]' 
+                      : 'bg-black/50 border-cyan-500/10 text-cyan-500/50 hover:bg-cyan-500/5'
+                  }`}
+                >
+                  {bloomEnabled ? 'ON' : 'OFF'}
+                </button>
+              </div>
 
-        {/* Bloom Intensity Slider */}
-        {bloomEnabled && (
-          <div className="flex flex-col gap-1">
-            <div className="flex items-center justify-between text-[8px] font-mono text-cyan-400/80">
-              <span>GLOW_LEVEL:</span>
-              <span className="font-bold">{bloomIntensity.toFixed(1)}x</span>
-            </div>
-            <input
-              type="range"
-              min="0.5"
-              max="4.5"
-              step="0.1"
-              value={bloomIntensity}
-              onChange={(e) => setBloomIntensity(parseFloat(e.target.value))}
-              className="w-full accent-cyan-400 cursor-pointer h-1 rounded bg-cyan-950/60 border border-cyan-500/20"
-            />
-          </div>
-        )}
+              {/* Bloom Intensity Slider */}
+              {bloomEnabled && (
+                <div className="flex flex-col gap-1">
+                  <div className="flex items-center justify-between text-[8px] font-mono text-cyan-400/80">
+                    <span>GLOW_LEVEL:</span>
+                    <span className="font-bold">{bloomIntensity.toFixed(1)}x</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0.5"
+                    max="4.5"
+                    step="0.1"
+                    value={bloomIntensity}
+                    onChange={(e) => setBloomIntensity(parseFloat(e.target.value))}
+                    className="w-full accent-cyan-400 cursor-pointer h-1 rounded bg-cyan-950/60 border border-cyan-500/20"
+                  />
+                </div>
+              )}
 
-        {/* Projection Beam Toggle */}
-        <div className="flex items-center justify-between gap-4">
-          <span className="text-white/70 font-mono text-[8px] uppercase tracking-wider">PROJECTOR:</span>
-          <button
-            onClick={() => setShowProjectionBeam(!showProjectionBeam)}
-            className={`px-2 py-0.5 rounded text-[8px] font-mono border transition-all ${
-              showProjectionBeam 
-                ? 'bg-cyan-500/20 border-cyan-400 text-cyan-300 font-bold shadow-[0_0_8px_rgba(6,182,212,0.3)]' 
-                : 'bg-black/50 border-cyan-500/10 text-cyan-500/50 hover:bg-cyan-500/5'
-            }`}
-          >
-            {showProjectionBeam ? 'ACTIVE' : 'STANDBY'}
-          </button>
-        </div>
+              {/* Projection Beam Toggle */}
+              <div className="flex items-center justify-between gap-4">
+                <span className="text-white/70 font-mono text-[8px] uppercase tracking-wider">PROJECTOR:</span>
+                <button
+                  onClick={() => setShowProjectionBeam(!showProjectionBeam)}
+                  className={`px-2 py-0.5 rounded text-[8px] font-mono border transition-all ${
+                    showProjectionBeam 
+                      ? 'bg-cyan-500/20 border-cyan-400 text-cyan-300 font-bold shadow-[0_0_8px_rgba(6,182,212,0.3)]' 
+                      : 'bg-black/50 border-cyan-500/10 text-cyan-500/50 hover:bg-cyan-500/5'
+                  }`}
+                >
+                  {showProjectionBeam ? 'ACTIVE' : 'STANDBY'}
+                </button>
+              </div>
 
-        {/* Cloud Layer Toggle & Slider */}
-        <div className="flex items-center justify-between gap-4 border-t border-cyan-500/10 pt-2">
-          <span className="text-white/70 font-mono text-[8px] uppercase tracking-wider">CLOUD_LAYER:</span>
-          <button
-            onClick={() => setCloudsEnabled(!cloudsEnabled)}
-            className={`px-2 py-0.5 rounded text-[8px] font-mono border transition-all ${
-              cloudsEnabled 
-                ? 'bg-cyan-500/20 border-cyan-400 text-cyan-300 font-bold shadow-[0_0_8px_rgba(6,182,212,0.3)]' 
-                : 'bg-black/50 border-cyan-500/10 text-cyan-500/50 hover:bg-cyan-500/5'
-            }`}
-          >
-            {cloudsEnabled ? 'ON' : 'OFF'}
-          </button>
-        </div>
+              {/* Cloud Layer Toggle & Slider */}
+              <div className="flex items-center justify-between gap-4 border-t border-cyan-500/10 pt-2">
+                <span className="text-white/70 font-mono text-[8px] uppercase tracking-wider">CLOUD_LAYER:</span>
+                <button
+                  onClick={() => setCloudsEnabled(!cloudsEnabled)}
+                  className={`px-2 py-0.5 rounded text-[8px] font-mono border transition-all ${
+                    cloudsEnabled 
+                      ? 'bg-cyan-500/20 border-cyan-400 text-cyan-300 font-bold shadow-[0_0_8px_rgba(6,182,212,0.3)]' 
+                      : 'bg-black/50 border-cyan-500/10 text-cyan-500/50 hover:bg-cyan-500/5'
+                  }`}
+                >
+                  {cloudsEnabled ? 'ON' : 'OFF'}
+                </button>
+              </div>
 
-        {cloudsEnabled && (
-          <div className="flex flex-col gap-1">
-            <div className="flex items-center justify-between text-[8px] font-mono text-cyan-400/80">
-              <span>CLOUD_DENSITY:</span>
-              <span className="font-bold">{(cloudOpacity * 100).toFixed(0)}%</span>
-            </div>
-            <input
-              type="range"
-              min="0.10"
-              max="1.00"
-              step="0.05"
-              value={cloudOpacity}
-              onChange={(e) => setCloudOpacity(parseFloat(e.target.value))}
-              className="w-full accent-cyan-400 cursor-pointer h-1 rounded bg-cyan-950/60 border border-cyan-500/20"
-            />
-          </div>
-        )}
+              {cloudsEnabled && (
+                <div className="flex flex-col gap-1">
+                  <div className="flex items-center justify-between text-[8px] font-mono text-cyan-400/80">
+                    <span>CLOUD_DENSITY:</span>
+                    <span className="font-bold">{(cloudOpacity * 100).toFixed(0)}%</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0.10"
+                    max="1.00"
+                    step="0.05"
+                    value={cloudOpacity}
+                    onChange={(e) => setCloudOpacity(parseFloat(e.target.value))}
+                    className="w-full accent-cyan-400 cursor-pointer h-1 rounded bg-cyan-950/60 border border-cyan-500/20"
+                  />
+                </div>
+              )}
 
-        {/* Atmosphere Halo Toggle & Slider */}
-        <div className="flex items-center justify-between gap-4 border-t border-cyan-500/10 pt-2">
-          <span className="text-white/70 font-mono text-[8px] uppercase tracking-wider">ATMOSPHERE:</span>
-          <button
-            onClick={() => setAtmosphereEnabled(!atmosphereEnabled)}
-            className={`px-2 py-0.5 rounded text-[8px] font-mono border transition-all ${
-              atmosphereEnabled 
-                ? 'bg-cyan-500/20 border-cyan-400 text-cyan-300 font-bold shadow-[0_0_8px_rgba(6,182,212,0.3)]' 
-                : 'bg-black/50 border-cyan-500/10 text-cyan-500/50 hover:bg-cyan-500/5'
-            }`}
-          >
-            {atmosphereEnabled ? 'ON' : 'OFF'}
-          </button>
-        </div>
+              {/* Atmosphere Halo Toggle & Slider */}
+              <div className="flex items-center justify-between gap-4 border-t border-cyan-500/10 pt-2">
+                <span className="text-white/70 font-mono text-[8px] uppercase tracking-wider">ATMOSPHERE:</span>
+                <button
+                  onClick={() => setAtmosphereEnabled(!atmosphereEnabled)}
+                  className={`px-2 py-0.5 rounded text-[8px] font-mono border transition-all ${
+                    atmosphereEnabled 
+                      ? 'bg-cyan-500/20 border-cyan-400 text-cyan-300 font-bold shadow-[0_0_8px_rgba(6,182,212,0.3)]' 
+                      : 'bg-black/50 border-cyan-500/10 text-cyan-500/50 hover:bg-cyan-500/5'
+                  }`}
+                >
+                  {atmosphereEnabled ? 'ON' : 'OFF'}
+                </button>
+              </div>
 
-        {atmosphereEnabled && (
-          <div className="flex flex-col gap-1">
-            <div className="flex items-center justify-between text-[8px] font-mono text-cyan-400/80">
-              <span>HALO_GLOW:</span>
-              <span className="font-bold">{atmosphereGlow.toFixed(1)}x</span>
-            </div>
-            <input
-              type="range"
-              min="0.5"
-              max="4.0"
-              step="0.1"
-              value={atmosphereGlow}
-              onChange={(e) => setAtmosphereGlow(parseFloat(e.target.value))}
-              className="w-full accent-cyan-400 cursor-pointer h-1 rounded bg-cyan-950/60 border border-cyan-500/20"
-            />
-          </div>
-        )}
+              {atmosphereEnabled && (
+                <div className="flex flex-col gap-1">
+                  <div className="flex items-center justify-between text-[8px] font-mono text-cyan-400/80">
+                    <span>HALO_GLOW:</span>
+                    <span className="font-bold">{atmosphereGlow.toFixed(2)}x</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0.1"
+                    max="2.0"
+                    step="0.05"
+                    value={atmosphereGlow}
+                    onChange={(e) => setAtmosphereGlow(parseFloat(e.target.value))}
+                    className="w-full accent-cyan-400 cursor-pointer h-1 rounded bg-cyan-950/60 border border-cyan-500/20"
+                  />
+                </div>
+              )}
 
-        {/* Cyber HUD Overlays Toggle */}
-        <div className="flex items-center justify-between gap-4 border-t border-cyan-500/10 pt-2">
-          <span className="text-white/70 font-mono text-[8px] uppercase tracking-wider">CYBER_HUD:</span>
-          <button
-            onClick={() => setCyberHudEnabled(!cyberHudEnabled)}
-            className={`px-2 py-0.5 rounded text-[8px] font-mono border transition-all ${
-              cyberHudEnabled 
-                ? 'bg-cyan-500/20 border-cyan-400 text-cyan-300 font-bold shadow-[0_0_8px_rgba(6,182,212,0.3)]' 
-                : 'bg-black/50 border-cyan-500/10 text-cyan-500/50 hover:bg-cyan-500/5'
-            }`}
-            title="Toggle futuristic scanning grids, HUD rings and transparent land filters"
-          >
-            {cyberHudEnabled ? 'ACTIVE' : 'OFF'}
-          </button>
-        </div>
+              {/* Cyber HUD Overlays Toggle */}
+              <div className="flex items-center justify-between gap-4 border-t border-cyan-500/10 pt-2">
+                <span className="text-white/70 font-mono text-[8px] uppercase tracking-wider">CYBER_HUD:</span>
+                <button
+                  onClick={() => setCyberHudEnabled(!cyberHudEnabled)}
+                  className={`px-2 py-0.5 rounded text-[8px] font-mono border transition-all ${
+                    cyberHudEnabled 
+                      ? 'bg-cyan-500/20 border-cyan-400 text-cyan-300 font-bold shadow-[0_0_8px_rgba(6,182,212,0.3)]' 
+                      : 'bg-black/50 border-cyan-500/10 text-cyan-500/50 hover:bg-cyan-500/5'
+                  }`}
+                  title="Toggle futuristic scanning grids, HUD rings and transparent land filters"
+                >
+                  {cyberHudEnabled ? 'ACTIVE' : 'OFF'}
+                </button>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
       <div className="absolute top-4 right-6 flex items-center gap-2 z-10 flex-wrap justify-end">
@@ -1108,11 +1148,11 @@ export default function InteractiveGlobe({
                 <circle
                   cx={dimensions.width / 2}
                   cy={dimensions.height / 2}
-                  r={scale + 2.5}
+                  r={scale + 1.2}
                   fill="none"
                   stroke="#ffffff"
-                  strokeWidth={1.5}
-                  strokeOpacity={0.85 * (atmosphereGlow / 2.0)}
+                  strokeWidth={1.0}
+                  strokeOpacity={0.85 * (atmosphereGlow / 1.0)}
                   filter="url(#subtle-glow)"
                 />
                 
@@ -1120,21 +1160,21 @@ export default function InteractiveGlobe({
                 <circle
                   cx={dimensions.width / 2}
                   cy={dimensions.height / 2}
-                  r={scale * 1.06}
+                  r={scale * 1.025}
                   fill="url(#atmosphere-halo-grad)"
                   className="transition-all duration-300"
-                  style={{ opacity: 0.9 * (atmosphereGlow / 2.0) }}
+                  style={{ opacity: 0.9 * (atmosphereGlow / 1.0) }}
                 />
 
                 {/* 3. Outer corona scatter layer */}
                 <circle
                   cx={dimensions.width / 2}
                   cy={dimensions.height / 2}
-                  r={scale * 1.10}
+                  r={scale * 1.04}
                   fill="none"
                   stroke="#0090ff"
-                  strokeWidth={6}
-                  strokeOpacity={0.25 * (atmosphereGlow / 2.0)}
+                  strokeWidth={2.5}
+                  strokeOpacity={0.25 * (atmosphereGlow / 1.0)}
                   filter="url(#subtle-glow)"
                 />
               </g>
@@ -1436,15 +1476,22 @@ export default function InteractiveGlobe({
               const isLocationOfSelectedContinent = selectedContinent === loc.continent;
 
               return (
-                <g key={loc.id} className="pointer-events-none">
+                <g 
+                  key={loc.id} 
+                  className="cursor-pointer pointer-events-auto group"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setSelectedLocation(loc);
+                  }}
+                >
                   {/* Concentric expanding telemetry radar ring */}
                   <circle
                     cx={x}
                     cy={y}
-                    r={isLocationOfSelectedContinent ? 10 : 7}
+                    r={isLocationOfSelectedContinent ? 11 : 8}
                     fill="none"
                     stroke="#00ffcc"
-                    strokeWidth={1}
+                    strokeWidth={1.2}
                     className="animate-ping"
                     style={{ animationDuration: '2.5s' }}
                   />
@@ -1453,20 +1500,21 @@ export default function InteractiveGlobe({
                   <circle
                     cx={x}
                     cy={y}
-                    r={4}
+                    r={5}
                     fill="#00ffcc"
                     filter="url(#glow-cyan)"
-                    className="opacity-80"
+                    className="opacity-70 group-hover:opacity-100 transition-opacity"
                   />
 
                   {/* Central high intensity physical node */}
                   <circle
                     cx={x}
                     cy={y}
-                    r={isLocationOfSelectedContinent ? 3.5 : 2.5}
+                    r={isLocationOfSelectedContinent ? 4 : 3}
                     fill="#ffffff"
                     stroke="#00ffff"
-                    strokeWidth={1.2}
+                    strokeWidth={1.5}
+                    className="group-hover:scale-125 transition-transform"
                   />
                 </g>
               );
@@ -1489,6 +1537,75 @@ export default function InteractiveGlobe({
               )}
             </span>
           </div>
+
+          {/* Custom Informational Info Window Popups for Landmark Markers */}
+          <AnimatePresence>
+            {selectedLocation && (
+              <motion.div
+                initial={{ opacity: 0, x: 40, scale: 0.95 }}
+                animate={{ opacity: 1, x: 0, scale: 1 }}
+                exit={{ opacity: 0, x: 40, scale: 0.95 }}
+                transition={{ type: 'spring', damping: 20 }}
+                onPointerDown={(e) => e.stopPropagation()} // Stop propagation so dragging is not activated on card
+                className="absolute top-6 right-6 z-30 bg-black/95 backdrop-blur-xl p-4 rounded-2xl border border-cyan-400/40 shadow-[0_0_25px_rgba(6,182,212,0.3)] max-w-[280px] md:max-w-[320px] text-white select-text pointer-events-auto"
+              >
+                {/* Header */}
+                <div className="flex items-start justify-between gap-3 border-b border-cyan-500/30 pb-2.5 mb-2.5">
+                  <div>
+                    <span className="text-[8px] font-mono font-black tracking-widest text-cyan-400 uppercase block">LANDMARK_LOCK_ENGAGED</span>
+                    <h3 className="font-serif italic text-lg tracking-tight text-white mt-1 leading-snug">{selectedLocation.name}</h3>
+                    <p className="text-[9px] font-mono text-cyan-400/70 mt-0.5 uppercase tracking-wide">
+                      {selectedLocation.state ? `${selectedLocation.state}, ` : ''}{selectedLocation.country}
+                    </p>
+                  </div>
+                  <button 
+                    onClick={() => setSelectedLocation(null)}
+                    className="text-cyan-400 hover:text-white cursor-pointer p-1 rounded hover:bg-cyan-500/20 transition-colors shrink-0"
+                    title="Close Lock"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                {/* Image Preview */}
+                <div className="relative h-28 w-full overflow-hidden rounded-xl mb-3 border border-cyan-500/30 shadow-[0_0_15px_rgba(6,182,212,0.1)]">
+                  <img 
+                    src={selectedLocation.imageUrl} 
+                    alt={selectedLocation.name} 
+                    className="w-full h-full object-cover"
+                    referrerPolicy="no-referrer"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
+                  <div className="absolute bottom-2 left-2 flex items-center gap-1.5">
+                    <MapPin className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+                    <span className="text-[8px] font-mono text-cyan-400 font-bold tracking-tight">
+                      LAT: {selectedLocation.lat.toFixed(4)} | LNG: {selectedLocation.lng.toFixed(4)}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Historical Summary */}
+                <p className="text-[10px] leading-relaxed text-cyan-100/90 font-mono mb-3.5 max-h-24 overflow-y-auto pr-1 select-text scrollbar-thin">
+                  {selectedLocation.description}
+                </p>
+
+                {/* Experience Deck Launcher Button */}
+                <div className="pt-2 border-t border-cyan-500/30">
+                  <button
+                    onClick={() => {
+                      if (onSelectLocation) {
+                        onSelectLocation(selectedLocation);
+                      }
+                    }}
+                    className="w-full bg-cyan-500/20 hover:bg-cyan-500/35 text-cyan-300 py-2 px-3 rounded-xl border border-cyan-400/50 text-[9px] font-mono font-bold uppercase tracking-widest flex items-center justify-center gap-1.5 cursor-pointer transition-all hover:shadow-[0_0_12px_rgba(6,182,212,0.35)]"
+                  >
+                    <Compass className="w-3.5 h-3.5 animate-spin" style={{ animationDuration: '8s' }} />
+                    Open Experience Deck
+                  </button>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       )}
 

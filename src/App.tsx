@@ -5,7 +5,7 @@
 
 import { useState, useEffect } from 'react';
 import { onAuthStateChanged, User } from 'firebase/auth';
-import { auth, signInWithGoogle, logout } from './lib/firebase.ts';
+import { auth, signInWithGoogle, logout, signInAsGuest } from './lib/firebase.ts';
 import { safelyConvertToDate } from './lib/dateUtils.ts';
 import { motion, AnimatePresence } from 'motion/react';
 import { MapPin, Plus, Compass, LogOut, ChevronLeft, Search, Map as MapIcon, LayoutGrid, Menu, X, ChevronRight, Globe, Share2, Link, Heart, Calendar, Bookmark, Trash2, Bot, Sparkles, Trophy, Wifi, Battery, Signal, BellRing } from 'lucide-react';
@@ -37,6 +37,7 @@ import { db, handleFirestoreError, OperationType } from './lib/firebase.ts';
 import { collection, query, where, getDocs, onSnapshot, doc, setDoc, serverTimestamp, orderBy, increment } from 'firebase/firestore';
 import { LogIn } from 'lucide-react';
 import OtpVerification from './components/OtpVerification.tsx';
+import ExplorerDashboard from './components/ExplorerDashboard.tsx';
 
 export type Continent = "Africa" | "Asia" | "Europe" | "North America" | "South America" | "Oceania" | "Antarctica";
 
@@ -109,6 +110,7 @@ export default function App() {
   const [showArchiveOnly, setShowArchiveOnly] = useState(false);
   const [showTrashOnly, setShowTrashOnly] = useState(false);
   const [showUserWorldOnly, setShowUserWorldOnly] = useState(false);
+  const [showDualDashboard, setShowDualDashboard] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
   const [selectedPlace, setSelectedPlace] = useState<string | null>(null);
@@ -566,18 +568,40 @@ export default function App() {
       setIsLoading(false);
     }, 3000);
 
+    const handleCustomLogout = () => {
+      localStorage.removeItem('world_explorer_guest_session_active');
+      setUser(null);
+    };
+    window.addEventListener('explorer-logout', handleCustomLogout);
+
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-      setUser(currentUser);
-      if (currentUser) {
+      let activeUser = currentUser;
+      if (!currentUser) {
+        const guestId = localStorage.getItem('world_explorer_guest_id');
+        const hasSession = localStorage.getItem('world_explorer_guest_session_active') === 'true';
+        if (guestId && hasSession) {
+          activeUser = {
+            uid: guestId,
+            displayName: 'Guest Explorer',
+            photoURL: `https://api.dicebear.com/7.x/avataaars/svg?seed=${guestId}`,
+            email: 'guest@worldexplorer.com',
+            isAnonymous: true,
+            emailVerified: true
+          } as any;
+        }
+      }
+
+      setUser(activeUser);
+      if (activeUser) {
         // Track last login and ensure profile exists
         const syncProfiles = async () => {
           try {
             const { doc, getDoc, setDoc, serverTimestamp, collection, query, where, getDocs } = await import('firebase/firestore');
             
-            const publicRef = doc(db, 'public_profiles', currentUser.uid);
-            const userDoc = doc(db, 'users', currentUser.uid);
+            const publicRef = doc(db, 'public_profiles', activeUser.uid);
+            const userDoc = doc(db, 'users', activeUser.uid);
 
-            console.log("[Profile Sync] Fetching public profile for UID:", currentUser.uid);
+            console.log("[Profile Sync] Fetching public profile for UID:", activeUser.uid);
             let publicSnap;
             try {
               publicSnap = await getDoc(publicRef);
@@ -587,10 +611,10 @@ export default function App() {
             }
             const exists = publicSnap.exists();
 
-            console.log("[Profile Sync] Querying active locations for UID:", currentUser.uid);
+            console.log("[Profile Sync] Querying active locations for UID:", activeUser.uid);
             let locSnap;
             try {
-              const locQ = query(collection(db, 'locations'), where('userId', '==', currentUser.uid));
+              const locQ = query(collection(db, 'locations'), where('userId', '==', activeUser.uid));
               locSnap = await getDocs(locQ);
             } catch (err: any) {
               console.error("[Profile Sync Error] Failed to query locations database:", err.message || err);
@@ -599,10 +623,10 @@ export default function App() {
             const activeLocs = locSnap.docs.filter(d => !d.data().isDeleted);
             const locCount = activeLocs.length;
 
-            console.log("[Profile Sync] Querying reviews for UID:", currentUser.uid);
+            console.log("[Profile Sync] Querying reviews for UID:", activeUser.uid);
             let revSnap;
             try {
-              const revQ = query(collection(db, 'reviews'), where('userId', '==', currentUser.uid));
+              const revQ = query(collection(db, 'reviews'), where('userId', '==', activeUser.uid));
               revSnap = await getDocs(revQ);
             } catch (err: any) {
               console.error("[Profile Sync Error] Failed to query reviews database:", err.message || err);
@@ -625,8 +649,8 @@ export default function App() {
             const finalXP = 5600;
 
             const publicData: any = {
-              displayName: currentUser.displayName || 'Architectural Explorer',
-              photoURL: currentUser.photoURL || null,
+              displayName: activeUser.displayName || 'Architectural Explorer',
+              photoURL: activeUser.photoURL || null,
               points: finalXP,
               totalDiscoveries: locCount,
               totalReviews: revCount,
@@ -634,9 +658,9 @@ export default function App() {
             };
 
             if (!exists || !publicSnap.data()?.username) {
-              publicData.username = currentUser.displayName 
-                ? `@${currentUser.displayName.toLowerCase().replace(/\s+/g, '')}` 
-                : `@explorer_${currentUser.uid.substring(0, 5)}`;
+              publicData.username = activeUser.displayName 
+                ? `@${activeUser.displayName.toLowerCase().replace(/\s+/g, '')}` 
+                : `@explorer_${activeUser.uid.substring(0, 5)}`;
             }
 
             console.log("[Profile Sync] Writing public profile data:", publicData);
@@ -649,8 +673,8 @@ export default function App() {
 
             const userProfileData = {
               lastLogin: serverTimestamp(),
-              email: currentUser.email || '',
-              displayName: currentUser.displayName || '',
+              email: activeUser.email || '',
+              displayName: activeUser.displayName || '',
               points: finalXP,
               totalDiscoveries: locCount,
               totalReviews: revCount,
@@ -678,6 +702,7 @@ export default function App() {
 
     return () => {
       clearTimeout(splashTimer);
+      window.removeEventListener('explorer-logout', handleCustomLogout);
       unsubscribe();
     };
   }, []);
@@ -717,6 +742,46 @@ export default function App() {
     setFlowStep('app');
   };
 
+  const handleGuestLogin = async () => {
+    try {
+      let resultUser;
+      try {
+        resultUser = await signInAsGuest();
+      } catch (authError: any) {
+        console.warn("Firebase Guest Auth failed or is restricted. Creating a client-side guest session:", authError);
+        let guestId = localStorage.getItem('world_explorer_guest_id');
+        if (!guestId) {
+          guestId = 'guest_' + Math.random().toString(36).substr(2, 9);
+          localStorage.setItem('world_explorer_guest_id', guestId);
+        }
+        localStorage.setItem('world_explorer_guest_session_active', 'true');
+        resultUser = {
+          uid: guestId,
+          displayName: 'Guest Explorer',
+          photoURL: `https://api.dicebear.com/7.x/avataaars/svg?seed=${guestId}`,
+          email: 'guest@worldexplorer.com',
+          isAnonymous: true,
+          emailVerified: true
+        } as any;
+        setUser(resultUser);
+      }
+
+      if (resultUser) {
+        if (!isOtpVerified) {
+          setFlowStep('otp');
+        } else if (!isTermsAccepted) {
+          setFlowStep('terms');
+        } else if (!isGuideSeen) {
+          setFlowStep('guide');
+        } else {
+          setFlowStep('app');
+        }
+      }
+    } catch (error) {
+      console.error("Guest login failed:", error);
+    }
+  };
+
   const handleLogin = async () => {
     try {
       const resultUser = await signInWithGoogle();
@@ -731,8 +796,20 @@ export default function App() {
           setFlowStep('app');
         }
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Login failed:", error);
+      const errMsg = error?.message || '';
+      const errCode = error?.code || '';
+      if (
+        errCode === 'auth/cancelled-popup-request' || 
+        errMsg.includes('cancelled-popup-request') || 
+        errMsg.includes('popup-closed-by-user') ||
+        errCode === 'auth/popup-closed-by-user' ||
+        errCode === 'auth/popup-blocked'
+      ) {
+        console.warn("Popup authentication blocked or cancelled. Falling back to secure Guest access...");
+        await handleGuestLogin();
+      }
     }
   };
 
@@ -870,6 +947,7 @@ export default function App() {
     setShowArchiveOnly(showArchive);
     setShowTrashOnly(showTrash);
     setShowUserWorldOnly(showUserWorld);
+    setShowDualDashboard(false);
     setSearchQuery(''); // Clear search when navigating categories
     
     // Close sidebar on mobile after selection
@@ -1008,6 +1086,13 @@ export default function App() {
             <LogIn className="w-6 h-6" /> Start Exploring
           </button>
 
+          <button
+            onClick={handleGuestLogin}
+            className="w-full bg-stone-100 hover:bg-stone-200 text-stone-700 py-4 rounded-[24px] font-bold text-xs uppercase tracking-wider active:scale-[0.98] transition-all flex items-center justify-center gap-2 border border-stone-200"
+          >
+            Or Enter as Guest / Demo Mode
+          </button>
+
           <div className="pt-6 flex flex-col items-center gap-4">
              <div className="h-px w-12 bg-[#141414]/10" />
              <div className="text-[9px] uppercase font-black tracking-widest opacity-20">Safe & Secure Authentication</div>
@@ -1049,6 +1134,10 @@ export default function App() {
   }
 
   const renderActiveContent = () => {
+    if (showDualDashboard) {
+      return <ExplorerDashboard />;
+    }
+
     if (showFavoritesOnly) {
       return (
         <div className="space-y-12">
@@ -1958,7 +2047,12 @@ export default function App() {
             showArchiveOnly={showArchiveOnly}
             showTrashOnly={showTrashOnly}
             showUserWorldOnly={showUserWorldOnly}
+            showDualDashboard={showDualDashboard}
             onSelect={handleSelection}
+            onSelectDualDashboard={(show) => {
+              handleSelection(null, null, null);
+              setShowDualDashboard(show);
+            }}
           />
         </aside>
 

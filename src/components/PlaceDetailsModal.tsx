@@ -47,6 +47,7 @@ import {
   serverTimestamp,
 } from "firebase/firestore";
 import ReviewSection from "./ReviewSection.tsx";
+import GMapExperienceDeck from "./GMapExperienceDeck.tsx";
 
 interface PlaceDetailsModalProps {
   placeName: string;
@@ -1038,6 +1039,12 @@ export default function PlaceDetailsModal({
                               </ReactMarkdown>
                             </div>
                           </div>
+
+                          <GMapExperienceDeck
+                            lat={activeCoords.lat}
+                            lng={activeCoords.lng}
+                            placeName={displayedName}
+                          />
 
                           <button
                             onClick={() => setShowPackingList(!showPackingList)}

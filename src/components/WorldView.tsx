@@ -253,6 +253,7 @@ export default function WorldView({
               locations={locations}
               speed={speed}
               onChangeSpeed={onChangeSpeed}
+              onSelectLocation={onSelect}
             />
           </motion.div>
         )}
