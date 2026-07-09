@@ -44,7 +44,7 @@ export const TRAVEL_GEOGRAPHY: GeographyHierarchy = {
       "Lakshadweep",
       "Puducherry"
     ],
-    "Japan": ["Tokyo", "Kyoto", "Osaka", "Hokkaido", "Okinawa", "Nara", "Fukuoka", "Miyagi", "Kanagawa", "Hiroshima", "Chiba", "Saitama", "Shizuoka", "Aichi", "Hyogo", "Nagano", "Gifu", "Niigata", "Ishikawa", "Pradesh Shiga"],
+    "Japan": ["Tokyo", "Kyoto", "Osaka", "Hokkaido", "Okinawa", "Nara", "Fukuoka", "Miyagi", "Kanagawa", "Hiroshima", "Chiba", "Saitama", "Shizuoka", "Aichi", "Hyogo", "Nagano", "Gifu", "Niigata", "Ishikawa", "Shiga"],
     "China": ["Beijing", "Shanghai", "Sichuan", "Yunnan", "Guangdong", "Fujian", "Hunan", "Shaanxi", "Zhejiang", "Jiangsu", "Tibet", "Xinjiang", "Guangxi", "Chongqing", "Hubei", "Anhui", "Henan", "Hainan", "Inner Mongolia"],
     "Thailand": ["Bangkok", "Phuket", "Chiang Mai", "Krabi", "Chon Buri", "Surat Thani", "Phang Nga", "Mae Hong Son", "Ayutthaya", "Prachuap Khiri Khan", "Chiang Rai", "Nakhon Ratchasima", "Sukhothai"],
     "South Korea": ["Seoul", "Busan", "Jeju", "Gyeonggi", "Gangwon", "Incheon", "Gyeongsang", "Jeolla", "Chungcheong", "Daegu", "Daejeon", "Ulsan", "Gwangju"],

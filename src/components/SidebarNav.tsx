@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Continent } from '../App.tsx';
 import { motion, AnimatePresence } from 'motion/react';
-import { ChevronRight, ChevronDown, Globe, MapPin, Map, Compass, Heart, Calendar, Bookmark, Trash2, Activity, Zap, Star } from 'lucide-react';
+import { ChevronRight, ChevronDown, Globe, MapPin, Map, Compass, Heart, Calendar, Bookmark, Trash2, Activity, Zap, Star, Mail } from 'lucide-react';
 import { TRAVEL_GEOGRAPHY } from '../constants/geography';
 import { db } from '../lib/firebase.ts';
 import { collection, query, orderBy, limit, onSnapshot } from 'firebase/firestore';
@@ -16,13 +16,15 @@ interface SidebarNavProps {
   showTrashOnly?: boolean;
   showUserWorldOnly?: boolean;
   showDualDashboard?: boolean;
+  showGmailHub?: boolean;
   onSelect: (continent: Continent | null, country: string | null, state: string | null, showFavorites?: boolean, showTour?: boolean, showArchive?: boolean, showTrash?: boolean, showUserWorld?: boolean) => void;
   onSelectDualDashboard?: (show: boolean) => void;
+  onSelectGmailHub?: (show: boolean) => void;
 }
 
 const CONTINENTS: Continent[] = ["Africa", "Asia", "Europe", "North America", "South America", "Oceania", "Antarctica"];
 
-export default function SidebarNav({ selectedContinent, selectedCountry, selectedState, showFavoritesOnly, showTourOnly, showArchiveOnly, showTrashOnly, showUserWorldOnly, showDualDashboard, onSelect, onSelectDualDashboard }: SidebarNavProps) {
+export default function SidebarNav({ selectedContinent, selectedCountry, selectedState, showFavoritesOnly, showTourOnly, showArchiveOnly, showTrashOnly, showUserWorldOnly, showDualDashboard, showGmailHub, onSelect, onSelectDualDashboard, onSelectGmailHub }: SidebarNavProps) {
   // Internal expansion state to allow browsing without changing the main view
   const [expandedContinent, setExpandedContinent] = useState<Continent | null>(selectedContinent);
   const [expandedCountry, setExpandedCountry] = useState<string | null>(selectedCountry);
@@ -99,22 +101,10 @@ export default function SidebarNav({ selectedContinent, selectedCountry, selecte
             setExpandedContinent(null);
             setExpandedCountry(null);
           }}
-          className={`flex items-center gap-3 w-full p-3 rounded-2xl transition-all ${!selectedContinent ? 'bg-[#5A5A40] text-white shadow-lg shadow-[#5A5A40]/30' : 'hover:bg-white/50 text-[#141414]/60'}`}
+          className={`flex items-center gap-3 w-full p-3 rounded-2xl transition-all ${!selectedContinent && !showTourOnly && !showArchiveOnly && !showFavoritesOnly && !showTrashOnly && !showUserWorldOnly && !showGmailHub && !showDualDashboard ? 'bg-[#5A5A40] text-white shadow-lg shadow-[#5A5A40]/30' : 'hover:bg-white/50 text-[#141414]/60'}`}
         >
           <Globe className="w-4 h-4" />
           <span className="text-sm font-bold">World View</span>
-        </button>
-
-        <button 
-          onClick={() => {
-            onSelect(null, null, null, false, false, false, false, true);
-            setExpandedContinent(null);
-            setExpandedCountry(null);
-          }}
-          className={`flex items-center gap-3 w-full p-3 rounded-2xl transition-all mt-1 ${showUserWorldOnly ? 'bg-[#5A5A40] text-white shadow-lg' : 'hover:bg-white/50 text-[#141414]/60'}`}
-        >
-          <Compass className="w-4 h-4" />
-          <span className="text-sm font-bold">Community Discoveries</span>
         </button>
 
         <button 
@@ -178,6 +168,33 @@ export default function SidebarNav({ selectedContinent, selectedCountry, selecte
         >
           <Trash2 className="w-4 h-4" />
           <span className="text-sm font-bold">Trash</span>
+        </button>
+
+        <button 
+          onClick={() => {
+            if (onSelectGmailHub) {
+              onSelectGmailHub(true);
+            }
+          }}
+          className={`flex items-center gap-3 w-full p-3 rounded-2xl transition-all mt-1 ${showGmailHub ? 'bg-red-600 text-white shadow-lg shadow-red-600/30 font-bold' : 'hover:bg-white/50 text-[#141414]/60'}`}
+        >
+          <Mail className="w-4 h-4" />
+          <span className="text-sm font-bold flex items-center gap-2">
+            <span>Gmail Transit Hub</span>
+            <span className="bg-red-500/10 text-red-500 border border-red-500/20 text-[7px] uppercase tracking-widest font-black px-1.5 py-0.5 rounded-md leading-none">LINK</span>
+          </span>
+        </button>
+
+        <button 
+          onClick={() => {
+            onSelect(null, null, null, false, false, false, false, true);
+            setExpandedContinent(null);
+            setExpandedCountry(null);
+          }}
+          className={`flex items-center gap-3 w-full p-3 rounded-2xl transition-all mt-1 ${showUserWorldOnly ? 'bg-[#5A5A40] text-white shadow-lg' : 'hover:bg-white/50 text-[#141414]/60'}`}
+        >
+          <Compass className="w-4 h-4" />
+          <span className="text-sm font-bold">Community discovery</span>
         </button>
       </div>
 

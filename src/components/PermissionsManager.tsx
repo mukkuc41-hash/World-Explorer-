@@ -66,19 +66,7 @@ export default function PermissionsManager({ onSimulateNotification, isOpen: con
     }
   }, []);
 
-  // Show automatic prompt on load for display all over app if not already granted/asked
-  useEffect(() => {
-    const alreadyAsked = localStorage.getItem('explorer_media_notif_permissions_asked') === 'true';
-    const permissionsGranted = localStorage.getItem('explorer_media_notif_permissions_granted') === 'true';
-    
-    if (!alreadyAsked && !permissionsGranted) {
-      // Gentle delayed dialog opening to allow splash exit transitions
-      const timer = setTimeout(() => {
-        setIsOpen(true);
-      }, 1800);
-      return () => clearTimeout(timer);
-    }
-  }, []);
+
 
   const requestSystemNotifications = async () => {
     if (!('Notification' in window)) {
@@ -182,23 +170,7 @@ export default function PermissionsManager({ onSimulateNotification, isOpen: con
 
   return (
     <>
-      {/* Floating Permission Manager Pill */}
-      {galleryAccess !== 'granted' && (
-        <div className="fixed bottom-24 left-6 z-[95] select-none" id="permission-manager-bubble">
-          <button
-            onClick={() => setIsOpen(true)}
-            className="relative flex items-center gap-2.5 px-4.5 py-3 bg-[#141414] hover:bg-[#2c2c2c] text-white rounded-full shadow-2xl hover:scale-105 active:scale-95 transition-all outline-none border border-white/10 font-bold text-xs uppercase tracking-wider"
-            title="Security & Permissions Console"
-          >
-            <span className="relative flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-            </span>
-            <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-            <span>Privacy & Access</span>
-          </button>
-        </div>
-      )}
+
 
       <AnimatePresence>
         {isOpen && (

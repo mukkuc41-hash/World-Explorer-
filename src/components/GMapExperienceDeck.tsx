@@ -20,21 +20,22 @@ function StreetViewPanorama({ lat, lng }: { lat: number; lng: number }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!containerRef.current || !window.google?.maps) return;
+    if (!containerRef.current || !mapsLib) return;
 
     setLoading(true);
     setError(null);
 
-    const svService = new google.maps.StreetViewService();
+    const googleMaps = mapsLib as any;
+    const svService = new googleMaps.StreetViewService();
     
-    // Check if Street View is available within 50 meters
+    // Check if Street View is available within 100 meters
     svService.getPanorama({
       location: { lat, lng },
       radius: 100,
-      sources: [google.maps.StreetViewSource.DEFAULT]
+      sources: [googleMaps.StreetViewSource.DEFAULT]
     }, (data, status) => {
-      if (status === google.maps.StreetViewStatus.OK && data && data.location && data.location.pano) {
-        new google.maps.StreetViewPanorama(containerRef.current!, {
+      if (status === googleMaps.StreetViewStatus.OK && data && data.location && data.location.pano) {
+        new googleMaps.StreetViewPanorama(containerRef.current!, {
           pano: data.location.pano,
           pov: { heading: 180, pitch: 0 },
           zoom: 1,

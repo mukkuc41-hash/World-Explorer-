@@ -1,11 +1,162 @@
 import { useState, useRef, useEffect } from 'react';
 import { User } from 'firebase/auth';
-import { collection, doc, setDoc, serverTimestamp, increment } from 'firebase/firestore';
+import { collection, doc, setDoc, serverTimestamp, increment, getDocs, query, where } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase.ts';
 import { Continent } from '../App.tsx';
 import { motion, AnimatePresence } from 'motion/react';
 import { X, Camera, Upload, AlertCircle, MapPin, Image as ImageIcon, Trash2, Check, RefreshCw, CheckCircle2, Sparkles, Minimize2, Maximize2 } from 'lucide-react';
 import PlaceAutocomplete from './PlaceAutocomplete.tsx';
+import { TRAVEL_GEOGRAPHY } from '../constants/geography';
+
+const COUNTRY_TO_CONTINENT_FALLBACK: Record<string, Continent> = {
+  // Asia
+  "india": "Asia",
+  "china": "Asia",
+  "japan": "Asia",
+  "south korea": "Asia",
+  "korea": "Asia",
+  "vietnam": "Asia",
+  "thailand": "Asia",
+  "indonesia": "Asia",
+  "malaysia": "Asia",
+  "singapore": "Asia",
+  "philippines": "Asia",
+  "taiwan": "Asia",
+  "nepal": "Asia",
+  "bangladesh": "Asia",
+  "pakistan": "Asia",
+  "sri lanka": "Asia",
+  "maldives": "Asia",
+  "united arab emirates": "Asia",
+  "uae": "Asia",
+  "saudi arabia": "Asia",
+  "jordan": "Asia",
+  "israel": "Asia",
+  "iran": "Asia",
+  "iraq": "Asia",
+  "afghanistan": "Asia",
+  "russia": "Asia",
+  "turkey": "Asia",
+
+  // Europe
+  "france": "Europe",
+  "united kingdom": "Europe",
+  "uk": "Europe",
+  "great britain": "Europe",
+  "england": "Europe",
+  "scotland": "Europe",
+  "germany": "Europe",
+  "italy": "Europe",
+  "spain": "Europe",
+  "greece": "Europe",
+  "portugal": "Europe",
+  "switzerland": "Europe",
+  "netherlands": "Europe",
+  "holland": "Europe",
+  "belgium": "Europe",
+  "austria": "Europe",
+  "sweden": "Europe",
+  "norway": "Europe",
+  "denmark": "Europe",
+  "finland": "Europe",
+  "ireland": "Europe",
+  "iceland": "Europe",
+  "croatia": "Europe",
+  "poland": "Europe",
+
+  // North America
+  "united states": "North America",
+  "usa": "North America",
+  "us": "North America",
+  "canada": "North America",
+  "mexico": "North America",
+  "costa rica": "North America",
+  "jamaica": "North America",
+  "dominican republic": "North America",
+  "panama": "North America",
+  "bahamas": "North America",
+  "guatemala": "North America",
+  "cuba": "North America",
+
+  // South America
+  "brazil": "South America",
+  "argentina": "South America",
+  "peru": "South America",
+  "chile": "South America",
+  "colombia": "South America",
+  "ecuador": "South America",
+  "bolivia": "South America",
+  "uruguay": "South America",
+  "venezuela": "South America",
+  "paraguay": "South America",
+
+  // Africa
+  "egypt": "Africa",
+  "south africa": "Africa",
+  "morocco": "Africa",
+  "kenya": "Africa",
+  "nigeria": "Africa",
+  "tanzania": "Africa",
+  "mauritius": "Africa",
+  "seychelles": "Africa",
+  "ethiopia": "Africa",
+  "ghana": "Africa",
+  "madagascar": "Africa",
+  "tunisia": "Africa",
+  "uganda": "Africa",
+
+  // Oceania
+  "australia": "Oceania",
+  "new zealand": "Oceania",
+  "fiji": "Oceania",
+  "papua new guinea": "Oceania",
+  "samoa": "Oceania",
+  "tonga": "Oceania",
+  "french polynesia": "Oceania",
+  "tahiti": "Oceania",
+  "cook islands": "Oceania",
+  "solomon islands": "Oceania",
+
+  // Antarctica
+  "antarctica": "Antarctica"
+};
+
+export function getContinentForCountry(countryName: string): Continent | null {
+  if (!countryName) return null;
+  const cleanName = countryName.trim().toLowerCase();
+
+  if (COUNTRY_TO_CONTINENT_FALLBACK[cleanName]) {
+    return COUNTRY_TO_CONTINENT_FALLBACK[cleanName];
+  }
+
+  for (const [key, value] of Object.entries(COUNTRY_TO_CONTINENT_FALLBACK)) {
+    if (cleanName.includes(key) || key.includes(cleanName)) {
+      return value;
+    }
+  }
+
+  for (const [cont, countries] of Object.entries(TRAVEL_GEOGRAPHY)) {
+    for (const country of Object.keys(countries)) {
+      if (country.toLowerCase() === cleanName || country.toLowerCase().includes(cleanName) || cleanName.includes(country.toLowerCase())) {
+        return cont as Continent;
+      }
+    }
+  }
+
+  return null;
+}
+
+export function getContinentFromTypedName(typedName: string): Continent | null {
+  const lower = typedName.trim().toLowerCase();
+  if (lower.includes('asia')) return 'Asia';
+  if (lower.includes('europe')) return 'Europe';
+  if (lower.includes('africa')) return 'Africa';
+  if (lower.includes('north america')) return 'North America';
+  if (lower.includes('south america')) return 'South America';
+  if (lower.includes('antarctica')) return 'Antarctica';
+  if (lower.includes('oceania') || lower.includes('australia')) return 'Oceania';
+  return null;
+}
 
 interface AddLocationModalProps {
   isOpen: boolean;
@@ -23,6 +174,15 @@ export default function AddLocationModal({ isOpen, onClose, continent, user }: A
   const [coords, setCoords] = useState<{ lat: number, lng: number } | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [localContinent, setLocalContinent] = useState<Continent>(continent);
+  const [duplicateMatch, setDuplicateMatch] = useState<any>(null);
+
+  useEffect(() => {
+    if (isOpen) {
+      setLocalContinent(continent);
+      setDuplicateMatch(null);
+    }
+  }, [isOpen, continent]);
 
   // AI Co-pilot State Additions
   const [aiSearchText, setAiSearchText] = useState('');
@@ -62,7 +222,16 @@ export default function AddLocationModal({ isOpen, onClose, continent, user }: A
         const stateVal = parts[2];
         const landmarkVal = parts[4];
         
-        if (countryVal) setCountry(countryVal);
+        if (countryVal) {
+          setCountry(countryVal);
+          const parsedCont = getContinentFromTypedName(parts[0]);
+          if (parsedCont) {
+            setLocalContinent(parsedCont);
+          } else {
+            const resolvedCont = getContinentForCountry(countryVal);
+            if (resolvedCont) setLocalContinent(resolvedCont);
+          }
+        }
         if (stateVal) setState(stateVal);
         if (landmarkVal) {
           setName(landmarkVal);
@@ -109,6 +278,17 @@ export default function AddLocationModal({ isOpen, onClose, continent, user }: A
       setDescription(data.description || '');
       setCountry(data.country || '');
       setState(data.state || '');
+
+      let finalCont: Continent | null = null;
+      if (data.country) {
+        finalCont = getContinentForCountry(data.country);
+      }
+      if (!finalCont && data.continent) {
+        finalCont = getContinentFromTypedName(data.continent);
+      }
+      if (finalCont) {
+        setLocalContinent(finalCont);
+      }
       if (typeof data.lat === 'number' && typeof data.lng === 'number') {
         setCoords({ lat: data.lat, lng: data.lng });
       }
@@ -208,6 +388,17 @@ export default function AddLocationModal({ isOpen, onClose, continent, user }: A
       const data = await response.json();
       setCountry(data.country || '');
       setState(data.state || '');
+
+      let finalCont: Continent | null = null;
+      if (data.country) {
+        finalCont = getContinentForCountry(data.country);
+      }
+      if (!finalCont && data.continent) {
+        finalCont = getContinentFromTypedName(data.continent);
+      }
+      if (finalCont) {
+        setLocalContinent(finalCont);
+      }
       if (typeof data.lat === 'number' && typeof data.lng === 'number') {
         setCoords({ lat: data.lat, lng: data.lng });
       }
@@ -272,6 +463,10 @@ export default function AddLocationModal({ isOpen, onClose, continent, user }: A
       const countryComp = place.address_components?.find(c => c.types.includes('country'));
       if (countryComp) {
         setCountry(countryComp.long_name);
+        const resolvedCont = getContinentForCountry(countryComp.long_name);
+        if (resolvedCont) {
+          setLocalContinent(resolvedCont);
+        }
       }
 
       // Extract state/administrative_area_level_1 from address components
@@ -400,16 +595,37 @@ export default function AddLocationModal({ isOpen, onClose, continent, user }: A
 
     setIsSubmitting(true);
     setError(null);
+    setDuplicateMatch(null);
 
     const locationId = crypto.randomUUID();
     const path = `locations/${locationId}`;
 
     try {
+      // Look-ahead duplicate verification check before committing the pin
+      const q = query(collection(db, 'locations'), where('isDeleted', '==', false));
+      const snap = await getDocs(q);
+      
+      const threshold = 0.00045; // ~50 meters in decimal degrees
+      const duplicateDoc = snap.docs.find(doc => {
+        const data = doc.data();
+        const distLat = Math.abs(data.lat - coords.lat);
+        const distLng = Math.abs(data.lng - coords.lng);
+        return distLat < threshold && distLng < threshold;
+      });
+
+      if (duplicateDoc) {
+        const dupData: any = { id: duplicateDoc.id, ...duplicateDoc.data() };
+        setError(`A matching location "${dupData.name}" already exists within 50 meters of these coordinates! We've blocked this submission to prevent duplication.`);
+        setDuplicateMatch(dupData);
+        setIsSubmitting(false);
+        return;
+      }
+
       await setDoc(doc(db, 'locations', locationId), {
         name: name.trim(),
         description: description.trim(),
         imageUrl: imageUrl.trim() || `https://picsum.photos/seed/${locationId}/800/600`,
-        continent: continent,
+        continent: localContinent,
         country: country.trim() || 'Unknown',
         state: state.trim() || 'Unknown',
         userId: user.uid,
@@ -825,9 +1041,24 @@ export default function AddLocationModal({ isOpen, onClose, continent, user }: A
               </div>
 
               {error && (
-                <div className="flex items-center gap-3 p-4 bg-red-50 text-red-600 rounded-2xl text-sm font-medium">
-                  <AlertCircle className="w-5 h-5 flex-shrink-0" />
-                  {error}
+                <div className="flex flex-col gap-2 p-4 bg-red-50 text-red-650 rounded-2xl text-sm font-medium border border-red-100">
+                  <div className="flex items-center gap-3">
+                    <AlertCircle className="w-5 h-5 flex-shrink-0 text-red-500" />
+                    <span className="flex-1 leading-snug">{error}</span>
+                  </div>
+                  {duplicateMatch && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        window.dispatchEvent(new CustomEvent('center-location', { detail: duplicateMatch }));
+                        onClose();
+                      }}
+                      className="mt-1 text-xs font-mono font-black uppercase tracking-wider text-cyan-700 hover:text-cyan-800 underline flex items-center gap-1.5 cursor-pointer self-start bg-cyan-50 hover:bg-cyan-100 px-3.5 py-2 rounded-xl border border-cyan-200 transition-all shadow-sm"
+                    >
+                      <MapPin className="w-3.5 h-3.5 text-cyan-600 animate-bounce" />
+                      <span>Center & Highlight Existing Pin</span>
+                    </button>
+                  )}
                 </div>
               )}
 
@@ -841,7 +1072,7 @@ export default function AddLocationModal({ isOpen, onClose, continent, user }: A
                     <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" />
                   ) : (
                     <>
-                      <Upload className="w-4 h-4" /> Publish in {continent}
+                      <Upload className="w-4 h-4" /> Publish in {localContinent}
                     </>
                   )}
                 </button>

@@ -8,7 +8,7 @@ import { onAuthStateChanged, User } from 'firebase/auth';
 import { auth, signInWithGoogle, logout, signInAsGuest } from './lib/firebase.ts';
 import { safelyConvertToDate } from './lib/dateUtils.ts';
 import { motion, AnimatePresence } from 'motion/react';
-import { MapPin, Plus, Compass, LogOut, ChevronLeft, Search, Map as MapIcon, LayoutGrid, Menu, X, ChevronRight, Globe, Share2, Link, Heart, Calendar, Bookmark, Trash2, Bot, Sparkles, Trophy, Wifi, Battery, Signal, BellRing } from 'lucide-react';
+import { MapPin, Plus, Compass, LogOut, ChevronLeft, Search, Map as MapIcon, LayoutGrid, Menu, X, ChevronRight, Globe, Share2, Link, Heart, Calendar, Bookmark, Trash2, Bot, Sparkles, Trophy, Wifi, Battery, Signal, BellRing, Mail } from 'lucide-react';
 import { Laptop, Smartphone, BatteryCharging, WifiOff, Volume2, Bluetooth, HelpCircle, Activity, HardDrive, Monitor, ShieldAlert } from 'lucide-react';
 import Header, { ExplorerNotification } from './components/Header.tsx';
 import SidebarNav from './components/SidebarNav.tsx';
@@ -38,6 +38,7 @@ import { collection, query, where, getDocs, onSnapshot, doc, setDoc, serverTimes
 import { LogIn } from 'lucide-react';
 import OtpVerification from './components/OtpVerification.tsx';
 import ExplorerDashboard from './components/ExplorerDashboard.tsx';
+import GmailTravelHub from './components/GmailTravelHub.tsx';
 
 export type Continent = "Africa" | "Asia" | "Europe" | "North America" | "South America" | "Oceania" | "Antarctica";
 
@@ -111,6 +112,7 @@ export default function App() {
   const [showTrashOnly, setShowTrashOnly] = useState(false);
   const [showUserWorldOnly, setShowUserWorldOnly] = useState(false);
   const [showDualDashboard, setShowDualDashboard] = useState(false);
+  const [showGmailHub, setShowGmailHub] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
   const [selectedPlace, setSelectedPlace] = useState<string | null>(null);
@@ -574,6 +576,15 @@ export default function App() {
     };
     window.addEventListener('explorer-logout', handleCustomLogout);
 
+    const handleCenterLocation = (e: Event) => {
+      const locationData = (e as CustomEvent).detail;
+      if (locationData) {
+        setSelectedLocationData(locationData);
+        setViewMode('map');
+      }
+    };
+    window.addEventListener('center-location', handleCenterLocation);
+
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       let activeUser = currentUser;
       if (!currentUser) {
@@ -703,6 +714,7 @@ export default function App() {
     return () => {
       clearTimeout(splashTimer);
       window.removeEventListener('explorer-logout', handleCustomLogout);
+      window.removeEventListener('center-location', handleCenterLocation);
       unsubscribe();
     };
   }, []);
@@ -948,6 +960,7 @@ export default function App() {
     setShowTrashOnly(showTrash);
     setShowUserWorldOnly(showUserWorld);
     setShowDualDashboard(false);
+    setShowGmailHub(false);
     setSearchQuery(''); // Clear search when navigating categories
     
     // Close sidebar on mobile after selection
@@ -1134,6 +1147,10 @@ export default function App() {
   }
 
   const renderActiveContent = () => {
+    if (showGmailHub) {
+      return <GmailTravelHub />;
+    }
+
     if (showDualDashboard) {
       return <ExplorerDashboard />;
     }
@@ -2010,11 +2027,18 @@ export default function App() {
              >
                <Trophy className="w-4 h-4" />
              </button>
-             <button onClick={() => handleSelection(null, null, null)} className={`p-2 rounded-lg ${!selectedContinent && !showTourOnly && !showArchiveOnly && !showFavoritesOnly && !showTrashOnly && !showUserWorldOnly ? 'bg-[#5A5A40] text-white' : 'text-[#141414]/40'}`}>
+             <button onClick={() => handleSelection(null, null, null)} className={`p-2 rounded-lg ${!selectedContinent && !showTourOnly && !showArchiveOnly && !showFavoritesOnly && !showTrashOnly && !showUserWorldOnly && !showGmailHub && !showDualDashboard ? 'bg-[#5A5A40] text-white' : 'text-[#141414]/40'}`}>
                <Globe className="w-4 h-4" />
              </button>
-             <button onClick={() => handleSelection(null, null, null, false, false, false, false, true)} className={`p-2 rounded-lg ${showUserWorldOnly ? 'bg-[#5A5A40] text-white' : 'text-[#141414]/40'}`}>
-               <Compass className="w-4 h-4" />
+             <button 
+               onClick={() => {
+                 handleSelection(null, null, null);
+                 setShowDualDashboard(true);
+               }} 
+               className={`p-2 rounded-lg ${showDualDashboard ? 'bg-cyan-600 text-white' : 'text-[#141414]/40'}`}
+               title="Dual Map & Globe"
+             >
+               <Globe className={`w-4 h-4 ${showDualDashboard ? 'animate-spin' : ''}`} style={{ animationDuration: '8s' }} />
              </button>
              <button onClick={() => handleSelection(null, null, null, false, true)} className={`p-2 rounded-lg ${showTourOnly ? 'bg-[#00af87] text-white' : 'text-[#141414]/40'}`}>
                <Calendar className="w-4 h-4" />
@@ -2027,6 +2051,19 @@ export default function App() {
              </button>
              <button onClick={() => handleSelection(null, null, null, false, false, false, true)} className={`p-2 rounded-lg ${showTrashOnly ? 'bg-red-500 text-white' : 'text-[#141414]/40'}`}>
                <Trash2 className="w-4 h-4" />
+             </button>
+             <button 
+               onClick={() => {
+                 handleSelection(null, null, null);
+                 setShowGmailHub(true);
+               }} 
+               className={`p-2 rounded-lg ${showGmailHub ? 'bg-red-600 text-white' : 'text-[#141414]/40'}`}
+               title="Gmail Transit Hub"
+             >
+               <Mail className="w-4 h-4" />
+             </button>
+             <button onClick={() => handleSelection(null, null, null, false, false, false, false, true)} className={`p-2 rounded-lg ${showUserWorldOnly ? 'bg-[#5A5A40] text-white' : 'text-[#141414]/40'}`}>
+               <Compass className="w-4 h-4" />
              </button>
            </div>
         </div>
@@ -2048,10 +2085,15 @@ export default function App() {
             showTrashOnly={showTrashOnly}
             showUserWorldOnly={showUserWorldOnly}
             showDualDashboard={showDualDashboard}
+            showGmailHub={showGmailHub}
             onSelect={handleSelection}
             onSelectDualDashboard={(show) => {
               handleSelection(null, null, null);
               setShowDualDashboard(show);
+            }}
+            onSelectGmailHub={(show) => {
+              handleSelection(null, null, null);
+              setShowGmailHub(show);
             }}
           />
         </aside>

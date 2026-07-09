@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import ImmersiveGlobeCanvas, { GlobeLocation } from './ImmersiveGlobeCanvas.tsx';
 import UltimateMapApp from './UltimateMapApp.tsx';
+import DistanceMatrixCalculator from './DistanceMatrixCalculator.tsx';
 
 // Fully specified pre-configured high-fidelity landmark datasets as requested
 const SEED_LANDMARKS: Array<GlobeLocation & { imageUrl?: string; region: string; category: string }> = [
@@ -454,16 +455,24 @@ export default function ExplorerDashboard() {
 
           </div>
 
-          {/* Footer Interactive Legend */}
-          <div className="bg-cyan-500/5 border border-cyan-500/10 rounded-2xl p-5 flex items-start gap-3">
-            <Info className="w-4 h-4 text-cyan-400 shrink-0 mt-0.5" />
-            <div className="space-y-1">
-              <h5 className="text-[11px] font-bold text-white uppercase tracking-wider">How to interact with the Dual-Preview Deck:</h5>
-              <p className="text-[10px] leading-relaxed text-stone-400 font-mono">
-                1. Search any custom place with the <strong className="text-cyan-400">Places Autocomplete</strong> bar overlaying the map to see coordinates sync instantly. <br />
-                2. Click <strong className="text-cyan-400">Street_View Portal</strong> on the info slide to pivot into the high-resolution 360° panorama lens viewport. <br />
-                3. Drag the <strong className="text-cyan-400">3D Globe Canvas</strong> manually to spin the orthographic planet sphere. Hover points to read location stamps.
-              </p>
+          {/* Footer Interactive Legend & Premium Telemetry Row */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <DistanceMatrixCalculator 
+              destLat={explorerState.lat}
+              destLng={explorerState.lng}
+              destTitle={activeFocusLandmark.title}
+            />
+
+            <div className="bg-[#191a18]/45 dark:bg-stone-900/40 border border-stone-800/80 rounded-2xl p-5 flex items-start gap-3.5 backdrop-blur-md">
+              <Info className="w-5 h-5 text-cyan-400 shrink-0 mt-0.5" />
+              <div className="space-y-1">
+                <h5 className="text-xs font-mono font-bold text-stone-200 uppercase tracking-wider">Dual-Preview Deck Guidelines:</h5>
+                <p className="text-[10px] leading-relaxed text-stone-400 font-mono">
+                  1. Search any custom place with the <strong className="text-cyan-400">Places Autocomplete</strong> bar overlaying the map to see coordinates sync instantly. <br />
+                  2. Click <strong className="text-cyan-400">Street_View Portal</strong> on the info slide to pivot into the high-resolution 360° panorama lens viewport. <br />
+                  3. Drag the <strong className="text-cyan-400">3D Globe Canvas</strong> manually to spin the orthographic planet sphere. Hover points to read location stamps.
+                </p>
+              </div>
             </div>
           </div>
 

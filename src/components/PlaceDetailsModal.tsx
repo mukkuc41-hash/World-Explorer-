@@ -1186,13 +1186,18 @@ export default function PlaceDetailsModal({
                   )}
                 </div>
 
-                <div className="mt-12 pt-12 border-t border-[#141414]/5 flex items-center justify-between">
-                  <div className="flex items-center gap-4">
+                <div className="mt-12 pt-8 border-t border-[#141414]/5 flex flex-wrap items-center justify-between gap-4">
+                  <div className="flex flex-wrap items-center gap-3">
                     {user && (
                       <>
                         <button
                           onClick={toggleTour}
-                          className={`flex items-center gap-2 px-6 py-3 rounded-full text-xs font-bold transition-all hover:scale-105 shadow-xl cursor-pointer ${isPlanned ? "bg-[#00af87] text-white" : "bg-[#141414] text-white"}`}
+                          className={`flex items-center gap-2 px-5 py-3.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all hover:scale-[1.03] active:scale-95 shadow-md hover:shadow-lg cursor-pointer ${
+                            isPlanned 
+                              ? "bg-[#00af87] text-white" 
+                              : "bg-[#141414] hover:bg-[#2a2a2a] text-white"
+                          }`}
+                          id="btn-plan-visit"
                         >
                           {isPlanned ? (
                             <CalendarCheck className="w-4 h-4" />
@@ -1201,6 +1206,7 @@ export default function PlaceDetailsModal({
                           )}
                           {isPlanned ? "Planned for Tour" : "Plan Visit"}
                         </button>
+                        
                         <button
                           onClick={() => {
                             const title = displayedName;
@@ -1217,47 +1223,55 @@ export default function PlaceDetailsModal({
                               );
                             }
                           }}
-                          className="p-3 rounded-full border border-[#141414]/5 rgb-bg animate-rgb text-white transition-all group cursor-pointer"
+                          className="p-3 rounded-full bg-gradient-to-tr from-[#00b074] via-[#0062ff] to-[#1200ff] text-white hover:scale-105 active:scale-95 shadow-md hover:shadow-lg transition-all group cursor-pointer flex items-center justify-center w-11 h-11"
                           title="Share Discovery"
+                          id="btn-share-discovery"
                         >
-                          <Share2 className="w-5 h-5 group-hover:scale-110 transition-transform" />
+                          <Share2 className="w-4.5 h-4.5 group-hover:rotate-12 transition-transform" />
                         </button>
                       </>
                     )}
-                    {(isOwner || isAdmin) &&
-                      locationId &&
-                      (isDeleted ? (
+
+                    {(isOwner || isAdmin) && locationId && (
+                      isDeleted ? (
                         <button
                           onClick={handleRestore}
-                          className="flex items-center gap-2 px-6 py-3 rounded-full bg-[#00af87] text-white text-xs font-bold hover:scale-105 transition-all cursor-pointer"
+                          className="flex items-center gap-2 px-5 py-3.5 rounded-full bg-[#00af87] hover:bg-[#009472] text-white text-[10px] font-black uppercase tracking-widest hover:scale-[1.03] active:scale-95 transition-all shadow-md cursor-pointer"
+                          id="btn-restore-discovery"
                         >
-                          <CalendarCheck className="w-4 h-4" /> Restore
-                          Discovery
+                          <CalendarCheck className="w-4 h-4" /> Restore Discovery
                         </button>
                       ) : (
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-3 flex-wrap">
                           {!isEditing && (
                             <button
                               onClick={() => setIsEditing(true)}
-                              className="flex items-center gap-2 px-6 py-3 rounded-full bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold hover:scale-105 transition-all cursor-pointer"
+                              className="flex items-center gap-2 px-5 py-3.5 rounded-full bg-[#ff9500] hover:bg-[#e08200] text-white text-[10px] font-black uppercase tracking-widest hover:scale-[1.03] active:scale-95 transition-all shadow-md cursor-pointer"
                               title="Edit Discovery details"
+                              id="btn-edit-discovery"
                             >
                               <Edit className="w-4 h-4" /> Edit Discovery
                             </button>
                           )}
                           <button
                             onClick={handleDelete}
-                            className="flex items-center gap-2 px-6 py-3 rounded-full bg-[#ef4444] text-white text-xs font-bold hover:scale-105 transition-all cursor-pointer"
+                            className="flex items-center gap-2 px-5 py-3.5 rounded-full bg-[#ef4444] hover:bg-[#dc2626] text-white text-[10px] font-black uppercase tracking-widest hover:scale-[1.03] active:scale-95 transition-all shadow-md cursor-pointer"
+                            id="btn-delete-discovery"
                           >
                             <Trash2 className="w-4 h-4" /> Delete Discovery
                           </button>
                         </div>
-                      ))}
+                      )
+                    )}
                   </div>
+
                   {user && (
                     <button
                       onClick={toggleArchive}
-                      className={`flex items-center gap-2 text-[10px] font-black uppercase tracking-widest transition-all cursor-pointer ${isArchived ? "text-[#141414]" : "text-[#00af87] hover:opacity-70"}`}
+                      className={`flex items-center gap-2 text-[10px] font-black uppercase tracking-widest transition-all cursor-pointer hover:scale-[1.03] active:scale-95 ${
+                        isArchived ? "text-[#141414] dark:text-white" : "text-[#00af87] hover:opacity-80"
+                      }`}
+                      id="btn-save-archive"
                     >
                       <Bookmark
                         className={`w-4 h-4 ${isArchived ? "fill-current" : ""}`}

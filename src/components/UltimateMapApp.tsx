@@ -25,6 +25,12 @@ import {
   RefreshCw
 } from 'lucide-react';
 import { GlobeLocation } from './ImmersiveGlobeCanvas.tsx';
+import { useWikipediaSync } from '../hooks/useWikipediaSync.ts';
+import { useTimeZoneTheme } from '../hooks/useTimeZoneTheme.ts';
+import { Clock, ExternalLink } from 'lucide-react';
+
+// Robust, fallback center when validation triggers
+const fallbackCenter = { lat: 26.9258, lng: 75.8237 };
 
 // -----------------------------------------------------------------------------
 // SCRIPT CORS MONKEYPATCH:
@@ -237,14 +243,24 @@ function UltimateMapAppContent({
     );
   }
 
+  // Strict coordinate boundary validation
+  const coordinates = { lat: explorerState.lat, lng: explorerState.lng };
+  const safeCoordinates = (!coordinates || typeof coordinates.lat === 'undefined' || typeof coordinates.lng === 'undefined' || isNaN(coordinates.lat) || isNaN(coordinates.lng)) 
+    ? fallbackCenter 
+    : { lat: Number(explorerState.lat), lng: Number(explorerState.lng) };
+
   const activeLandmark = landmarks.find(l => l.id === explorerState.activeLandmarkId) || {
     id: 'custom',
     title: 'Custom Coordinate Pin',
-    lat: explorerState.lat,
-    lng: explorerState.lng,
+    lat: safeCoordinates.lat,
+    lng: safeCoordinates.lng,
     description: 'A custom location pinned on the synchronized visual dashboard.',
     imageUrl: 'https://images.unsplash.com/photo-1548013146-72479768bada?auto=format&fit=crop&q=80&w=600'
   };
+
+  // PREMIUM EXTENSIONS INTEGRATION
+  const { localTimeStr, phase, mapStyles, glowingColor } = useTimeZoneTheme(safeCoordinates.lat, safeCoordinates.lng);
+  const wikiSummary = useWikipediaSync(activeLandmark.title);
 
   return (
     <APIProvider apiKey={API_KEY} version="weekly" solutionChannel="gmp-mcp-codeassist-v1-aistudio">
@@ -262,8 +278,8 @@ function UltimateMapAppContent({
                 className="w-full h-full relative"
               >
                 <StreetViewPortal 
-                  lat={explorerState.lat} 
-                  lng={explorerState.lng} 
+                  lat={safeCoordinates.lat} 
+                  lng={safeCoordinates.lng} 
                   onClose={() => onViewModeChange('map')} 
                 />
               </motion.div>
@@ -276,23 +292,29 @@ function UltimateMapAppContent({
                 className="w-full h-full"
               >
                 <Map
-                  defaultCenter={{ lat: explorerState.lat, lng: explorerState.lng }}
+                  defaultCenter={safeCoordinates}
                   defaultZoom={explorerState.zoom}
-                  center={{ lat: explorerState.lat, lng: explorerState.lng }}
+                  center={safeCoordinates}
                   zoom={zoomLevel}
-                  onZoomChanged={(e) => setZoomLevel(e.detail.zoom)}
+                  onZoomChanged={(e) => {
+                    try {
+                      setZoomLevel(e.detail.zoom);
+                    } catch (zoomErr) {
+                      console.error("[Map Guard] Failed to update zoomLevel state:", zoomErr);
+                    }
+                  }}
                   mapTypeId={mapType}
                   disableDefaultUI={true}
                   gestureHandling="greedy"
                   mapId="ULTIMATE_MAP_SYNC_CANVAS"
                   style={{ width: '100%', height: '100%' }}
-                  styles={ULTRA_DARK_MAP_STYLE}
+                  styles={mapStyles}
                   internalUsageAttributionIds={['gmp_mcp_codeassist_v1_aistudio']}
                 >
                   {/* Master cinematic drone fly-to component controller */}
                   <CinematicCameraEngine 
-                    lat={explorerState.lat} 
-                    lng={explorerState.lng} 
+                    lat={safeCoordinates.lat} 
+                    lng={safeCoordinates.lng} 
                     targetZoom={explorerState.zoom} 
                     setZoomLevel={setZoomLevel}
                   />
@@ -316,7 +338,7 @@ function UltimateMapAppContent({
           <FloatingOverlays 
             mapType={mapType} 
             setMapType={setMapType} 
-            activeLocation={explorerState} 
+            activeLocation={safeCoordinates} 
             onLocationChange={onLocationChange}
             zoomLevel={zoomLevel}
             setZoomLevel={setZoomLevel}
@@ -347,6 +369,18 @@ function UltimateMapAppContent({
                 </button>
               </div>
 
+              {/* Local Clock & Time Zone Phase Badge */}
+              <div className="flex items-center gap-2 bg-stone-900/80 border border-stone-800 px-3 py-1.5 rounded-xl mb-3">
+                <Clock className="w-3.5 h-3.5 text-cyan-400 animate-pulse shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <span className="text-[8px] font-mono text-stone-400 block uppercase leading-none">LOCAL_SOLAR_TIME</span>
+                  <span className="text-[10px] font-mono font-bold text-white mt-0.5 block">{localTimeStr}</span>
+                </div>
+                <div className={`px-2 py-0.5 rounded-md text-[7px] font-mono font-bold uppercase tracking-wider bg-gradient-to-r ${glowingColor} text-black shrink-0`}>
+                  {phase}
+                </div>
+              </div>
+
               {/* Landmark Frame Preview */}
               <div className="relative h-32 w-full overflow-hidden rounded-xl mb-3 border border-stone-800 bg-stone-900">
                 <img
@@ -359,14 +393,22 @@ function UltimateMapAppContent({
                 <div className="absolute bottom-2 left-2 flex items-center gap-1.5">
                   <MapPin className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
                   <span className="text-[8px] font-mono text-cyan-400 font-bold">
-                    LAT: {explorerState.lat.toFixed(4)} &bull; LNG: {explorerState.lng.toFixed(4)}
+                    LAT: {safeCoordinates.lat.toFixed(4)} &bull; LNG: {safeCoordinates.lng.toFixed(4)}
                   </span>
                 </div>
               </div>
 
-              <p className="text-[10.5px] leading-relaxed text-stone-300 font-mono mb-4 max-h-24 overflow-y-auto pr-1 select-text scrollbar-thin">
-                {activeLandmark.description}
-              </p>
+              {/* Wikipedia Synced Article Extract */}
+              {wikiSummary.isLoading ? (
+                <div className="flex flex-col gap-1.5 py-4 justify-center items-center bg-stone-900/40 border border-stone-800/40 rounded-xl mb-4">
+                  <div className="w-4.5 h-4.5 border border-cyan-400 border-t-transparent rounded-full animate-spin" />
+                  <span className="text-[8px] text-cyan-400 font-mono uppercase tracking-wider">Syncing Wikipedia...</span>
+                </div>
+              ) : (
+                <p className="text-[10.5px] leading-relaxed text-stone-300 font-mono mb-4 max-h-24 overflow-y-auto pr-1 select-text scrollbar-thin">
+                  {wikiSummary.extract || activeLandmark.description}
+                </p>
+              )}
 
               {/* Portal Quick Launcher Buttons */}
               <div className="pt-3 border-t border-stone-800 flex gap-2">
@@ -378,13 +420,27 @@ function UltimateMapAppContent({
                   Street_View Portal
                 </button>
                 <button
-                  onClick={() => window.open(`https://www.google.com/maps/dir/?api=1&destination=${explorerState.lat},${explorerState.lng}`, '_blank')}
+                  onClick={() => window.open(`https://www.google.com/maps/dir/?api=1&destination=${safeCoordinates.lat},${safeCoordinates.lng}`, '_blank')}
                   className="px-3 bg-stone-900 hover:bg-stone-800 text-stone-300 py-2.5 rounded-xl border border-stone-800 text-[9px] font-mono font-bold flex items-center justify-center cursor-pointer"
                   title="Open Direction Directions in Google Maps"
                 >
                   <Navigation className="w-3.5 h-3.5" />
                 </button>
               </div>
+
+              {wikiSummary.pageUrl && (
+                <div className="mt-3 text-center border-t border-stone-900/60 pt-2.5">
+                  <a
+                    href={wikiSummary.pageUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-[8px] font-mono font-bold uppercase tracking-wider text-cyan-400 hover:text-cyan-300 inline-flex items-center gap-1.5 transition-colors"
+                  >
+                    <span>Read Wiki Page</span>
+                    <ExternalLink className="w-3 h-3" />
+                  </a>
+                </div>
+              )}
             </motion.div>
           )}
         </AnimatePresence>
@@ -421,44 +477,59 @@ function CinematicCameraEngine({
   useEffect(() => {
     if (!map) return;
 
-    // Pan smoothly to target coordinate
-    map.panTo({ lat, lng });
+    // Strict LatLng boundary check using the requested validation pattern
+    const coordinates = { lat, lng };
+    if (!coordinates || typeof coordinates.lat === 'undefined' || typeof coordinates.lng === 'undefined' || isNaN(coordinates.lat) || isNaN(coordinates.lng)) {
+      console.warn("[Map Guard] Blocked execution due to uninitialized or malformed LatLng values.");
+      return;
+    }
 
-    let count = 0;
-    const initialHeading = map.getHeading() || 0;
-    const initialTilt = map.getTilt() || 0;
+    try {
+      // Pan smoothly to target coordinate
+      map.panTo({ lat, lng });
 
-    const flightDuration = 1800; // 1.8 seconds fluid sweep
-    const stepInterval = 40; // ~25 FPS
-    const totalSteps = flightDuration / stepInterval;
+      let count = 0;
+      const initialHeading = map.getHeading() || 0;
+      const initialTilt = map.getTilt() || 0;
 
-    const easeOutQuad = (t: number) => t * (2 - t);
+      const flightDuration = 1800; // 1.8 seconds fluid sweep
+      const stepInterval = 40; // ~25 FPS
+      const totalSteps = flightDuration / stepInterval;
 
-    const intervalId = setInterval(() => {
-      count++;
-      const progress = count / totalSteps;
-      const easedProgress = easeOutQuad(progress);
+      const easeOutQuad = (t: number) => t * (2 - t);
 
-      // Perform camera dynamic rotation and 45 degree tilt sweep
-      try {
-        if (typeof map.setHeading === 'function') {
-          map.setHeading(initialHeading + easedProgress * 45);
+      const intervalId = setInterval(() => {
+        count++;
+        const progress = count / totalSteps;
+        const easedProgress = easeOutQuad(progress);
+
+        // Perform camera dynamic rotation and 45 degree tilt sweep
+        try {
+          if (typeof map.setHeading === 'function') {
+            map.setHeading(initialHeading + easedProgress * 45);
+          }
+          if (typeof map.setTilt === 'function') {
+            map.setTilt(initialTilt + easedProgress * 45);
+          }
+        } catch (err) {
+          // Fallback for standard 2D vector layouts if WebGL tilt properties are blocked
         }
-        if (typeof map.setTilt === 'function') {
-          map.setTilt(initialTilt + easedProgress * 45);
+
+        if (count >= totalSteps) {
+          clearInterval(intervalId);
+          try {
+            map.setZoom(targetZoom);
+            setZoomLevel(targetZoom);
+          } catch (zoomErr) {
+            console.error("[Map Guard] Failed to update map zoom:", zoomErr);
+          }
         }
-      } catch (err) {
-        // Fallback for standard 2D vector layouts if WebGL tilt properties are blocked
-      }
+      }, stepInterval);
 
-      if (count >= totalSteps) {
-        clearInterval(intervalId);
-        map.setZoom(targetZoom);
-        setZoomLevel(targetZoom);
-      }
-    }, stepInterval);
-
-    return () => clearInterval(intervalId);
+      return () => clearInterval(intervalId);
+    } catch (err) {
+      console.error("[Map Guard] Error during cinematic flight operations:", err);
+    }
   }, [lat, lng, map, targetZoom, setZoomLevel]);
 
   return null;
@@ -476,37 +547,50 @@ function StreetViewPortal({
 }) {
   const portalContainerRef = useRef<HTMLDivElement>(null);
   const [streetViewStatus, setStreetViewStatus] = useState<'loading' | 'active' | 'not_found'>('loading');
+  const mapsLib = useMapsLibrary('maps');
 
   useEffect(() => {
-    if (!portalContainerRef.current) return;
+    if (!portalContainerRef.current || !mapsLib) return;
 
-    // Instantiates classic StreetViewPanorama direct connection using global window.google
-    const google = (window as any).google;
-    if (!google || !google.maps) {
-      setStreetViewStatus('not_found');
+    // Strict LatLng boundary check using the requested validation pattern
+    const coordinates = { lat, lng };
+    if (!coordinates || typeof coordinates.lat === 'undefined' || typeof coordinates.lng === 'undefined' || isNaN(coordinates.lat) || isNaN(coordinates.lng)) {
+      console.warn("[Map Guard] Blocked execution due to uninitialized or malformed LatLng values.");
       return;
     }
 
-    const svService = new google.maps.StreetViewService();
-    const radius = 100; // Search for street panorama within 100 meters
+    try {
+      setStreetViewStatus('loading');
+      const googleMaps = mapsLib as any;
+      const svService = new googleMaps.StreetViewService();
+      const radius = 100; // Search for street panorama within 100 meters
 
-    svService.getPanorama({ location: { lat, lng }, radius }, (data: any, status: string) => {
-      if (status === google.maps.StreetViewStatus.OK && data && data.location) {
-        const panorama = new google.maps.StreetViewPanorama(portalContainerRef.current, {
-          position: data.location.latLng,
-          pov: { heading: 34, pitch: 10 },
-          zoom: 1,
-          addressControl: false,
-          showRoadLabels: true,
-          motionTracking: false,
-          motionTrackingControl: false
-        });
-        setStreetViewStatus('active');
-      } else {
-        setStreetViewStatus('not_found');
-      }
-    });
-  }, [lat, lng]);
+      svService.getPanorama({ location: { lat, lng }, radius }, (data: any, status: string) => {
+        try {
+          if (status === googleMaps.StreetViewStatus.OK && data && data.location) {
+            new googleMaps.StreetViewPanorama(portalContainerRef.current!, {
+              position: data.location.latLng,
+              pov: { heading: 34, pitch: 10 },
+              zoom: 1,
+              addressControl: false,
+              showRoadLabels: true,
+              motionTracking: false,
+              motionTrackingControl: false
+            });
+            setStreetViewStatus('active');
+          } else {
+            setStreetViewStatus('not_found');
+          }
+        } catch (renderErr) {
+          console.error("[Map Guard] Failed to instantiate street view panel:", renderErr);
+          setStreetViewStatus('not_found');
+        }
+      });
+    } catch (svcErr) {
+      console.error("[Map Guard] StreetView service initialization error:", svcErr);
+      setStreetViewStatus('not_found');
+    }
+  }, [lat, lng, mapsLib]);
 
   return (
     <div className="relative w-full h-full bg-stone-900 rounded-[32px] overflow-hidden flex flex-col justify-between">
@@ -572,7 +656,7 @@ function FloatingOverlays({
 }: {
   mapType: string;
   setMapType: (type: any) => void;
-  activeLocation: any;
+  activeLocation: { lat: number; lng: number };
   onLocationChange: (location: GlobeLocation & { imageUrl?: string }) => void;
   zoomLevel: number;
   setZoomLevel: (z: number) => void;
@@ -586,79 +670,121 @@ function FloatingOverlays({
   useEffect(() => {
     if (!placesLibrary || !searchInputRef.current || !map) return;
 
-    const autocomplete = new placesLibrary.Autocomplete(searchInputRef.current, {
-      fields: ['geometry', 'name', 'formatted_address', 'photos']
-    });
+    try {
+      const autocomplete = new placesLibrary.Autocomplete(searchInputRef.current, {
+        fields: ['geometry', 'name', 'formatted_address', 'photos']
+      });
 
-    autocomplete.bindTo('bounds', map);
+      autocomplete.bindTo('bounds', map);
 
-    const listener = autocomplete.addListener('place_changed', () => {
-      const place = autocomplete.getPlace();
-      if (place.geometry && place.geometry.location) {
-        const lat = place.geometry.location.lat();
-        const lng = place.geometry.location.lng();
-        
-        // Dynamic fetch of Places Photo array
-        let imgUrl = undefined;
-        if (place.photos && place.photos.length > 0) {
-          try {
-            imgUrl = place.photos[0].getUrl({ maxWidth: 600 });
-          } catch (photoErr) {
-            console.warn('Autocomplete image parsing error (gracefully caught):', photoErr);
+      const listener = autocomplete.addListener('place_changed', () => {
+        try {
+          const place = autocomplete.getPlace();
+          if (place.geometry && place.geometry.location) {
+            const lat = place.geometry.location.lat();
+            const lng = place.geometry.location.lng();
+            
+            // Strict LatLng boundary check using the requested validation pattern
+            const coordinates = { lat, lng };
+            if (!coordinates || typeof coordinates.lat === 'undefined' || typeof coordinates.lng === 'undefined' || isNaN(coordinates.lat) || isNaN(coordinates.lng)) {
+              console.warn("[Map Guard] Blocked execution due to uninitialized or malformed LatLng values.");
+              return;
+            }
+
+            // Dynamic fetch of Places Photo array
+            let imgUrl = undefined;
+            if (place.photos && place.photos.length > 0) {
+              try {
+                imgUrl = place.photos[0].getUrl({ maxWidth: 600 });
+              } catch (photoErr) {
+                console.warn('Autocomplete image parsing error (gracefully caught):', photoErr);
+              }
+            }
+
+            onLocationChange({
+              id: Math.random().toString(36).substring(2, 9),
+              title: place.name || 'Discovered Location',
+              lat,
+              lng,
+              zoom: 16,
+              region: place.formatted_address || 'WGS-84 coordinate system',
+              category: 'Explored Target',
+              description: place.formatted_address || 'An exciting landmark resolved through standard search autocompletion API.',
+              imageUrl: imgUrl
+            });
           }
+        } catch (callbackErr) {
+          console.error("[Map Guard] Error inside autocomplete place_changed callback:", callbackErr);
         }
+      });
 
-        onLocationChange({
-          id: Math.random().toString(36).substring(2, 9),
-          title: place.name || 'Discovered Location',
-          lat,
-          lng,
-          zoom: 16,
-          region: place.formatted_address || 'WGS-84 coordinate system',
-          category: 'Explored Target',
-          description: place.formatted_address || 'An exciting landmark resolved through standard search autocompletion API.',
-          imageUrl: imgUrl
-        });
-      }
-    });
-
-    return () => {
-      listener.remove();
-    };
+      return () => {
+        try {
+          listener.remove();
+        } catch (removeErr) {
+          console.warn("[Map Guard] Failed to remove autocomplete listener:", removeErr);
+        }
+      };
+    } catch (initErr) {
+      console.error("[Map Guard] Autocomplete service initialization failed:", initErr);
+    }
   }, [placesLibrary, map, onLocationChange]);
 
   const handleZoomIn = () => {
     if (map) {
-      const nextZoom = Math.min(21, (map.getZoom() || zoomLevel) + 1);
-      map.setZoom(nextZoom);
-      setZoomLevel(nextZoom);
+      try {
+        const nextZoom = Math.min(21, (map.getZoom() || zoomLevel) + 1);
+        map.setZoom(nextZoom);
+        setZoomLevel(nextZoom);
+      } catch (zoomInErr) {
+        console.error("[Map Guard] Zoom in command failed:", zoomInErr);
+      }
     }
   };
 
   const handleZoomOut = () => {
     if (map) {
-      const nextZoom = Math.max(1, (map.getZoom() || zoomLevel) - 1);
-      map.setZoom(nextZoom);
-      setZoomLevel(nextZoom);
+      try {
+        const nextZoom = Math.max(1, (map.getZoom() || zoomLevel) - 1);
+        map.setZoom(nextZoom);
+        setZoomLevel(nextZoom);
+      } catch (zoomOutErr) {
+        console.error("[Map Guard] Zoom out command failed:", zoomOutErr);
+      }
     }
   };
 
   const handleRecenter = () => {
     if (map) {
-      map.panTo({ lat: activeLocation.lat, lng: activeLocation.lng });
-      map.setZoom(16);
-      setZoomLevel(16);
-      
-      // Zero-out tilts for absolute 2D look during rapid re-centering
+      // Strict LatLng boundary check using the requested validation pattern
+      const coordinates = { lat: activeLocation.lat, lng: activeLocation.lng };
+      if (!coordinates || typeof coordinates.lat === 'undefined' || typeof coordinates.lng === 'undefined' || isNaN(coordinates.lat) || isNaN(coordinates.lng)) {
+        console.warn("[Map Guard] Blocked execution due to uninitialized or malformed LatLng values.");
+        return;
+      }
+
       try {
-        if (typeof map.setTilt === 'function') map.setTilt(0);
-        if (typeof map.setHeading === 'function') map.setHeading(0);
-      } catch (err) {}
+        map.panTo({ lat: activeLocation.lat, lng: activeLocation.lng });
+        map.setZoom(16);
+        setZoomLevel(16);
+        
+        // Zero-out tilts for absolute 2D look during rapid re-centering
+        try {
+          if (typeof map.setTilt === 'function') map.setTilt(0);
+          if (typeof map.setHeading === 'function') map.setHeading(0);
+        } catch (err) {}
+      } catch (panErr) {
+        console.error("[Map Guard] Recenter camera pan failed:", panErr);
+      }
     }
   };
 
   const toggleSatellite = () => {
-    setMapType(mapType === 'roadmap' ? 'hybrid' : 'roadmap');
+    try {
+      setMapType(mapType === 'roadmap' ? 'hybrid' : 'roadmap');
+    } catch (typeErr) {
+      console.error("[Map Guard] Map type toggle error:", typeErr);
+    }
   };
 
   return (
@@ -725,7 +851,13 @@ function FloatingOverlays({
 
         {/* Immediate Street View Toggle */}
         <button
-          onClick={() => onViewModeChange('streetview')}
+          onClick={() => {
+            try {
+              onViewModeChange('streetview');
+            } catch (viewErr) {
+              console.error("[Map Guard] ViewMode change trigger failed:", viewErr);
+            }
+          }}
           className="w-10 h-10 rounded-xl bg-black/95 hover:bg-stone-900 border border-stone-800 text-cyan-400 hover:text-white flex items-center justify-center transition-all shadow-xl cursor-pointer"
           title="Quick Street View Mode"
         >
@@ -751,16 +883,25 @@ function ActiveCustomMarker({
 
   if (!map) return null;
 
-  // Enforce absolute sanitization on the coordinate numbers
-  const lat = typeof position.lat === 'number' && !isNaN(position.lat) ? position.lat : 26.9258;
-  const lng = typeof position.lng === 'number' && !isNaN(position.lng) ? position.lng : 75.8237;
+  // Enforce absolute sanitization on the coordinate numbers using the requested validation pattern
+  const coordinates = position;
+  if (!coordinates || typeof coordinates.lat === 'undefined' || typeof coordinates.lng === 'undefined' || isNaN(coordinates.lat) || isNaN(coordinates.lng)) {
+    console.warn("[Map Guard] Blocked execution due to uninitialized or malformed LatLng values.");
+    return null;
+  }
 
   return (
     <AdvancedMarker
       ref={markerRef}
-      position={{ lat, lng }}
+      position={{ lat: coordinates.lat, lng: coordinates.lng }}
       title={title}
-      onClick={onClick}
+      onClick={() => {
+        try {
+          onClick();
+        } catch (clickErr) {
+          console.error("[Map Guard] Active marker click event failed:", clickErr);
+        }
+      }}
     >
       <div className="relative flex items-center justify-center cursor-pointer select-none">
         <span className="absolute animate-ping inline-flex h-11 w-11 rounded-full bg-cyan-400/40" />
@@ -828,6 +969,13 @@ function SafeMarkers({
   const activeLat = sanitizeValue(explorerState.lat, 26.9258);
   const activeLng = sanitizeValue(explorerState.lng, 75.8237);
 
+  // Strict LatLng boundary check using the requested validation pattern
+  const activeCoords = { lat: activeLat, lng: activeLng };
+  if (!activeCoords || typeof activeCoords.lat === 'undefined' || typeof activeCoords.lng === 'undefined' || isNaN(activeCoords.lat) || isNaN(activeCoords.lng)) {
+    console.warn("[Map Guard] Blocked execution due to uninitialized or malformed LatLng values.");
+    return null;
+  }
+
   return (
     <>
       {/* 2. COORDINATE SANITIZATION & 3. STABLE KEY ASSIGNMENT: Target custom pinpoint */}
@@ -835,13 +983,26 @@ function SafeMarkers({
         key={`active-center-marker-${explorerState.activeLandmarkId || 'custom'}-${activeLat}-${activeLng}`}
         position={{ lat: activeLat, lng: activeLng }}
         title={activeLandmark?.title || 'Target'}
-        onClick={() => setIsCardOpen(true)}
+        onClick={() => {
+          try {
+            setIsCardOpen(true);
+          } catch (openErr) {
+            console.error("[Map Guard] Failed to trigger card opening:", openErr);
+          }
+        }}
       />
 
       {/* Array loop mapping safe secondary landmark pins */}
       {landmarks.map((landmark) => {
         const landmarkLat = sanitizeValue(landmark.lat, 0);
         const landmarkLng = sanitizeValue(landmark.lng, 0);
+
+        // Strict LatLng boundary check using the requested validation pattern
+        const landmarkCoords = { lat: landmarkLat, lng: landmarkLng };
+        if (!landmarkCoords || typeof landmarkCoords.lat === 'undefined' || typeof landmarkCoords.lng === 'undefined' || isNaN(landmarkCoords.lat) || isNaN(landmarkCoords.lng)) {
+          console.warn("[Map Guard] Blocked execution due to uninitialized or malformed LatLng values.");
+          return null;
+        }
 
         // Exclude the active landmark coordinate to avoid double rendering clashes
         const isSelf = Math.abs(landmarkLat - activeLat) < 0.0001 &&
@@ -854,8 +1015,12 @@ function SafeMarkers({
             position={{ lat: landmarkLat, lng: landmarkLng }}
             title={landmark.title}
             onClick={() => {
-              onLocationChange(landmark);
-              setIsCardOpen(true);
+              try {
+                onLocationChange(landmark);
+                setIsCardOpen(true);
+              } catch (clickErr) {
+                console.error("[Map Guard] Landmark marker click failure:", clickErr);
+              }
             }}
           >
             <div className="group relative cursor-pointer flex items-center justify-center">

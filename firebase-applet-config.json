@@ -3,8 +3,8 @@
   "appId": "1:590151313726:web:4a58190a3d1f3e6793e46f",
   "apiKey": "AIzaSyAYhFHhYPeBA4RMAdBoIWW1xVRKYF8LfoI",
   "authDomain": "silver-copilot-407pf.firebaseapp.com",
-  "firestoreDatabaseId": "ai-studio-d9542ee8-47d0-450f-b001-22ce3706a7a4",
   "storageBucket": "silver-copilot-407pf.firebasestorage.app",
   "messagingSenderId": "590151313726",
-  "measurementId": ""
+  "measurementId": "",
+  "firestoreDatabaseId": "ai-studio-d9542ee8-47d0-450f-b001-22ce3706a7a4"
 }
