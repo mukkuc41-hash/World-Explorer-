@@ -35,6 +35,7 @@ export interface LocationData {
   deletedAt?: any;
   createdAt: any;
   updatedAt: any;
+  type?: string;
 }
 
 export default function LocationList({ continent, country, state, showFavoritesOnly, showTourOnly, showArchiveOnly, showTrashOnly, showUserAddedOnly, searchQuery, onSelect }: LocationListProps) {

@@ -118,6 +118,21 @@ function generateWeather(lat: number, lng: number) {
   return { temp, aqi, condition };
 }
 
+const SIMULATED_WILDFIRES = [
+  { id: 'fire-amazon', name: 'Amazon Basin Fire Alert', lat: -3.4653, lng: -62.2159, area: '4,500 hectares', intensity: 'Extreme', warning: 'Thermal hotspot anomaly detected via satellite overlay.', rating: 5, address: 'Amazonas, Brazil' },
+  { id: 'fire-california', name: 'Sierra Nevada Woodland Fire', lat: 37.8651, lng: -119.5383, area: '850 hectares', intensity: 'High', warning: 'Evacuation warnings in active mountain canyons.', rating: 4.8, address: 'California, USA' },
+  { id: 'fire-australia', name: 'Blue Mountains Bushfire', lat: -33.7128, lng: 150.3119, area: '12,400 hectares', intensity: 'Extreme', warning: 'High winds accelerating front lines across forested hills.', rating: 5, address: 'NSW, Australia' },
+  { id: 'fire-mediterranean', name: 'Athens Regional Forest Fire', lat: 37.9838, lng: 23.7275, area: '1,200 hectares', intensity: 'High', warning: 'Active operations by localized civil protection forces.', rating: 4.5, address: 'Attica, Greece' }
+];
+
+const SIMULATED_AQI = [
+  { id: 'aqi-delhi', name: 'Delhi NCR Region', lat: 28.6139, lng: 77.2090, aqi: 184, category: 'Unhealthy', color: 'rgba(239, 68, 68, 0.25)', border: '#ef4444', advice: 'Wear masks outdoors. High PM2.5 levels.', rating: 1.5, address: 'Delhi, India' },
+  { id: 'aqi-beijing', name: 'Beijing Metropolitan Area', lat: 39.9042, lng: 116.4074, aqi: 152, category: 'Unhealthy', color: 'rgba(239, 68, 68, 0.25)', border: '#ef4444', advice: 'Reduced outdoor physical activity recommended.', rating: 2.2, address: 'Beijing, China' },
+  { id: 'aqi-ny', name: 'New York City', lat: 40.7128, lng: -74.0060, aqi: 42, category: 'Good', color: 'rgba(34, 197, 94, 0.25)', border: '#22c55e', advice: 'Air quality is satisfactory for outdoor recreation.', rating: 4.8, address: 'New York, USA' },
+  { id: 'aqi-london', name: 'Greater London', lat: 51.5074, lng: -0.1278, aqi: 55, category: 'Moderate', color: 'rgba(234, 179, 8, 0.25)', border: '#eab308', advice: 'Acceptable air quality with minor particulate risk.', rating: 4.1, address: 'London, UK' },
+  { id: 'aqi-sydney', name: 'Sydney Harbour Coast', lat: -33.8688, lng: 151.2093, aqi: 28, category: 'Good', color: 'rgba(34, 197, 94, 0.25)', border: '#22c55e', advice: 'Pristine marine air flow. Excellent breathing index.', rating: 4.9, address: 'Sydney, Australia' }
+];
+
 interface GoogleMapsAppProps {
   locations: LocationData[];
   selectedLocation: LocationData | null;
@@ -125,6 +140,11 @@ interface GoogleMapsAppProps {
   userFavorites: Set<string>;
   userTour: Set<string>;
   showTourOnly?: boolean;
+  center?: { lat: number, lng: number };
+  zoom?: number;
+  onCameraChange?: (center: { lat: number, lng: number }, zoom: number) => void;
+  activeCategory?: string;
+  onCategoryChange?: (category: string) => void;
 }
 
 // Sub-component that has access to useMap and useMapsLibrary inside APIProvider
@@ -134,26 +154,160 @@ function MapController({
   onSelect, 
   userFavorites, 
   userTour,
-  showTourOnly 
+  showTourOnly,
+  center,
+  zoom,
+  onCameraChange,
+  activeCategory: parentActiveCategory,
+  onCategoryChange
 }: GoogleMapsAppProps) {
   const map = useMap();
   const placesLib = useMapsLibrary('places');
   const routesLib = useMapsLibrary('routes');
 
+  // Synchronize Google Map camera when parent center/zoom change
+  useEffect(() => {
+    if (map && center) {
+      const currentCenter = map.getCenter();
+      if (currentCenter) {
+        const latDiff = Math.abs(currentCenter.lat() - center.lat);
+        const lngDiff = Math.abs(currentCenter.lng() - center.lng);
+        if (latDiff > 0.0001 || lngDiff > 0.0001) {
+          map.panTo(center);
+        }
+      } else {
+        map.panTo(center);
+      }
+    }
+  }, [center, map]);
+
+  useEffect(() => {
+    if (map && typeof zoom === 'number') {
+      if (map.getZoom() !== zoom) {
+        map.setZoom(zoom);
+      }
+    }
+  }, [zoom, map]);
+
+  // Handle Google Maps camera change to update parent (and in turn Leaflet)
+  const handleCameraChange = (e: any) => {
+    if (onCameraChange && map) {
+      const currentCenter = map.getCenter();
+      const currentZoom = map.getZoom();
+      if (currentCenter && typeof currentZoom === 'number') {
+        const lat = currentCenter.lat();
+        const lng = currentCenter.lng();
+        if (center) {
+          const latDiff = Math.abs(center.lat - lat);
+          const lngDiff = Math.abs(center.lng - lng);
+          if (latDiff > 0.0001 || lngDiff > 0.0001 || zoom !== currentZoom) {
+            onCameraChange({ lat, lng }, currentZoom);
+          }
+        } else {
+          onCameraChange({ lat, lng }, currentZoom);
+        }
+      }
+    }
+  };
+
   // Core Map States
-  const [mapStyleType, setMapStyleType] = useState<'roadmap' | 'satellite' | 'terrain'>('roadmap');
+  const [mapStyleType, setMapStyleType] = useState<'roadmap' | 'satellite' | 'hybrid' | 'terrain'>('hybrid');
   
   // Toggleable Layers (Advanced Map Details)
   const [transitActive, setTransitActive] = useState(false);
   const [trafficActive, setTrafficActive] = useState(false);
   const [bicyclingActive, setBicyclingActive] = useState(false);
   const [raised3DActive, setRaised3DActive] = useState(true);
-  const [streetViewOverlayActive, setStreetViewOverlayActive] = useState(false);
+  const [streetViewActive, setStreetViewActive] = useState(false);
+  const [wildfiresActive, setWildfiresActive] = useState(false);
+  const [aqiActive, setAqiActive] = useState(false);
   const [weatherOverlayActive, setWeatherOverlayActive] = useState(true);
+  const [bottomSheetOpen, setBottomSheetOpen] = useState(false);
+
+  // Street View Panorama Refs & Positions
+  const panoramaRef = useRef<HTMLDivElement | null>(null);
+  const panoramaInstanceRef = useRef<google.maps.StreetViewPanorama | null>(null);
+  const [streetViewPosition, setStreetViewPosition] = useState<google.maps.LatLngLiteral | null>({ lat: 26.9258, lng: 75.8237 });
+
+  // Map Click handler for Street View teleportation
+  const handleMapClick = (e: any) => {
+    if (streetViewActive) {
+      let latLng = e.detail?.latLng || e.latLng;
+      if (latLng) {
+        const lat = typeof latLng.lat === 'function' ? latLng.lat() : latLng.lat;
+        const lng = typeof latLng.lng === 'function' ? latLng.lng() : latLng.lng;
+        if (typeof lat === 'number' && typeof lng === 'number' && !isNaN(lat) && !isNaN(lng)) {
+          setStreetViewPosition({ lat, lng });
+        }
+      }
+    }
+  };
+
+  // Sync Street View when active place changes
+  useEffect(() => {
+    if (selectedLocation && streetViewActive) {
+      setStreetViewPosition({ lat: selectedLocation.lat, lng: selectedLocation.lng });
+    }
+  }, [selectedLocation, streetViewActive]);
+
+  // Street View Panorama Initialization & Synced Movement
+  useEffect(() => {
+    if (streetViewActive && panoramaRef.current && streetViewPosition) {
+      if (!panoramaInstanceRef.current) {
+        panoramaInstanceRef.current = new google.maps.StreetViewPanorama(panoramaRef.current, {
+          position: streetViewPosition,
+          pov: { heading: 165, pitch: 0 },
+          zoom: 1,
+          visible: true,
+          motionTracking: false,
+          motionTrackingControl: false
+        });
+      } else {
+        panoramaInstanceRef.current.setPosition(streetViewPosition);
+        panoramaInstanceRef.current.setVisible(true);
+      }
+    }
+  }, [streetViewActive, streetViewPosition]);
+
+  // Listener for panorama position change to sync back to the 2D map & local states
+  useEffect(() => {
+    if (!streetViewActive || !panoramaInstanceRef.current) return;
+    
+    const listener = panoramaInstanceRef.current.addListener('position_changed', () => {
+      const pos = panoramaInstanceRef.current?.getPosition();
+      if (pos) {
+        const newPos = { lat: pos.lat(), lng: pos.lng() };
+        if (streetViewPosition) {
+          const dist = Math.abs(streetViewPosition.lat - newPos.lat) + Math.abs(streetViewPosition.lng - newPos.lng);
+          if (dist > 0.0001) {
+            setStreetViewPosition(newPos);
+            map?.panTo(newPos);
+          }
+        }
+      }
+    });
+    
+    return () => {
+      google.maps.event.removeListener(listener);
+    };
+  }, [map, streetViewActive, streetViewPosition]);
+
+  useEffect(() => {
+    if (!streetViewActive && panoramaInstanceRef.current) {
+      panoramaInstanceRef.current.setVisible(false);
+    }
+  }, [streetViewActive]);
 
   // Layout states
   const [searchQuery, setSearchQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState('all');
+
+  useEffect(() => {
+    if (parentActiveCategory && parentActiveCategory !== activeCategory) {
+      handleCategorySearch(parentActiveCategory);
+    }
+  }, [parentActiveCategory]);
+
   const [nearbyResults, setNearbyResults] = useState<any[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
   
@@ -578,134 +732,304 @@ function MapController({
 
   return (
     <div className="relative w-full h-full flex flex-col justify-end">
-      {/* 1. Core Map Canvas element */}
-      <div className="absolute inset-0 z-0">
-        <Map
-          defaultCenter={{ lat: 26.9258, lng: 75.8237 }}
-          defaultZoom={4}
-          mapTypeId={mapStyleType}
-          mapId="HIGH_FIDELITY_GOOGLE_MAPS_APP"
-          gestureHandling="greedy"
-          disableDefaultUI={true}
-          style={{ width: '100%', height: '100%' }}
-          internalUsageAttributionIds={['gmp_mcp_codeassist_v1_aistudio']}
-        >
-          {/* Main Landmark Pins */}
-          {locations.map((loc) => {
-            const isFav = userFavorites.has(loc.id);
-            const isTour = userTour.has(loc.id);
-            const isSelected = activeMarkerId === loc.id;
-            const weather = generateWeather(loc.lat, loc.lng);
+      {/* 1. Core Map Canvas element & Split Screen 360 Pane */}
+      <div className="absolute inset-0 z-0 flex flex-col md:flex-row overflow-hidden animate-fade-in">
+        <div className="relative h-full flex-1 min-w-0">
+          <Map
+            defaultCenter={{ lat: 26.9258, lng: 75.8237 }}
+            defaultZoom={4}
+            mapTypeId={mapStyleType}
+            mapId="HIGH_FIDELITY_GOOGLE_MAPS_APP"
+            gestureHandling="greedy"
+            disableDefaultUI={true}
+            style={{ width: '100%', height: '100%' }}
+            internalUsageAttributionIds={['gmp_mcp_codeassist_v1_aistudio']}
+            onClick={handleMapClick}
+            onCameraChanged={handleCameraChange}
+          >
+            {/* Main Landmark Pins */}
+            {locations.map((loc) => {
+              const isFav = userFavorites.has(loc.id);
+              const isTour = userTour.has(loc.id);
+              const isSelected = activeMarkerId === loc.id;
+              const weather = generateWeather(loc.lat, loc.lng);
 
-            return (
+              const isHospital = loc.type?.toLowerCase().includes('hospital') || loc.name.toLowerCase().includes('hospital');
+              const isResidenceOrHotel = loc.type?.toLowerCase().includes('residence') || loc.type?.toLowerCase().includes('home') || loc.type?.toLowerCase().includes('hotel') || loc.name.toLowerCase().includes('hotel') || loc.name.toLowerCase().includes('residence');
+
+              return (
+                <AdvancedMarker
+                  key={loc.id}
+                  position={{ lat: loc.lat, lng: loc.lng }}
+                  onClick={() => {
+                    setActiveMarkerId(loc.id);
+                    if (onSelect) onSelect(loc);
+                  }}
+                >
+                  <div className="relative group cursor-pointer flex flex-col items-center">
+                    {/* Weather Bubble on Marker */}
+                    {weatherOverlayActive && (
+                      <div className="absolute -top-7 bg-white/95 dark:bg-[#141414]/95 text-[8px] font-mono font-bold text-stone-700 dark:text-stone-300 px-1.5 py-0.5 rounded-md shadow-md border border-stone-200 dark:border-stone-800 flex items-center gap-1 opacity-90 group-hover:opacity-100 transition-opacity whitespace-nowrap z-30 animate-fade-in">
+                        {weather.temp > 25 ? <Sun className="w-2.5 h-2.5 text-amber-500 animate-spin-slow" /> : <Cloud className="w-2.5 h-2.5 text-sky-400" />}
+                        <span>{weather.temp}°C</span>
+                        <span className="w-1 h-1 bg-stone-300 rounded-full" />
+                        <span className={weather.aqi < 50 ? 'text-emerald-600' : 'text-amber-600'}>AQI:{weather.aqi}</span>
+                      </div>
+                    )}
+
+                    {isHospital ? (
+                      <div className={`w-8 h-8 rounded-full bg-red-600 border-2 border-white flex items-center justify-center text-white text-xs font-black shadow-lg hover:scale-110 transition-transform ${isSelected ? 'ring-4 ring-red-400/50' : ''}`}>
+                        H
+                      </div>
+                    ) : isResidenceOrHotel ? (
+                      <div className={`w-8 h-8 bg-blue-600 border-2 border-white flex items-center justify-center text-white text-xs shadow-lg hover:scale-110 transition-transform rounded-xl ${isSelected ? 'ring-4 ring-blue-400/50' : ''}`} style={{ clipPath: 'polygon(50% 0%, 100% 38%, 100% 100%, 0% 100%, 0% 38%)' }}>
+                        <Home className="w-4.5 h-4.5 text-white -mt-0.5" />
+                      </div>
+                    ) : (
+                      <Pin 
+                        background={isSelected ? "#ea580c" : isFav ? "#e11d48" : isTour ? "#00af87" : "#5A5A40"} 
+                        glyphColor="#fff" 
+                        borderColor="#fff"
+                        scale={isSelected ? 1.25 : 1}
+                      />
+                    )}
+                  </div>
+                </AdvancedMarker>
+              );
+            })}
+
+            {/* Nearby Search results Pins */}
+            {nearbyResults.map((r) => {
+              const isSelected = activeMarkerId === r.id;
+              const isHospital = r.id.includes('hospital') || r.name.toLowerCase().includes('hospital');
+              const isResidenceOrHotel = r.id.includes('hotel') || r.name.toLowerCase().includes('hotel') || r.name.toLowerCase().includes('residence');
+
+              return (
+                <AdvancedMarker
+                  key={r.id}
+                  position={{ lat: r.lat, lng: r.lng }}
+                  onClick={() => setActiveMarkerId(r.id)}
+                >
+                  <div className="relative cursor-pointer flex flex-col items-center">
+                    {isHospital ? (
+                      <div className={`w-8 h-8 rounded-full bg-red-600 border-2 border-white flex items-center justify-center text-white text-xs font-black shadow-lg hover:scale-110 transition-transform ${isSelected ? 'ring-4 ring-red-400/50' : ''}`}>
+                        H
+                      </div>
+                    ) : isResidenceOrHotel ? (
+                      <div className={`w-8 h-8 bg-blue-600 border-2 border-white flex items-center justify-center text-white text-xs shadow-lg hover:scale-110 transition-transform rounded-xl ${isSelected ? 'ring-4 ring-blue-400/50' : ''}`} style={{ clipPath: 'polygon(50% 0%, 100% 38%, 100% 100%, 0% 100%, 0% 38%)' }}>
+                        <Home className="w-4.5 h-4.5 text-white -mt-0.5" />
+                      </div>
+                    ) : (
+                      <Pin 
+                        background={isSelected ? "#ea580c" : "#2563eb"} 
+                        glyphColor="#fff" 
+                        borderColor="#fff"
+                        scale={isSelected ? 1.25 : 0.9}
+                      />
+                    )}
+                  </div>
+                </AdvancedMarker>
+              );
+            })}
+
+            {/* Yellow Pegman Marker for Street View 360° */}
+            {streetViewActive && streetViewPosition && (
               <AdvancedMarker
-                key={loc.id}
-                position={{ lat: loc.lat, lng: loc.lng }}
-                onClick={() => {
-                  setActiveMarkerId(loc.id);
-                  if (onSelect) onSelect(loc);
+                position={streetViewPosition}
+                draggable={true}
+                onDragEnd={(e) => {
+                  const latLng = e.latLng;
+                  if (latLng) {
+                    setStreetViewPosition({ lat: latLng.lat(), lng: latLng.lng() });
+                  }
                 }}
               >
-                <div className="relative group cursor-pointer flex flex-col items-center">
-                  {/* Weather Bubble on Marker */}
-                  {weatherOverlayActive && (
-                    <div className="absolute -top-7 bg-white/95 text-[8px] font-mono font-bold text-stone-700 px-1.5 py-0.5 rounded-md shadow-md border border-stone-200 flex items-center gap-1 opacity-90 group-hover:opacity-100 transition-opacity whitespace-nowrap z-30">
-                      {weather.temp > 25 ? <Sun className="w-2.5 h-2.5 text-amber-500" /> : <Cloud className="w-2.5 h-2.5 text-sky-400" />}
-                      <span>{weather.temp}°C</span>
-                      <span className="w-1 h-1 bg-stone-300 rounded-full" />
-                      <span className={weather.aqi < 50 ? 'text-emerald-600' : 'text-amber-600'}>AQI:{weather.aqi}</span>
-                    </div>
-                  )}
-
-                  <Pin 
-                    background={isSelected ? "#ea580c" : isFav ? "#e11d48" : isTour ? "#00af87" : "#5A5A40"} 
-                    glyphColor="#fff" 
-                    borderColor="#fff"
-                    scale={isSelected ? 1.25 : 1}
-                  />
+                <div className="relative cursor-pointer flex flex-col items-center group">
+                  <div className="absolute -top-7 bg-yellow-400 text-black text-[8px] font-black px-1.5 py-0.5 rounded-md shadow-md border border-yellow-500 whitespace-nowrap z-40 font-mono tracking-wider animate-bounce-slow">
+                    PEGMAN 🟡
+                  </div>
+                  <div className="w-8 h-8 rounded-full bg-yellow-400 border-2 border-white flex items-center justify-center shadow-2xl hover:scale-110 active:scale-95 transition-all text-sm">
+                    🧍
+                  </div>
                 </div>
               </AdvancedMarker>
-            );
-          })}
+            )}
 
-          {/* Nearby Search results Pins */}
-          {nearbyResults.map((r) => (
-            <AdvancedMarker
-              key={r.id}
-              position={{ lat: r.lat, lng: r.lng }}
-              onClick={() => setActiveMarkerId(r.id)}
-            >
-              <Pin 
-                background="#0284c7" 
-                glyphColor="#fff" 
-                borderColor="#fff"
-                scale={0.9}
-              />
-            </AdvancedMarker>
-          ))}
-
-          {/* Info Windows */}
-          {activeMarkerId && (() => {
-            const currentPlace = locations.find(l => l.id === activeMarkerId) || nearbyResults.find(r => r.id === activeMarkerId);
-            if (!currentPlace) return null;
-            const weather = generateWeather(currentPlace.lat, currentPlace.lng);
-
-            return (
-              <InfoWindow
-                position={{ lat: currentPlace.lat, lng: currentPlace.lng }}
-                onCloseClick={() => setActiveMarkerId(null)}
+            {/* Simulated Wildfire hotspots */}
+            {wildfiresActive && SIMULATED_WILDFIRES.map((fire) => (
+              <AdvancedMarker
+                key={fire.id}
+                position={{ lat: fire.lat, lng: fire.lng }}
+                onClick={() => setActiveMarkerId(fire.id)}
               >
-                <div className="p-2.5 max-w-[220px] text-stone-800 font-sans">
-                  <h4 className="font-serif italic text-sm font-bold text-stone-950 mb-0.5">{currentPlace.name}</h4>
-                  <p className="text-[10px] text-stone-500 line-clamp-2 leading-relaxed mb-1.5">
-                    {'description' in currentPlace ? currentPlace.description : currentPlace.address}
-                  </p>
-
-                  <div className="grid grid-cols-2 gap-1 border-t border-stone-100 pt-1.5 mb-2 text-[9px] font-mono text-stone-500">
-                    <div className="flex items-center gap-1 text-amber-600 font-bold">
-                      <Star className="w-3 h-3 fill-current" />
-                      <span>{('rating' in currentPlace ? currentPlace.rating : 4.8)} ★</span>
-                    </div>
-                    <div className="flex items-center gap-1 justify-end text-emerald-600">
-                      <Wind className="w-3 h-3" />
-                      <span>AQI: {weather.aqi}</span>
-                    </div>
+                <div className="relative cursor-pointer flex flex-col items-center">
+                  <div className="absolute -top-7 bg-red-600 text-white text-[8px] font-bold px-1.5 py-0.5 rounded-md shadow-md border border-red-500 whitespace-nowrap z-40 font-mono">
+                    🔥 ACTIVE FIRE
                   </div>
-
-                  <div className="flex gap-1">
-                    <button
-                      onClick={() => {
-                        setDestinationInput(currentPlace.name);
-                        setDirectionsPanelOpen(true);
-                        setActiveMarkerId(null);
-                      }}
-                      className="flex-1 bg-[#141414] hover:bg-stone-800 text-white text-[9px] font-bold uppercase tracking-wider py-1.5 rounded-lg flex items-center justify-center gap-1 cursor-pointer transition-colors"
-                    >
-                      <Navigation className="w-2.5 h-2.5" /> Directions
-                    </button>
-                    <button
-                      onClick={() => {
-                        if (onSelect && 'id' in currentPlace && !currentPlace.id.startsWith('mock')) {
-                          onSelect(currentPlace as LocationData);
-                        } else {
-                          alert(`Mock Attraction: ${currentPlace.name}\nLocal Details synced via Maps API`);
-                        }
-                      }}
-                      className="px-2 bg-stone-100 hover:bg-stone-200 text-stone-800 rounded-lg text-[9px] font-bold border border-stone-200 cursor-pointer"
-                      title="View details card"
-                    >
-                      Info
-                    </button>
+                  <div className="absolute w-10 h-10 rounded-full bg-red-600/20 animate-ping" />
+                  <div className="relative w-6.5 h-6.5 bg-red-600 text-white rounded-full flex items-center justify-center shadow-lg border-2 border-white text-xs hover:scale-110 transition-all">
+                    🔥
                   </div>
                 </div>
-              </InfoWindow>
-            );
-          })()}
-        </Map>
+              </AdvancedMarker>
+            ))}
+
+            {/* Simulated Air Quality (AQI) overlays */}
+            {aqiActive && SIMULATED_AQI.map((aqiItem) => (
+              <AdvancedMarker
+                key={aqiItem.id}
+                position={{ lat: aqiItem.lat, lng: aqiItem.lng }}
+                onClick={() => setActiveMarkerId(aqiItem.id)}
+              >
+                <div className="relative cursor-pointer flex flex-col items-center">
+                  {/* Atmospheric overlay ring */}
+                  <div className="absolute w-24 h-24 rounded-full border-2 transition-all flex items-center justify-center" style={{ backgroundColor: aqiItem.color, borderColor: aqiItem.border }}>
+                    {/* Floating Badge */}
+                    <div className="relative bg-white/95 dark:bg-[#141414]/95 px-2 py-0.5 rounded-full shadow-lg border border-stone-200 dark:border-stone-800 text-[8px] font-mono font-bold flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: aqiItem.border }} />
+                      <span className="text-stone-700 dark:text-stone-300">AQI: {aqiItem.aqi}</span>
+                    </div>
+                  </div>
+                </div>
+              </AdvancedMarker>
+            ))}
+
+            {/* Info Windows */}
+            {activeMarkerId && (() => {
+              const currentPlace = 
+                locations.find(l => l.id === activeMarkerId) || 
+                nearbyResults.find(r => r.id === activeMarkerId) ||
+                (wildfiresActive ? SIMULATED_WILDFIRES.find(f => f.id === activeMarkerId) : null) ||
+                (aqiActive ? SIMULATED_AQI.find(a => a.id === activeMarkerId) : null);
+              if (!currentPlace) return null;
+              
+              const isWildfire = currentPlace.id.startsWith('fire-');
+              const isAqi = currentPlace.id.startsWith('aqi-');
+              const weather = generateWeather(currentPlace.lat, currentPlace.lng);
+
+              return (
+                <InfoWindow
+                  position={{ lat: currentPlace.lat, lng: currentPlace.lng }}
+                  onCloseClick={() => setActiveMarkerId(null)}
+                >
+                  <div className="p-2.5 max-w-[220px] text-stone-800 font-sans">
+                    {isWildfire ? (
+                      <>
+                        <div className="flex items-center gap-1.5 text-red-600 font-bold mb-1">
+                          <ShieldAlert className="w-4 h-4 animate-pulse" />
+                          <h4 className="text-[9px] uppercase font-black tracking-wider">Wildfire Alert</h4>
+                        </div>
+                        <h5 className="font-serif italic text-xs font-bold text-stone-950 mb-1">{currentPlace.name}</h5>
+                        <div className="bg-red-50 dark:bg-red-950/20 text-[9px] text-red-800 dark:text-red-300 p-2 rounded-lg border border-red-200/50 mb-2 leading-relaxed">
+                          <strong>Intensity:</strong> {('intensity' in currentPlace ? currentPlace.intensity : 'High')}<br />
+                          <strong>Covered Area:</strong> {('area' in currentPlace ? currentPlace.area : 'Unknown')}<br />
+                          <p className="mt-1 font-sans">{('warning' in currentPlace ? currentPlace.warning : '')}</p>
+                        </div>
+                      </>
+                    ) : isAqi ? (
+                      <>
+                        <div className="flex items-center gap-1.5 text-sky-650 font-bold mb-1">
+                          <Wind className="w-4 h-4" />
+                          <h4 className="text-[9px] uppercase font-black tracking-wider font-mono">Air Quality</h4>
+                        </div>
+                        <h5 className="font-serif italic text-xs font-bold text-stone-950 mb-1">{currentPlace.name}</h5>
+                        <div className="p-2 rounded-lg text-[9px] leading-relaxed mb-2" style={{ backgroundColor: ('color' in currentPlace ? currentPlace.color : 'rgba(0,0,0,0.05)'), border: `1px solid ${('border' in currentPlace ? currentPlace.border : '#ccc')}` }}>
+                          <span className="font-bold text-stone-850 block">Rating: {('aqi' in currentPlace ? currentPlace.aqi : 50)} ({('category' in currentPlace ? currentPlace.category : 'Moderate')})</span>
+                          <p className="mt-1 text-stone-600 font-sans">{('advice' in currentPlace ? currentPlace.advice : '')}</p>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <h4 className="font-serif italic text-sm font-bold text-stone-950 mb-0.5">{currentPlace.name}</h4>
+                        <p className="text-[10px] text-stone-500 line-clamp-2 leading-relaxed mb-1.5">
+                          {'description' in currentPlace ? currentPlace.description : currentPlace.address}
+                        </p>
+
+                        <div className="grid grid-cols-2 gap-1 border-t border-stone-100 pt-1.5 mb-2 text-[9px] font-mono text-stone-500">
+                          <div className="flex items-center gap-1 text-amber-600 font-bold">
+                            <Star className="w-3 h-3 fill-current" />
+                            <span>{('rating' in currentPlace ? currentPlace.rating : 4.8)} ★</span>
+                          </div>
+                          <div className="flex items-center gap-1 justify-end text-emerald-600">
+                            <Wind className="w-3 h-3" />
+                            <span>AQI: {weather.aqi}</span>
+                          </div>
+                        </div>
+                      </>
+                    )}
+
+                    {!isWildfire && !isAqi && (
+                      <div className="flex gap-1">
+                        <button
+                          onClick={() => {
+                            setDestinationInput(currentPlace.name);
+                            setDirectionsPanelOpen(true);
+                            setActiveMarkerId(null);
+                          }}
+                          className="flex-1 bg-[#141414] hover:bg-stone-800 text-white text-[9px] font-bold uppercase tracking-wider py-1.5 rounded-lg flex items-center justify-center gap-1 cursor-pointer transition-colors"
+                        >
+                          <Navigation className="w-2.5 h-2.5" /> Directions
+                        </button>
+                        <button
+                          onClick={() => {
+                            if (onSelect && 'id' in currentPlace && !currentPlace.id.startsWith('mock')) {
+                              onSelect(currentPlace as LocationData);
+                            } else {
+                              alert(`Mock Attraction: ${currentPlace.name}\nLocal Details synced via Maps API`);
+                            }
+                          }}
+                          className="px-2 bg-stone-100 hover:bg-stone-200 text-stone-800 rounded-lg text-[9px] font-bold border border-stone-200 cursor-pointer"
+                          title="View details card"
+                        >
+                          Info
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </InfoWindow>
+              );
+            })()}
+          </Map>
+        </div>
+
+        {/* 360° Street View Pane */}
+        <AnimatePresence>
+          {streetViewActive && (
+            <motion.div
+              initial={{ width: 0, opacity: 0 }}
+              animate={{ width: '40%', opacity: 1 }}
+              exit={{ width: 0, opacity: 0 }}
+              transition={{ type: 'spring', stiffness: 200, damping: 25 }}
+              className="h-full bg-stone-950 border-l border-stone-800 dark:border-stone-900 flex flex-col relative z-10 shrink-0 animate-fade-in"
+              id="streetview-container"
+            >
+              <div className="bg-stone-900 px-4 py-3 border-b border-stone-800 flex items-center justify-between text-white text-[10px] font-bold uppercase tracking-widest font-mono shrink-0">
+                <div className="flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-yellow-400 animate-pulse" />
+                  <span className="text-yellow-400">360° Interactive Street View</span>
+                </div>
+                <button 
+                  onClick={() => setStreetViewActive(false)}
+                  className="p-1 hover:bg-stone-800 rounded-full text-stone-400 hover:text-white transition-colors"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              
+              {/* Street View container ref */}
+              <div ref={panoramaRef} className="flex-1 w-full bg-stone-900" style={{ height: 'calc(100% - 40px)' }} />
+              
+              <div className="p-3 bg-stone-900 border-t border-stone-800 text-[9px] text-stone-400 font-sans flex items-center gap-2 select-none shrink-0">
+                <span className="text-yellow-400 text-xs">🟡</span>
+                <span>Drag the yellow Pegman or click any road on the map to explore the world in 360°!</span>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
       {/* 2. Floating Search Bar & Horizontal Quick Category shortcuts */}
-      <div className="absolute top-4 left-4 z-10 w-[calc(100%-32px)] max-w-md space-y-2.5 pointer-events-auto">
+      <div className="absolute top-[76px] left-1/2 -translate-x-1/2 z-10 w-[calc(100%-32px)] max-w-md space-y-2.5 pointer-events-auto">
         <div className="bg-white/95 dark:bg-[#141414]/95 backdrop-blur-md rounded-2xl p-2 flex items-center gap-2 shadow-2xl border border-white/20 dark:border-stone-800">
           <div className="p-2 text-stone-400">
             <Search className="w-4 h-4" />
@@ -754,7 +1078,10 @@ function MapController({
             return (
               <button
                 key={cat.id}
-                onClick={() => handleCategorySearch(cat.id)}
+                onClick={() => {
+                  handleCategorySearch(cat.id);
+                  if (onCategoryChange) onCategoryChange(cat.id);
+                }}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest transition-all cursor-pointer border shadow-sm shrink-0 ${
                   isActive 
                     ? 'bg-blue-600 border-blue-500 text-white font-black' 
@@ -771,76 +1098,143 @@ function MapController({
         </div>
       </div>
 
-      {/* 4. Google Maps Style Details/Map Type floating triggers (Right Side) */}
-      <div className="absolute right-4 top-20 z-10 flex flex-col gap-2.5">
-        {/* Map Type switcher floating card */}
-        <div className="bg-white/95 dark:bg-[#141414]/95 rounded-2xl p-2.5 shadow-xl border border-stone-200 dark:border-stone-800 flex flex-col gap-2">
-          <span className="text-[7px] font-black uppercase tracking-wider text-stone-400 font-mono text-center">Type</span>
-          <button 
-            onClick={() => setMapStyleType('roadmap')}
-            className={`p-2 rounded-xl text-xs font-bold uppercase transition-all ${mapStyleType === 'roadmap' ? 'bg-blue-100 text-blue-600 dark:bg-blue-950/40 dark:text-blue-400' : 'text-stone-500 hover:bg-stone-100 dark:hover:bg-stone-900'}`}
-            title="Roadmap View"
-          >
-            <MapIcon className="w-4 h-4 mx-auto" />
-          </button>
-          <button 
-            onClick={() => setMapStyleType('satellite')}
-            className={`p-2 rounded-xl text-xs font-bold uppercase transition-all ${mapStyleType === 'satellite' ? 'bg-blue-100 text-blue-600 dark:bg-blue-950/40 dark:text-blue-400' : 'text-stone-500 hover:bg-stone-100 dark:hover:bg-stone-900'}`}
-            title="Satellite View"
-          >
-            <Layers className="w-4 h-4 mx-auto" />
-          </button>
-          <button 
-            onClick={() => setMapStyleType('terrain')}
-            className={`p-2 rounded-xl text-xs font-bold uppercase transition-all ${mapStyleType === 'terrain' ? 'bg-blue-100 text-blue-600 dark:bg-blue-950/40 dark:text-blue-400' : 'text-stone-500 hover:bg-stone-100 dark:hover:bg-stone-900'}`}
-            title="Terrain View"
-          >
-            <Compass className="w-4 h-4 mx-auto" />
-          </button>
-        </div>
-
-        {/* Overlay Layers triggers card */}
-        <div className="bg-white/95 dark:bg-[#141414]/95 rounded-2xl p-2.5 shadow-xl border border-stone-200 dark:border-stone-800 flex flex-col gap-2">
-          <span className="text-[7px] font-black uppercase tracking-wider text-stone-400 font-mono text-center">Layers</span>
-          <button 
-            onClick={() => setTransitActive(!transitActive)}
-            className={`p-2 rounded-xl transition-all ${transitActive ? 'bg-emerald-100 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400' : 'text-stone-500 hover:bg-stone-100'}`}
-            title="Transit Layer (Public Transport)"
-          >
-            <Train className="w-4 h-4 mx-auto" />
-          </button>
-          <button 
-            onClick={() => setTrafficActive(!trafficActive)}
-            className={`p-2 rounded-xl transition-all ${trafficActive ? 'bg-rose-100 text-rose-600 dark:bg-rose-950/40 dark:text-rose-400' : 'text-stone-500 hover:bg-stone-100'}`}
-            title="Traffic Layer (Real-time updates)"
-          >
-            <Activity className="w-4 h-4 mx-auto" />
-          </button>
-          <button 
-            onClick={() => setBicyclingActive(!bicyclingActive)}
-            className={`p-2 rounded-xl transition-all ${bicyclingActive ? 'bg-emerald-100 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400' : 'text-stone-500 hover:bg-stone-100'}`}
-            title="Bicycling Path Layer"
-          >
-            <Bike className="w-4 h-4 mx-auto" />
-          </button>
-          <button 
-            onClick={() => setWeatherOverlayActive(!weatherOverlayActive)}
-            className={`p-2 rounded-xl transition-all ${weatherOverlayActive ? 'bg-amber-100 text-amber-600 dark:bg-amber-950/40' : 'text-stone-500 hover:bg-stone-100'}`}
-            title="Toggle Weather Overlays"
-          >
-            <Sun className="w-4 h-4 mx-auto" />
-          </button>
-        </div>
+      {/* 4. Interactive Layers FAB & Zoom-to-Locate Triggers */}
+      <div className="absolute right-4 top-20 z-10 flex flex-col gap-2.5 pointer-events-auto">
+        {/* Floating Layers circular FAB */}
+        <button
+          onClick={() => setBottomSheetOpen(!bottomSheetOpen)}
+          className="p-3.5 bg-white hover:bg-stone-50 dark:bg-[#141414] dark:hover:bg-stone-900 text-stone-800 dark:text-white rounded-full shadow-2xl border border-stone-200 dark:border-stone-800 hover:scale-110 active:scale-95 transition-all cursor-pointer flex items-center justify-center w-12 h-12 z-20"
+          title="Open Map Layers and Style Settings"
+        >
+          <Layers className="w-5 h-5 text-blue-500 animate-pulse" />
+        </button>
 
         {/* Locate Me Button */}
         <button 
           onClick={handleLocateMe}
-          className="p-3 bg-white hover:bg-stone-50 text-stone-800 dark:bg-[#141414] dark:text-white rounded-full shadow-lg border border-stone-200 dark:border-stone-800 hover:scale-105 active:scale-95 transition-all cursor-pointer flex items-center justify-center w-11 h-11"
+          className="p-3.5 bg-white hover:bg-stone-50 text-stone-800 dark:bg-[#141414] dark:text-white rounded-full shadow-lg border border-stone-200 dark:border-stone-800 hover:scale-110 active:scale-95 transition-all cursor-pointer flex items-center justify-center w-12 h-12 z-20"
           title="Zoom to My Location"
         >
-          <Navigation className="w-4 h-4 rotate-45" />
+          <Navigation className="w-5 h-5 rotate-45 text-stone-700 dark:text-stone-300" />
         </button>
       </div>
+
+      {/* Interactive Map Settings Bottom-Sheet */}
+      <AnimatePresence>
+        {bottomSheetOpen && (
+          <motion.div
+            initial={{ y: '100%' }}
+            animate={{ y: 0 }}
+            exit={{ y: '100%' }}
+            transition={{ type: 'spring', stiffness: 260, damping: 28 }}
+            className="absolute bottom-0 left-0 right-0 bg-white/95 dark:bg-[#141414]/95 backdrop-blur-xl rounded-t-[36px] shadow-3xl border-t border-stone-200/80 dark:border-stone-800 z-30 flex flex-col max-h-[85%] pointer-events-auto overflow-hidden text-stone-800 dark:text-stone-200"
+          >
+            {/* Handle bar for sliding visual */}
+            <div className="w-12 h-1.5 bg-stone-300 dark:bg-stone-700 rounded-full mx-auto my-3.5 cursor-pointer shrink-0" onClick={() => setBottomSheetOpen(false)} />
+
+            {/* Title Header */}
+            <div className="px-6 pb-4 border-b border-stone-100 dark:border-stone-800/80 flex items-center justify-between shrink-0">
+              <div>
+                <h3 className="font-serif italic font-bold text-base text-stone-950 dark:text-white leading-none">Map Style & Visual Layers</h3>
+                <span className="text-[9px] uppercase tracking-wider font-mono text-stone-400">Customize your satellite hybrid landscape</span>
+              </div>
+              <button
+                onClick={() => setBottomSheetOpen(false)}
+                className="p-1.5 hover:bg-stone-100 dark:hover:bg-stone-800 rounded-full text-stone-400 hover:text-stone-800 dark:hover:text-white transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-6 overflow-y-auto space-y-6">
+              {/* Map Type Grid */}
+              <div className="space-y-2">
+                <span className="text-[10px] uppercase font-mono font-bold tracking-widest text-stone-400 block mb-1">Map Representation</span>
+                <div className="grid grid-cols-3 gap-3">
+                  {[
+                    { id: 'roadmap', name: 'Default', icon: MapIcon, desc: 'Vector street grid', color: 'from-blue-500/10 to-blue-500/5', border: 'border-blue-500' },
+                    { id: 'hybrid', name: 'Satellite (Hybrid)', icon: Layers, desc: 'High-res satellite view', color: 'from-emerald-500/10 to-emerald-500/5', border: 'border-emerald-500' },
+                    { id: 'terrain', name: 'Terrain', icon: Compass, desc: 'Topography & elevation', color: 'from-amber-500/10 to-amber-500/5', border: 'border-amber-500' }
+                  ].map((type) => {
+                    const Icon = type.icon;
+                    const isSelected = mapStyleType === type.id;
+                    return (
+                      <button
+                        key={type.id}
+                        onClick={() => setMapStyleType(type.id as any)}
+                        className={`p-3 rounded-2xl border text-left flex flex-col justify-between h-24 cursor-pointer transition-all ${
+                          isSelected 
+                            ? `bg-gradient-to-br ${type.color} ${type.border} shadow-md scale-102` 
+                            : 'bg-stone-50 dark:bg-stone-900 border-stone-200/50 dark:border-stone-800 hover:bg-stone-100'
+                        }`}
+                      >
+                        <div className={`p-1.5 rounded-lg w-fit ${isSelected ? 'bg-blue-600 text-white shadow-sm' : 'bg-stone-200 text-stone-500'}`}>
+                          <Icon className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <span className="text-xs font-bold text-stone-900 dark:text-white block leading-tight">{type.name}</span>
+                          <span className="text-[8px] text-stone-400 leading-none">{type.desc}</span>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Layer Details Grid */}
+              <div className="space-y-3">
+                <span className="text-[10px] uppercase font-mono font-bold tracking-widest text-stone-400 block mb-1">Dynamic Layer Overlays</span>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  
+                  {/* Dynamic Overlays */}
+                  {[
+                    { id: 'transit', name: 'Transit Grid', desc: 'Renders native public transport lines & hubs', value: transitActive, setter: setTransitActive, icon: Train, badgeColor: 'bg-emerald-500' },
+                    { id: 'traffic', name: 'Live Traffic Flow', desc: 'Integrates real-time congestion & delays', value: trafficActive, setter: setTrafficActive, icon: Activity, badgeColor: 'bg-rose-500' },
+                    { id: 'bicycling', name: 'Bicycling Paths', desc: 'Highlights active bike lanes & routes', value: bicyclingActive, setter: setBicyclingActive, icon: Bike, badgeColor: 'bg-teal-500' },
+                    { id: '3d', name: '3D Building Vectors', desc: 'Renders raised 45° isometric structures', value: raised3DActive, setter: setRaised3DActive, icon: Home, badgeColor: 'bg-indigo-500' },
+                    { id: 'streetview', name: '360° Street View', desc: '🟡 Teleport Pegman into ground panoramic views', value: streetViewActive, setter: setStreetViewActive, icon: Camera, badgeColor: 'bg-yellow-500' },
+                    { id: 'wildfires', name: 'Thermal Wildfires', desc: '⚠️ Spawns active global forest fire alerts', value: wildfiresActive, setter: setWildfiresActive, icon: ShieldAlert, badgeColor: 'bg-orange-500' },
+                    { id: 'aqi', name: 'Air Quality Index (AQI)', desc: '💨 Overlays colored atmospheric purity metrics', value: aqiActive, setter: setAqiActive, icon: Wind, badgeColor: 'bg-sky-500' }
+                  ].map((layer) => {
+                    const Icon = layer.icon;
+                    return (
+                      <div 
+                        key={layer.id}
+                        onClick={() => {
+                          layer.setter(!layer.value as any);
+                          if (layer.id === 'streetview') {
+                            setBottomSheetOpen(false); // Close layers bottom sheet when starting street view to avoid overlapping
+                          }
+                        }}
+                        className={`p-3 rounded-2xl border flex items-center justify-between cursor-pointer transition-all hover:bg-stone-50 dark:hover:bg-stone-900 ${
+                          layer.value 
+                            ? 'border-blue-500 bg-blue-500/5 dark:border-blue-400/40' 
+                            : 'border-stone-100 dark:border-stone-800'
+                        }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className={`p-2 rounded-xl text-white ${layer.badgeColor} shadow-md shrink-0`}>
+                            <Icon className="w-4 h-4" />
+                          </div>
+                          <div>
+                            <span className="text-xs font-bold text-stone-900 dark:text-white block leading-tight">{layer.name}</span>
+                            <span className="text-[9px] text-stone-400 leading-relaxed block pr-3">{layer.desc}</span>
+                          </div>
+                        </div>
+                        {/* Styled Switch */}
+                        <div className={`w-9 h-5 rounded-full p-0.5 transition-all ${layer.value ? 'bg-blue-600' : 'bg-stone-200 dark:bg-stone-800'}`}>
+                          <div className={`w-4 h-4 rounded-full bg-white shadow-md transition-transform ${layer.value ? 'translate-x-4' : ''}`} />
+                        </div>
+                      </div>
+                    );
+                  })}
+
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* 5. Navigation & Directions sliding sidebar overlay */}
       <AnimatePresence>
@@ -1269,7 +1663,10 @@ export default function GoogleMapsApp({
   onSelect, 
   userFavorites, 
   userTour,
-  showTourOnly 
+  showTourOnly,
+  center,
+  zoom,
+  onCameraChange
 }: GoogleMapsAppProps) {
   if (!API_KEY) {
     return (
@@ -1302,6 +1699,9 @@ export default function GoogleMapsApp({
         userFavorites={userFavorites}
         userTour={userTour}
         showTourOnly={showTourOnly}
+        center={center}
+        zoom={zoom}
+        onCameraChange={onCameraChange}
       />
     </APIProvider>
   );

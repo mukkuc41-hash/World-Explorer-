@@ -1532,6 +1532,7 @@ export default function App() {
                 showTourOnly={showTourOnly}
                 showUserAddedOnly={showUserWorldOnly}
                 searchQuery={searchQuery} 
+                onSearchQueryChange={setSearchQuery}
                 onSelect={setSelectedLocationData} 
                 onSelectContinent={(c) => handleSelection(c, null, null)}
                 speed={backgroundEarthSpeed}
