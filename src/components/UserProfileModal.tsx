@@ -447,27 +447,56 @@ export default function UserProfileModal({ isOpen, onClose, user }: UserProfileM
     setIsDeleting(true);
     setDeleteError('');
 
+    const isGuestUser = user.isAnonymous || user.email === 'guest@worldexplorer.com' || user.uid.startsWith('guest_');
+
     try {
       // 1. Delete user record from Firestore
       const userDocRef = doc(db, 'users', user.uid);
-      await deleteDoc(userDocRef);
+      try {
+        await deleteDoc(userDocRef);
+      } catch (fsErr) {
+        console.warn("Firestore user doc deletion warning (continuing):", fsErr);
+      }
 
-      // 2. Delete user from Firebase Auth
-      await deleteUser(user);
+      // 2. If guest, clean up guest collections & localStorage
+      if (isGuestUser) {
+        try {
+          const { deleteCurrentGuestAccount } = await import('../lib/guestLogin');
+          await deleteCurrentGuestAccount();
+        } catch (guestErr) {
+          console.warn("Guest account cleanup warning (continuing):", guestErr);
+          localStorage.removeItem('world_explorer_guest_id');
+          localStorage.removeItem('world_explorer_guest_session_active');
+        }
+      }
+
+      // 3. Delete user from Firebase Auth
+      try {
+        if (user && typeof deleteUser === 'function') {
+          await deleteUser(user);
+        } else {
+          await logout();
+        }
+      } catch (authErr: any) {
+        console.error("Firebase Auth Deletion Error (continuing to logout):", authErr);
+        if (authErr.code === 'auth/requires-recent-login' && !isGuestUser) {
+          setDeleteError("For security, this action requires a recent sign-in. You will be signed out so you can log back in and delete your account.");
+          setTimeout(async () => {
+            await logout();
+            onClose();
+          }, 4500);
+          return;
+        } else {
+          // If guest or any other error, sign them out anyway to finalize deletion
+          await logout();
+        }
+      }
       
       // Close modal and the app will auto-redirect to login screen since user state changes to null
       onClose();
     } catch (error: any) {
-      console.error("Account Deletion Error:", error);
-      if (error.code === 'auth/requires-recent-login') {
-        setDeleteError("For security, this action requires a recent sign-in. You will be signed out so you can log back in and delete your account.");
-        setTimeout(async () => {
-          await logout();
-          onClose();
-        }, 4500);
-      } else {
-        setDeleteError("Failed to delete account. Please try again or contact support.");
-      }
+      console.error("Account Deletion Root Error:", error);
+      setDeleteError("Failed to delete account. Please try again or contact support.");
     } finally {
       setIsDeleting(false);
     }

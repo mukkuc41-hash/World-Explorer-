@@ -103,6 +103,26 @@
         "updatedAt": { "type": "string", "format": "date-time", "description": "When the profile was last updated." }
       },
       "required": ["email", "updatedAt"]
+    },
+    "Guest": {
+      "title": "Guest",
+      "description": "Information about a guest session's saved data.",
+      "type": "object",
+      "properties": {
+        "guestId": { "type": "string", "description": "The unique guest ID." },
+        "savedLocationsCount": { "type": "number", "description": "Count of locations saved during session." },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "When the guest data was last updated." }
+      },
+      "required": ["guestId"]
+    },
+    "GuestCounter": {
+      "title": "GuestCounter",
+      "description": "Global stats counter for guest indices.",
+      "type": "object",
+      "properties": {
+        "count": { "type": "number", "description": "The current counter value." }
+      },
+      "required": ["count"]
     }
   },
   "firestore": {
@@ -133,6 +153,14 @@
     "public_profiles": {
       "schema": "PublicProfile",
       "description": "Public user profiles for leaderboard."
+    },
+    "guests/{guestId}": {
+      "schema": "Guest",
+      "description": "Collection of guest session isolated data."
+    },
+    "stats/guestCounter": {
+      "schema": "GuestCounter",
+      "description": "Global counter document for guest indexing."
     }
   }
 }

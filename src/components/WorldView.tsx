@@ -1816,29 +1816,48 @@ export default function WorldView({
       {/* Dynamic Location Locator floating box */}
       {viewType !== 'globe' && (
         <motion.div
+          drag
+          dragControls={dragControls}
+          dragListener={false}
+          dragMomentum={false}
+          dragElastic={0.05}
+          dragConstraints={worldViewContainerRef}
           layout
-          className="absolute bottom-4 left-4 right-4 z-10 bg-white/95 dark:bg-[#141414]/95 backdrop-blur-md rounded-[24px] shadow-lg border border-stone-200/50 dark:border-stone-800/80 overflow-hidden select-none pointer-events-auto"
+          className="absolute bottom-4 left-4 z-[400] w-[340px] max-w-[calc(100%-32px)] bg-white/95 dark:bg-[#141414]/95 backdrop-blur-md rounded-[24px] shadow-lg border border-stone-200/50 dark:border-stone-800/80 overflow-hidden select-none pointer-events-auto"
         >
           <div className="p-4 space-y-2.5">
             {/* Header / Clickable Toggle area */}
             <div 
-              onClick={() => setIsLocatorMinimized(!isLocatorMinimized)}
-              className={`flex items-center justify-between cursor-pointer ${!isLocatorMinimized ? 'border-b border-stone-100 dark:border-stone-800 pb-2.5' : ''}`}
+              className={`flex items-center justify-between ${!isLocatorMinimized ? 'border-b border-stone-100 dark:border-stone-800 pb-2.5' : ''}`}
             >
-              <div className="flex items-center gap-2.5">
-                <div className="p-1.5 bg-stone-100 dark:bg-stone-900 rounded-xl text-stone-500 dark:text-stone-400 shrink-0">
-                  <Target className="w-5 h-5" />
+              <div className="flex items-center gap-2">
+                {/* Drag Handle */}
+                <div 
+                  onPointerDown={(e) => dragControls.start(e)}
+                  className="p-1.5 hover:bg-stone-100 dark:hover:bg-stone-800 rounded-lg text-stone-400 active:text-blue-500 cursor-grab active:cursor-grabbing shrink-0 transition-colors"
+                  title="Drag to reposition panel"
+                >
+                  <GripHorizontal className="w-4 h-4" />
                 </div>
-                <div>
-                  <h3 className="font-sans font-bold text-xs tracking-tight leading-none text-stone-900 dark:text-white flex items-center gap-1.5">
-                    Location Locator
-                    <GripHorizontal className="w-3.5 h-3.5 opacity-40 text-stone-500 shrink-0" />
-                  </h3>
-                  <span className="text-[8px] uppercase tracking-wider font-mono text-stone-500 dark:text-stone-400 opacity-70 block mt-0.5">NAVIGATE DATABASE GEMS</span>
+
+                <div 
+                  onClick={() => setIsLocatorMinimized(!isLocatorMinimized)}
+                  className="flex items-center gap-2 cursor-pointer"
+                  title={isLocatorMinimized ? "Expand Location Locator" : "Minimize Location Locator"}
+                >
+                  <div className="p-1.5 bg-stone-100 dark:bg-stone-900 rounded-xl text-[#107c85] dark:text-teal-400 shrink-0">
+                    <Target className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="font-sans font-bold text-[11px] tracking-tight leading-none text-stone-900 dark:text-white">
+                      Location Locator
+                    </h3>
+                    <span className="text-[7.5px] uppercase tracking-wider font-mono text-stone-500 dark:text-stone-400 opacity-70 block mt-0.5">NAVIGATE DATABASE GEMS</span>
+                  </div>
                 </div>
               </div>
               
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-1">
                 {/* Reset Filters / Clear Button */}
                 <button 
                   onClick={(e) => {
@@ -1852,7 +1871,23 @@ export default function WorldView({
                   className="p-1.5 hover:bg-stone-100 dark:hover:bg-stone-800 rounded-full text-stone-400 hover:text-stone-800 dark:hover:text-white transition-all cursor-pointer"
                   title="Clear Filters"
                 >
-                  <X className="w-5 h-5" />
+                  <X className="w-4 h-4" />
+                </button>
+
+                {/* Minimize / Maximize Toggle */}
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setIsLocatorMinimized(!isLocatorMinimized);
+                  }}
+                  className="p-1.5 hover:bg-stone-100 dark:hover:bg-stone-800 rounded-full text-stone-400 hover:text-stone-800 dark:hover:text-white transition-all cursor-pointer"
+                  title={isLocatorMinimized ? "Maximize" : "Minimize"}
+                >
+                  {isLocatorMinimized ? (
+                    <Maximize2 className="w-4 h-4" />
+                  ) : (
+                    <Minimize2 className="w-4 h-4" />
+                  )}
                 </button>
               </div>
             </div>
