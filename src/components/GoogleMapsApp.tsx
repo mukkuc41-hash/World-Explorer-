@@ -145,6 +145,7 @@ interface GoogleMapsAppProps {
   onCameraChange?: (center: { lat: number, lng: number }, zoom: number) => void;
   activeCategory?: string;
   onCategoryChange?: (category: string) => void;
+  isEmbedded?: boolean;
 }
 
 // Sub-component that has access to useMap and useMapsLibrary inside APIProvider
@@ -159,7 +160,8 @@ function MapController({
   zoom,
   onCameraChange,
   activeCategory: parentActiveCategory,
-  onCategoryChange
+  onCategoryChange,
+  isEmbedded
 }: GoogleMapsAppProps) {
   const map = useMap();
   const placesLib = useMapsLibrary('places');
@@ -1029,90 +1031,92 @@ function MapController({
       </div>
 
       {/* 2. Floating Search Bar & Horizontal Quick Category shortcuts */}
-      <div className="absolute top-[76px] left-1/2 -translate-x-1/2 z-10 w-[calc(100%-32px)] max-w-md space-y-2.5 pointer-events-auto">
-        <div className="bg-white/95 dark:bg-[#141414]/95 backdrop-blur-md rounded-2xl p-2 flex items-center gap-2 shadow-2xl border border-white/20 dark:border-stone-800">
-          <div className="p-2 text-stone-400">
-            <Search className="w-4 h-4" />
-          </div>
-          <input
-            type="text"
-            placeholder="Search historic gems, or enter directions..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="flex-1 bg-transparent text-xs text-stone-900 dark:text-white placeholder-stone-400 focus:outline-none py-1.5"
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && searchQuery) {
-                // Find a matching local landmark
-                const matched = locations.find(l => l.name.toLowerCase().includes(searchQuery.toLowerCase()));
-                if (matched && map) {
-                  map.panTo({ lat: matched.lat, lng: matched.lng });
-                  map.setZoom(15);
-                  setActiveMarkerId(matched.id);
-                } else {
-                  alert(`Location scan: Searching places database for "${searchQuery}"`);
+      {!isEmbedded && (
+        <div className="absolute top-[76px] left-1/2 -translate-x-1/2 z-10 w-[calc(100%-32px)] max-w-md space-y-2.5 pointer-events-auto">
+          <div className="bg-white/95 dark:bg-[#141414]/95 backdrop-blur-md rounded-2xl p-2 flex items-center gap-2 shadow-2xl border border-white/20 dark:border-stone-800">
+            <div className="p-2 text-stone-400">
+              <Search className="w-4 h-4" />
+            </div>
+            <input
+              type="text"
+              placeholder="Search historic gems, or enter directions..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="flex-1 bg-transparent text-xs text-stone-900 dark:text-white placeholder-stone-400 focus:outline-none py-1.5"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && searchQuery) {
+                  // Find a matching local landmark
+                  const matched = locations.find(l => l.name.toLowerCase().includes(searchQuery.toLowerCase()));
+                  if (matched && map) {
+                    map.panTo({ lat: matched.lat, lng: matched.lng });
+                    map.setZoom(15);
+                    setActiveMarkerId(matched.id);
+                  } else {
+                    alert(`Location scan: Searching places database for "${searchQuery}"`);
+                  }
                 }
-              }
-            }}
-          />
-          {searchQuery && (
-            <button onClick={() => setSearchQuery('')} className="p-1.5 hover:bg-stone-100 rounded-full text-stone-400">
-              <X className="w-3.5 h-3.5" />
-            </button>
-          )}
-          <span className="h-6 w-[1px] bg-stone-200 dark:bg-stone-800 mx-1" />
-          <button 
-            onClick={() => setDirectionsPanelOpen(!directionsPanelOpen)}
-            className="p-2 bg-blue-500 hover:bg-blue-600 text-white rounded-xl shadow-md transition-all active:scale-95 cursor-pointer flex items-center justify-center"
-            title="Toggle Directions Panel"
-          >
-            <Navigation className="w-4 h-4" />
-          </button>
-        </div>
-
-        {/* 3. Quick Category Horizontal Scrolling Shortcuts Bar */}
-        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-1 scroll-smooth">
-          {CATEGORIES.map((cat) => {
-            const Icon = cat.icon;
-            const isActive = activeCategory === cat.id;
-
-            return (
-              <button
-                key={cat.id}
-                onClick={() => {
-                  handleCategorySearch(cat.id);
-                  if (onCategoryChange) onCategoryChange(cat.id);
-                }}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest transition-all cursor-pointer border shadow-sm shrink-0 ${
-                  isActive 
-                    ? 'bg-blue-600 border-blue-500 text-white font-black' 
-                    : 'bg-white/95 dark:bg-[#141414]/95 border-stone-200 dark:border-stone-800 text-stone-700 dark:text-stone-300 hover:bg-stone-50'
-                }`}
-              >
-                <div className={`w-3.5 h-3.5 rounded-full ${cat.color} flex items-center justify-center text-white scale-90`}>
-                  <Icon className="w-2.5 h-2.5" />
-                </div>
-                <span>{cat.name}</span>
+              }}
+            />
+            {searchQuery && (
+              <button onClick={() => setSearchQuery('')} className="p-1.5 hover:bg-stone-100 rounded-full text-stone-400">
+                <X className="w-3.5 h-3.5" />
               </button>
-            );
-          })}
+            )}
+            <span className="h-6 w-[1px] bg-stone-200 dark:bg-stone-800 mx-1" />
+            <button 
+              onClick={() => setDirectionsPanelOpen(!directionsPanelOpen)}
+              className="p-2 bg-blue-500 hover:bg-blue-600 text-white rounded-xl shadow-md transition-all active:scale-95 cursor-pointer flex items-center justify-center"
+              title="Toggle Directions Panel"
+            >
+              <Navigation className="w-4 h-4" />
+            </button>
+          </div>
+
+          {/* 3. Quick Category Horizontal Scrolling Shortcuts Bar */}
+          <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-1 scroll-smooth">
+            {CATEGORIES.map((cat) => {
+              const Icon = cat.icon;
+              const isActive = activeCategory === cat.id;
+
+              return (
+                <button
+                  key={cat.id}
+                  onClick={() => {
+                    handleCategorySearch(cat.id);
+                    if (onCategoryChange) onCategoryChange(cat.id);
+                  }}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest transition-all cursor-pointer border shadow-sm shrink-0 ${
+                    isActive 
+                      ? 'bg-blue-600 border-blue-500 text-white font-black' 
+                      : 'bg-white/95 dark:bg-[#141414]/95 border-stone-200 dark:border-stone-800 text-stone-700 dark:text-stone-300 hover:bg-stone-50'
+                  }`}
+                >
+                  <div className={`w-3.5 h-3.5 rounded-full ${cat.color} flex items-center justify-center text-white scale-90`}>
+                    <Icon className="w-2.5 h-2.5" />
+                  </div>
+                  <span>{cat.name}</span>
+                </button>
+              );
+            })}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* 4. Interactive Layers FAB & Zoom-to-Locate Triggers */}
-      <div className="absolute right-4 top-20 z-10 flex flex-col gap-2.5 pointer-events-auto">
-        {/* Floating Layers circular FAB */}
+      <div className={`absolute right-4 z-10 flex flex-col gap-2.5 pointer-events-auto ${isEmbedded ? 'bottom-20 mb-2' : 'top-20'}`}>
+        {/* Floating Layers FAB */}
         <button
           onClick={() => setBottomSheetOpen(!bottomSheetOpen)}
-          className="p-3.5 bg-white hover:bg-stone-50 dark:bg-[#141414] dark:hover:bg-stone-900 text-stone-800 dark:text-white rounded-full shadow-2xl border border-stone-200 dark:border-stone-800 hover:scale-110 active:scale-95 transition-all cursor-pointer flex items-center justify-center w-12 h-12 z-20"
+          className={`bg-white hover:bg-stone-50 dark:bg-[#141414] dark:hover:bg-stone-900 text-stone-800 dark:text-white shadow-2xl border border-stone-200 dark:border-stone-800 hover:scale-110 active:scale-95 transition-all cursor-pointer flex items-center justify-center w-11 h-11 z-20 ${isEmbedded ? 'rounded-xl' : 'rounded-full'}`}
           title="Open Map Layers and Style Settings"
         >
-          <Layers className="w-5 h-5 text-blue-500 animate-pulse" />
+          <Layers className="w-5 h-5 text-blue-500" />
         </button>
 
         {/* Locate Me Button */}
         <button 
           onClick={handleLocateMe}
-          className="p-3.5 bg-white hover:bg-stone-50 text-stone-800 dark:bg-[#141414] dark:text-white rounded-full shadow-lg border border-stone-200 dark:border-stone-800 hover:scale-110 active:scale-95 transition-all cursor-pointer flex items-center justify-center w-12 h-12 z-20"
+          className={`bg-white hover:bg-stone-50 text-stone-800 dark:bg-[#141414] dark:text-white shadow-lg border border-stone-200 dark:border-stone-800 hover:scale-110 active:scale-95 transition-all cursor-pointer flex items-center justify-center w-11 h-11 z-20 ${isEmbedded ? 'rounded-xl' : 'rounded-full'}`}
           title="Zoom to My Location"
         >
           <Navigation className="w-5 h-5 rotate-45 text-stone-700 dark:text-stone-300" />
@@ -1666,7 +1670,10 @@ export default function GoogleMapsApp({
   showTourOnly,
   center,
   zoom,
-  onCameraChange
+  onCameraChange,
+  activeCategory,
+  onCategoryChange,
+  isEmbedded
 }: GoogleMapsAppProps) {
   if (!API_KEY) {
     return (
@@ -1702,6 +1709,9 @@ export default function GoogleMapsApp({
         center={center}
         zoom={zoom}
         onCameraChange={onCameraChange}
+        activeCategory={activeCategory}
+        onCategoryChange={onCategoryChange}
+        isEmbedded={isEmbedded}
       />
     </APIProvider>
   );
