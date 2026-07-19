@@ -6,8 +6,10 @@ import confetti from 'canvas-confetti';
 import { 
   Gamepad2, Trophy, Compass, Star, MapPin, Map, Navigation, 
   HelpCircle, RefreshCw, Milestone, Volume2, VolumeX, ArrowRight,
-  Info, Sparkles, X, CheckCircle2, ChevronRight, AlertCircle, Heart
+  Info, Sparkles, X, CheckCircle2, ChevronRight, AlertCircle, Heart,
+  Flag, Target
 } from 'lucide-react';
+import StreetViewScavengerHunt from './StreetViewScavengerHunt.tsx';
 
 export interface GameLocation {
   name: string;
@@ -112,6 +114,7 @@ const CATEGORIES = [
 ];
 
 export default function GameHub() {
+  const [activeGame, setActiveGame] = useState<'menu' | 'quiz' | 'scavenger'>('menu');
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [currentTarget, setCurrentTarget] = useState<GameLocation | null>(null);
   const [score, setScore] = useState(0);
@@ -471,6 +474,140 @@ export default function GameHub() {
     }
   };
 
+  if (activeGame === 'scavenger') {
+    return <StreetViewScavengerHunt onBack={() => setActiveGame('menu')} />;
+  }
+
+  if (activeGame === 'menu') {
+    return (
+      <div className="w-full max-w-5xl mx-auto space-y-8">
+        {/* Main Hub Welcome Banner */}
+        <div className="bg-[#141414] text-white p-8 rounded-[32px] shadow-2xl relative overflow-hidden border border-white/5">
+          <div className="absolute top-0 right-0 w-80 h-80 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none"></div>
+          <div className="absolute -bottom-10 -left-10 w-60 h-60 bg-[#5A5A40]/10 rounded-full blur-3xl pointer-events-none"></div>
+          
+          <div className="flex flex-col md:flex-row items-center justify-between gap-6 relative z-10">
+            <div className="text-center md:text-left space-y-2">
+              <div className="flex items-center justify-center md:justify-start gap-2">
+                <span className="bg-emerald-500/15 text-emerald-400 text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded border border-emerald-500/20">
+                  World Explorer Arcade
+                </span>
+                <span className="bg-[#5A5A40]/25 text-white/80 text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded border border-[#5A5A40]/35 animate-pulse">
+                  2 Games Loaded
+                </span>
+              </div>
+              <h1 className="font-serif italic text-4xl md:text-5xl font-black tracking-tight text-white mt-1">
+                Geographical Game Hub
+              </h1>
+              <p className="text-sm text-zinc-400 max-w-xl">
+                Expand your spatial intelligence and global geographic literacy with our custom curated map games. Teleport around the globe, drop pinpoint markers, and test your speed!
+              </p>
+            </div>
+            
+            <div className="w-20 h-20 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-3xl flex items-center justify-center shadow-inner shrink-0">
+              <Gamepad2 className="w-10 h-10" />
+            </div>
+          </div>
+        </div>
+
+        {/* 2-Column Game Selection Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 pt-2">
+          {/* GAME 1: QUIZ MASTER */}
+          <motion.div 
+            whileHover={{ y: -6, scale: 1.01 }}
+            className="bg-white dark:bg-zinc-900 border border-black/5 dark:border-white/5 rounded-[32px] p-8 shadow-xl flex flex-col justify-between space-y-6 group transition-all relative overflow-hidden"
+          >
+            {/* Background pattern */}
+            <div className="absolute -bottom-12 -right-12 w-40 h-40 bg-indigo-500/5 rounded-full blur-2xl group-hover:bg-indigo-500/10 transition-colors pointer-events-none"></div>
+            
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="w-14 h-14 bg-indigo-500/10 border border-indigo-500/20 text-indigo-500 dark:text-indigo-400 rounded-2xl flex items-center justify-center">
+                  <Trophy className="w-7 h-7" />
+                </div>
+                <span className="bg-indigo-500/10 text-indigo-500 dark:text-indigo-400 text-[10px] uppercase font-black px-3 py-1 rounded-full border border-indigo-500/20">
+                  Map Guesser
+                </span>
+              </div>
+
+              <div className="space-y-1.5">
+                <h3 className="text-2xl font-bold text-zinc-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
+                  10-Category World Quiz Master
+                </h3>
+                <p className="text-sm text-zinc-500 dark:text-zinc-400 leading-relaxed">
+                  Test your world knowledge! Drop coordinates on an interactive satellite radar map across 10 specialized categories including Landmarks, Capitals, Rivers, and Mountains. Correct guesses must be within 250 kilometers!
+                </p>
+              </div>
+
+              {/* Badges */}
+              <div className="flex flex-wrap gap-2 pt-2">
+                {['10 Categories', 'Score Tracker', 'Win Streaks', 'Geographical Hints'].map((tag) => (
+                  <span key={tag} className="bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 text-[11px] px-2.5 py-1 rounded-lg border border-black/5 dark:border-white/5">
+                    {tag}
+                  </span>
+                ))}
+              </div>
+            </div>
+
+            <button
+              onClick={() => { playSound('click'); setActiveGame('quiz'); }}
+              className="w-full py-4 bg-indigo-600 hover:bg-indigo-500 dark:bg-indigo-700 dark:hover:bg-indigo-600 text-white font-bold rounded-2xl transition-all shadow-lg shadow-indigo-600/20 flex items-center justify-center gap-2 group-hover:shadow-indigo-600/30"
+            >
+              <span>Play Quiz Master</span>
+              <ChevronRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
+            </button>
+          </motion.div>
+
+          {/* GAME 2: STREET VIEW SCAVENGER HUNT */}
+          <motion.div 
+            whileHover={{ y: -6, scale: 1.01 }}
+            className="bg-white dark:bg-zinc-900 border border-black/5 dark:border-white/5 rounded-[32px] p-8 shadow-xl flex flex-col justify-between space-y-6 group transition-all relative overflow-hidden"
+          >
+            {/* Background pattern */}
+            <div className="absolute -bottom-12 -right-12 w-40 h-40 bg-emerald-500/5 rounded-full blur-2xl group-hover:bg-emerald-500/10 transition-colors pointer-events-none"></div>
+
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="w-14 h-14 bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 dark:text-emerald-400 rounded-2xl flex items-center justify-center">
+                  <Compass className="w-7 h-7" />
+                </div>
+                <span className="bg-emerald-500/10 text-emerald-500 dark:text-emerald-400 text-[10px] uppercase font-black px-3 py-1 rounded-full border border-emerald-500/20">
+                  Street View
+                </span>
+              </div>
+
+              <div className="space-y-1.5">
+                <h3 className="text-2xl font-bold text-zinc-900 dark:text-white group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">
+                  Teleportation Scavenger Hunt
+                </h3>
+                <p className="text-sm text-zinc-500 dark:text-zinc-400 leading-relaxed">
+                  Spawn randomly inside immersive, 3D Google Street View panoramas! Navigate road systems step-by-step while tracing your progressive deviation on a live tracking mini-map. Reach the target within a precise 10-meter range before time runs out!
+                </p>
+              </div>
+
+              {/* Badges */}
+              <div className="flex flex-wrap gap-2 pt-2">
+                {['Immersive 3D', 'Live Mini-Map', 'Haversine Timer', '10m Precision'].map((tag) => (
+                  <span key={tag} className="bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 text-[11px] px-2.5 py-1 rounded-lg border border-black/5 dark:border-white/5">
+                    {tag}
+                  </span>
+                ))}
+              </div>
+            </div>
+
+            <button
+              onClick={() => { playSound('click'); setActiveGame('scavenger'); }}
+              className="w-full py-4 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-2xl transition-all shadow-lg shadow-emerald-600/20 flex items-center justify-center gap-2 group-hover:shadow-emerald-600/30"
+            >
+              <span>Play Scavenger Hunt</span>
+              <ChevronRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
+            </button>
+          </motion.div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="w-full max-w-6xl mx-auto space-y-6">
       {/* HEADER HUD */}
@@ -537,6 +674,15 @@ export default function GameHub() {
             exit={{ opacity: 0, y: -15 }}
             className="space-y-6"
           >
+            <div className="flex items-center justify-between">
+              <button
+                onClick={() => { playSound('click'); setActiveGame('menu'); }}
+                className="text-xs font-bold uppercase tracking-wider text-emerald-600 hover:text-emerald-500 flex items-center gap-1 hover:-translate-x-0.5 transition-all"
+              >
+                ← Back to Game Hub Menu
+              </button>
+            </div>
+
             <div className="text-center md:text-left">
               <h2 className="text-xl font-bold text-[#141414] dark:text-white flex items-center justify-center md:justify-start gap-2">
                 <Trophy className="w-5 h-5 text-amber-500" />
