@@ -1,44 +1,11 @@
-import { initializeApp } from 'firebase/app';
+import { db } from './firebase';
 import { 
-  getFirestore, 
   doc, 
   getDoc, 
   setDoc, 
   deleteDoc,
-  increment, 
-  initializeFirestore, 
-  persistentLocalCache, 
-  persistentMultipleTabManager 
+  increment
 } from 'firebase/firestore';
-
-// ==========================================
-// FIREBASE CONFIGURATION
-// ==========================================
-// Placeholders for your Firebase Web App configuration.
-// Replace these values with your actual config from the Firebase Console.
-export const firebaseConfig = {
-  apiKey: "YOUR_API_KEY_HERE",
-  authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
-  projectId: "YOUR_PROJECT_ID",
-  storageBucket: "YOUR_PROJECT_ID.firebasestorage.app",
-  messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
-  appId: "YOUR_APP_ID",
-  measurementId: "YOUR_MEASUREMENT_ID",
-  firestoreDatabaseId: "default" // or your specific database ID (e.g. "ai-studio-...")
-};
-
-// ==========================================
-// INITIALIZE FIREBASE & FIRESTORE
-// ==========================================
-// Initialize Firebase application
-const app = initializeApp(firebaseConfig);
-
-// Initialize Firestore with modern persistent caching for excellent offline reliability
-export const db = initializeFirestore(app, {
-  localCache: persistentLocalCache({
-    tabManager: persistentMultipleTabManager()
-  })
-}, firebaseConfig.firestoreDatabaseId);
 
 // ==========================================
 // GUEST LOGIN LOGIC WITH PREVIOUS CLEANUP
@@ -125,9 +92,20 @@ export async function deleteCurrentGuestAccount(): Promise<void> {
     const guestId = localStorage.getItem('world_explorer_guest_id');
     if (guestId) {
       console.log(`[Guest Cleanup] Deleting current guest account: ${guestId}`);
+      
+      // Delete from guests collection
       const guestRef = doc(db, 'guests', guestId);
       await deleteDoc(guestRef);
-      console.log(`[Guest Cleanup] Current guest account successfully deleted from Firestore.`);
+
+      // Delete from public_profiles collection
+      const publicProfileRef = doc(db, 'public_profiles', guestId);
+      await deleteDoc(publicProfileRef);
+
+      // Delete from users collection
+      const userRef = doc(db, 'users', guestId);
+      await deleteDoc(userRef);
+
+      console.log(`[Guest Cleanup] Current guest account and associated profiles successfully deleted from Firestore.`);
     }
   } catch (error) {
     console.error("[Guest Cleanup Error] Failed to delete guest account from Firestore:", error);

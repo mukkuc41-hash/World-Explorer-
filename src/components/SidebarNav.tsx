@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Continent } from '../App.tsx';
 import { motion, AnimatePresence } from 'motion/react';
-import { ChevronRight, ChevronDown, Globe, MapPin, Map, Compass, Heart, Calendar, Bookmark, Trash2, Activity, Zap, Star, Mail } from 'lucide-react';
+import { ChevronRight, ChevronDown, Globe, MapPin, Map, Compass, Heart, Calendar, Bookmark, Trash2, Activity, Zap, Star, Mail, Trophy } from 'lucide-react';
 import { TRAVEL_GEOGRAPHY } from '../constants/geography';
 import { db } from '../lib/firebase.ts';
 import { collection, query, orderBy, limit, onSnapshot } from 'firebase/firestore';
@@ -17,14 +17,16 @@ interface SidebarNavProps {
   showUserWorldOnly?: boolean;
   showDualDashboard?: boolean;
   showGmailHub?: boolean;
+  showGameHub?: boolean;
   onSelect: (continent: Continent | null, country: string | null, state: string | null, showFavorites?: boolean, showTour?: boolean, showArchive?: boolean, showTrash?: boolean, showUserWorld?: boolean) => void;
   onSelectDualDashboard?: (show: boolean) => void;
   onSelectGmailHub?: (show: boolean) => void;
+  onSelectGameHub?: (show: boolean) => void;
 }
 
 const CONTINENTS: Continent[] = ["Africa", "Asia", "Europe", "North America", "South America", "Oceania", "Antarctica"];
 
-export default function SidebarNav({ selectedContinent, selectedCountry, selectedState, showFavoritesOnly, showTourOnly, showArchiveOnly, showTrashOnly, showUserWorldOnly, showDualDashboard, showGmailHub, onSelect, onSelectDualDashboard, onSelectGmailHub }: SidebarNavProps) {
+export default function SidebarNav({ selectedContinent, selectedCountry, selectedState, showFavoritesOnly, showTourOnly, showArchiveOnly, showTrashOnly, showUserWorldOnly, showDualDashboard, showGmailHub, showGameHub, onSelect, onSelectDualDashboard, onSelectGmailHub, onSelectGameHub }: SidebarNavProps) {
   // Internal expansion state to allow browsing without changing the main view
   const [expandedContinent, setExpandedContinent] = useState<Continent | null>(selectedContinent);
   const [expandedCountry, setExpandedCountry] = useState<string | null>(selectedCountry);
@@ -182,6 +184,21 @@ export default function SidebarNav({ selectedContinent, selectedCountry, selecte
           <span className="text-sm font-bold flex items-center gap-2">
             <span>Gmail Transit Hub</span>
             <span className="bg-red-500/10 text-red-500 border border-red-500/20 text-[7px] uppercase tracking-widest font-black px-1.5 py-0.5 rounded-md leading-none">LINK</span>
+          </span>
+        </button>
+
+        <button 
+          onClick={() => {
+            if (onSelectGameHub) {
+              onSelectGameHub(true);
+            }
+          }}
+          className={`flex items-center gap-3 w-full p-3 rounded-2xl transition-all mt-1 ${showGameHub ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-600/30 font-bold' : 'hover:bg-white/50 text-[#141414]/60'}`}
+        >
+          <Trophy className="w-4 h-4" />
+          <span className="text-sm font-bold flex items-center gap-2">
+            <span>10-Game Hub</span>
+            <span className="bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 text-[7px] uppercase tracking-widest font-black px-1.5 py-0.5 rounded-md leading-none animate-pulse">PLAY</span>
           </span>
         </button>
 

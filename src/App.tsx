@@ -8,7 +8,7 @@ import { onAuthStateChanged, User } from 'firebase/auth';
 import { auth, signInWithGoogle, logout, signInAsGuest } from './lib/firebase.ts';
 import { safelyConvertToDate } from './lib/dateUtils.ts';
 import { motion, AnimatePresence } from 'motion/react';
-import { MapPin, Plus, Compass, LogOut, ChevronLeft, Search, Map as MapIcon, LayoutGrid, Menu, X, ChevronRight, Globe, Share2, Link, Heart, Calendar, Bookmark, Trash2, Bot, Sparkles, Trophy, Wifi, Battery, Signal, BellRing, Mail } from 'lucide-react';
+import { MapPin, Plus, Compass, LogOut, ChevronLeft, Search, Map as MapIcon, LayoutGrid, Menu, X, ChevronRight, Globe, Share2, Link, Heart, Calendar, Bookmark, Trash2, Bot, Sparkles, Trophy, Gamepad2, Wifi, Battery, Signal, BellRing, Mail } from 'lucide-react';
 import { Laptop, Smartphone, BatteryCharging, WifiOff, Volume2, Bluetooth, HelpCircle, Activity, HardDrive, Monitor, ShieldAlert } from 'lucide-react';
 import Header, { ExplorerNotification } from './components/Header.tsx';
 import SidebarNav from './components/SidebarNav.tsx';
@@ -39,6 +39,7 @@ import { LogIn } from 'lucide-react';
 import OtpVerification from './components/OtpVerification.tsx';
 import ExplorerDashboard from './components/ExplorerDashboard.tsx';
 import GmailTravelHub from './components/GmailTravelHub.tsx';
+import GameHub from './components/GameHub.tsx';
 
 export type Continent = "Africa" | "Asia" | "Europe" | "North America" | "South America" | "Oceania" | "Antarctica";
 
@@ -113,6 +114,7 @@ export default function App() {
   const [showUserWorldOnly, setShowUserWorldOnly] = useState(false);
   const [showDualDashboard, setShowDualDashboard] = useState(false);
   const [showGmailHub, setShowGmailHub] = useState(false);
+  const [showGameHub, setShowGameHub] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
   const [selectedPlace, setSelectedPlace] = useState<string | null>(null);
@@ -607,10 +609,32 @@ export default function App() {
         // Track last login and ensure profile exists
         const syncProfiles = async () => {
           try {
-            const { doc, getDoc, setDoc, serverTimestamp, collection, query, where, getDocs } = await import('firebase/firestore');
+            const { doc, getDoc, setDoc, deleteDoc, serverTimestamp, collection, query, where, getDocs } = await import('firebase/firestore');
             
             const publicRef = doc(db, 'public_profiles', activeUser.uid);
             const userDoc = doc(db, 'users', activeUser.uid);
+
+            const isGuestUser = activeUser.isAnonymous || 
+                               activeUser.email === 'guest@worldexplorer.com' || 
+                               activeUser.uid.startsWith('guest_') || 
+                               localStorage.getItem('world_explorer_guest_id') === activeUser.uid;
+
+            if (isGuestUser) {
+              console.log("[Guest Reset] Clearing guest progress, locations, and achievements to zero for session...");
+              const collectionsToClear = ['favorites', 'tours', 'archives', 'locations', 'reviews'];
+              for (const colName of collectionsToClear) {
+                try {
+                  const q = query(collection(db, colName), where('userId', '==', activeUser.uid));
+                  const snap = await getDocs(q);
+                  for (const document of snap.docs) {
+                    await deleteDoc(doc(db, colName, document.id));
+                  }
+                  console.log(`[Guest Reset] Cleared ${colName} for guest user.`);
+                } catch (clearErr) {
+                  console.warn(`[Guest Reset Warning] Failed to clear ${colName} for guest:`, clearErr);
+                }
+              }
+            }
 
             console.log("[Profile Sync] Fetching public profile for UID:", activeUser.uid);
             let publicSnap;
@@ -632,7 +656,7 @@ export default function App() {
               throw err;
             }
             const activeLocs = locSnap.docs.filter(d => !d.data().isDeleted);
-            const locCount = activeLocs.length;
+            const locCount = isGuestUser ? 0 : activeLocs.length;
 
             console.log("[Profile Sync] Querying reviews for UID:", activeUser.uid);
             let revSnap;
@@ -643,21 +667,25 @@ export default function App() {
               console.error("[Profile Sync Error] Failed to query reviews database:", err.message || err);
               throw err;
             }
-            const revCount = revSnap.size;
+            const revCount = isGuestUser ? 0 : revSnap.size;
 
             // Retrieve streak bonus points so they are not wiped during reconciliation
             let streakBonusPoints = 0;
+            let streakCount = 0;
+            let longestStreak = 0;
             try {
               const userSnap = await getDoc(userDoc);
               if (userSnap.exists()) {
                 streakBonusPoints = userSnap.data().streakBonusPoints || 0;
+                streakCount = userSnap.data().streakCount || 0;
+                longestStreak = userSnap.data().longestStreak || 0;
               }
             } catch (snapErr) {
               console.warn("[Profile Sync] Failed to load existing user document for points reconciliation:", snapErr);
             }
 
-            // Reconcile user points strictly to 5600 points!
-            const finalXP = 5600;
+            // Reconcile user points strictly to 5600 points for normal users, 0 for guest
+            const finalXP = isGuestUser ? 0 : 5600;
 
             const publicData: any = {
               displayName: activeUser.displayName || 'Architectural Explorer',
@@ -682,13 +710,16 @@ export default function App() {
               throw err;
             }
 
-            const userProfileData = {
+            const userProfileData: any = {
               lastLogin: serverTimestamp(),
               email: activeUser.email || '',
               displayName: activeUser.displayName || '',
               points: finalXP,
               totalDiscoveries: locCount,
               totalReviews: revCount,
+              streakCount: isGuestUser ? 0 : streakCount,
+              longestStreak: isGuestUser ? 0 : longestStreak,
+              streakBonusPoints: isGuestUser ? 0 : streakBonusPoints,
               updatedAt: serverTimestamp()
             };
             console.log("[Profile Sync] Writing user metadata profile:", userProfileData);
@@ -961,6 +992,7 @@ export default function App() {
     setShowUserWorldOnly(showUserWorld);
     setShowDualDashboard(false);
     setShowGmailHub(false);
+    setShowGameHub(false);
     setSearchQuery(''); // Clear search when navigating categories
     
     // Close sidebar on mobile after selection
@@ -1149,6 +1181,10 @@ export default function App() {
   const renderActiveContent = () => {
     if (showGmailHub) {
       return <GmailTravelHub />;
+    }
+
+    if (showGameHub) {
+      return <GameHub />;
     }
 
     if (showDualDashboard) {
@@ -2063,7 +2099,17 @@ export default function App() {
              >
                <Mail className="w-4 h-4" />
              </button>
-             <button onClick={() => handleSelection(null, null, null, false, false, false, false, true)} className={`p-2 rounded-lg ${showUserWorldOnly ? 'bg-[#5A5A40] text-white' : 'text-[#141414]/40'}`}>
+             <button 
+                onClick={() => {
+                  handleSelection(null, null, null);
+                  setShowGameHub(true);
+                }} 
+                className={`p-2 rounded-lg ${showGameHub ? 'bg-emerald-600 text-white' : 'text-[#141414]/40'}`}
+                title="10-Game Hub"
+              >
+                <Gamepad2 className="w-4 h-4" />
+              </button>
+              <button onClick={() => handleSelection(null, null, null, false, false, false, false, true)} className={`p-2 rounded-lg ${showUserWorldOnly ? 'bg-[#5A5A40] text-white' : 'text-[#141414]/40'}`}>
                <Compass className="w-4 h-4" />
              </button>
            </div>
@@ -2087,6 +2133,7 @@ export default function App() {
             showUserWorldOnly={showUserWorldOnly}
             showDualDashboard={showDualDashboard}
             showGmailHub={showGmailHub}
+            showGameHub={showGameHub}
             onSelect={handleSelection}
             onSelectDualDashboard={(show) => {
               handleSelection(null, null, null);
@@ -2096,6 +2143,10 @@ export default function App() {
               handleSelection(null, null, null);
               setShowGmailHub(show);
             }}
+            onSelectGameHub={(show) => {
+              handleSelection(null, null, null);
+              setShowGameHub(show);
+            }}
           />
         </aside>
 
@@ -2104,7 +2155,7 @@ export default function App() {
 
           <AnimatePresence mode="wait">
             <motion.div
-              key={`${selectedContinent}-${selectedCountry}-${selectedState}-${viewMode}-${showFavoritesOnly}-${showTourOnly}-${showArchiveOnly}-${showTrashOnly}`}
+              key={`${selectedContinent}-${selectedCountry}-${selectedState}-${viewMode}-${showFavoritesOnly}-${showTourOnly}-${showArchiveOnly}-${showTrashOnly}-${showGameHub}`}
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -20 }}

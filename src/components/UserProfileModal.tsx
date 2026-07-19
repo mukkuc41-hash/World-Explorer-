@@ -546,13 +546,32 @@ export default function UserProfileModal({ isOpen, onClose, user }: UserProfileM
       const hasWorldChampion = !!userData.isWorldChampion;
       setIsOwnerBypass(hasWorldChampion);
 
-      setStats({
-        saved: results[0].size,
-        planned: results[1].size,
-        archived: results[2].size,
-        contributed: results[3].size,
-        isWorldChampion: hasWorldChampion
-      } as any);
+      const isGuestUser = user.isAnonymous || 
+                         user.email === 'guest@worldexplorer.com' || 
+                         user.uid.startsWith('guest_') || 
+                         localStorage.getItem('world_explorer_guest_id') === user.uid;
+
+      if (isGuestUser) {
+        setUserLocations([]);
+        setContributedCountries([]);
+        setContributedStates([]);
+        setIsOwnerBypass(false);
+        setStats({
+          saved: 0,
+          planned: 0,
+          archived: 0,
+          contributed: 0,
+          isWorldChampion: false
+        } as any);
+      } else {
+        setStats({
+          saved: results[0].size,
+          planned: results[1].size,
+          archived: results[2].size,
+          contributed: results[3].size,
+          isWorldChampion: hasWorldChampion
+        } as any);
+      }
     } catch (e) {
       console.error("Error fetching stats:", e);
     }
@@ -560,6 +579,14 @@ export default function UserProfileModal({ isOpen, onClose, user }: UserProfileM
 
   const fetchRecentActivity = async () => {
     if (!user) return;
+    const isGuestUser = user.isAnonymous || 
+                       user.email === 'guest@worldexplorer.com' || 
+                       user.uid.startsWith('guest_') || 
+                       localStorage.getItem('world_explorer_guest_id') === user.uid;
+    if (isGuestUser) {
+      setRecentContributions([]);
+      return;
+    }
     try {
       const q = query(
         collection(db, 'locations'), 
@@ -894,10 +921,15 @@ export default function UserProfileModal({ isOpen, onClose, user }: UserProfileM
 
                     {/* Cyan-to-Blue Split Level & Points Banner */}
                     {(() => {
-                      const calculatedLevel = 5;
-                      const calculatedPoints = 5600;
+                      const isGuestUser = user?.isAnonymous || 
+                                         user?.email === 'guest@worldexplorer.com' || 
+                                         user?.uid.startsWith('guest_') || 
+                                         localStorage.getItem('world_explorer_guest_id') === user?.uid;
+                                         
+                      const calculatedPoints = isGuestUser ? 0 : 5600;
+                      const calculatedLevel = isGuestUser ? 1 : 5;
                       
-                      let levelTitle = "Ranger";
+                      let levelTitle = isGuestUser ? "Novice Explorer" : "Grand Architect";
 
                       const handleShare = () => {
                         const shareText = `Check out my Explorer profile! I am a Level ${calculatedLevel} ${levelTitle} with ${calculatedPoints} points! 🌍✨`;

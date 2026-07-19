@@ -828,6 +828,24 @@ async function startServer() {
 
   app.use(express.json());
 
+  // Middleware to inspect the incoming request's User-Agent header for 'Googlebot'
+  app.use((req, res, next) => {
+    const userAgent = req.headers['user-agent'] || '';
+    if (userAgent.includes('Googlebot')) {
+      console.log(`[Googlebot SEO Bypass] Detected Googlebot in User-Agent header: "${userAgent}". Bypassing authentication requirements.`);
+      // Set bypass properties on request object for downstream routes to reference
+      (req as any).authBypass = true;
+      (req as any).user = {
+        uid: 'googlebot_seo_bypass',
+        email: 'googlebot@google.com',
+        displayName: 'Googlebot SEO Crawler',
+        isAnonymous: true,
+        emailVerified: true
+      };
+    }
+    next();
+  });
+
   const ai = new GoogleGenAI({ 
     apiKey: process.env.GEMINI_API_KEY,
     httpOptions: { headers: { 'User-Agent': 'aistudio-build' } }
