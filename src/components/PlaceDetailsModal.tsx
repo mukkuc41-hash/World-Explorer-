@@ -167,8 +167,6 @@ export default function PlaceDetailsModal({
   lng,
 }: PlaceDetailsModalProps) {
   const user = auth.currentUser;
-  const isOwner = user?.uid === userId;
-  const isAdmin = user?.email === "mukkuc41@gmail.com";
 
   const [isPlanned, setIsPlanned] = useState(false);
   const [planningInfo, setPlanningInfo] = useState<any>(null);
@@ -198,6 +196,9 @@ export default function PlaceDetailsModal({
   const [editLng, setEditLng] = useState<number>(lng || 0);
   const [isSaving, setIsSaving] = useState(false);
   const [localLocation, setLocalLocation] = useState<any>(null);
+
+  const isOwner = user ? user.uid === (localLocation?.userId ?? userId) : false;
+  const isAdmin = user ? user.email === "mukkuc41@gmail.com" : false;
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isCompressing, setIsCompressing] = useState(false);
@@ -346,6 +347,8 @@ export default function PlaceDetailsModal({
     localLocation?.lat !== undefined ? localLocation.lat : lat;
   const displayedLng =
     localLocation?.lng !== undefined ? localLocation.lng : lng;
+
+  const isLocationDeleted = localLocation?.isDeleted ?? isDeleted;
 
   const activeCoords = getStableCoords(
     displayedName,
@@ -1233,7 +1236,7 @@ export default function PlaceDetailsModal({
                     )}
 
                     {(isOwner || isAdmin) && locationId && (
-                      isDeleted ? (
+                      isLocationDeleted ? (
                         <button
                           onClick={handleRestore}
                           className="flex items-center gap-2 px-5 py-3.5 rounded-full bg-[#00af87] hover:bg-[#009472] text-white text-[10px] font-black uppercase tracking-widest hover:scale-[1.03] active:scale-95 transition-all shadow-md cursor-pointer"

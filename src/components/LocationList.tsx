@@ -230,7 +230,12 @@ export default function LocationList({ continent, country, state, showFavoritesO
 
       // Filter by isDeleted
       if (showTrashOnly) {
-        locs = locs.filter(loc => loc.isDeleted === true);
+        const currentUser = auth.currentUser;
+        const isAdminUser = currentUser?.email === 'mukkuc41@gmail.com';
+        locs = locs.filter(loc => 
+          loc.isDeleted === true && 
+          (isAdminUser || (currentUser && loc.userId === currentUser.uid))
+        );
       } else {
         locs = locs.filter(loc => !loc.isDeleted);
       }

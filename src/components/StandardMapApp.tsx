@@ -90,8 +90,6 @@ export default function StandardMapApp({
         <Map
           defaultCenter={{ lat: activeLocation.lat, lng: activeLocation.lng }}
           defaultZoom={activeLocation.zoom || zoomLevel}
-          center={{ lat: activeLocation.lat, lng: activeLocation.lng }}
-          zoom={activeLocation.zoom || zoomLevel}
           onZoomChanged={(e) => setZoomLevel(e.detail.zoom)}
           mapTypeId={mapType}
           disableDefaultUI={true}
@@ -100,6 +98,9 @@ export default function StandardMapApp({
           style={{ width: '100%', height: '100%' }}
           internalUsageAttributionIds={['gmp_mcp_codeassist_v1_aistudio']}
         >
+          {/* Camera sync engine to handle smooth panning */}
+          <CameraSyncEngine activeLocation={activeLocation} />
+
           {/* Active SVG Target Pinned Marker */}
           <ActiveCustomMarker 
             position={{ lat: activeLocation.lat, lng: activeLocation.lng }}
@@ -322,45 +323,45 @@ function FloatingControls({
       </div>
 
       {/* Vertical Map Action Controls (Recenter, Zoom, Map Type Toggle) */}
-      <div className="absolute bottom-6 left-6 z-20 flex flex-col gap-2">
+      <div className="absolute bottom-6 left-6 z-20 flex flex-col gap-2.5">
         {/* Recenter Lock */}
         <button
           onClick={handleRecenter}
-          className="w-10 h-10 rounded-xl bg-black/90 hover:bg-stone-900 border border-stone-800 text-cyan-400 hover:text-white flex items-center justify-center transition-all shadow-xl cursor-pointer"
+          className="w-12 h-12 rounded-[16px] bg-stone-950/95 hover:bg-stone-900 border border-stone-800 hover:border-cyan-400/40 text-cyan-400 hover:text-cyan-300 flex items-center justify-center transition-all duration-150 ease-out hover:scale-[1.08] active:scale-[0.92] shadow-xl hover:shadow-[0_0_15px_rgba(6,182,212,0.25)] cursor-pointer select-none"
           title="Recenter Camera on Lock"
         >
-          <Compass className="w-4.5 h-4.5 animate-pulse" />
+          <Compass className="w-5 h-5 animate-pulse" />
         </button>
 
         {/* Satellite Map Type */}
         <button
           onClick={toggleSatellite}
-          className={`w-10 h-10 rounded-xl border flex items-center justify-center transition-all shadow-xl cursor-pointer ${
+          className={`w-12 h-12 rounded-[16px] border flex items-center justify-center transition-all duration-150 ease-out hover:scale-[1.08] active:scale-[0.92] cursor-pointer select-none ${
             mapType === 'hybrid' || mapType === 'satellite'
-              ? 'bg-cyan-500/20 text-cyan-300 border-cyan-400/40 shadow-[0_0_12px_rgba(6,182,212,0.25)]'
-              : 'bg-black/90 hover:bg-stone-900 border-stone-800 text-cyan-400 hover:text-white'
+              ? 'bg-cyan-950/80 text-cyan-300 border-cyan-400/60 shadow-[0_0_15px_rgba(6,182,212,0.3)]'
+              : 'bg-stone-950/95 hover:bg-stone-900 border border-stone-800 hover:border-cyan-400/40 text-cyan-400 hover:text-cyan-300 shadow-xl hover:shadow-[0_0_15px_rgba(6,182,212,0.25)]'
           }`}
           title="Toggle Satellite View"
         >
-          <Layers className="w-4.5 h-4.5" />
+          <Layers className="w-5 h-5" />
         </button>
 
         {/* Zoom In */}
         <button
           onClick={handleZoomIn}
-          className="w-10 h-10 rounded-xl bg-black/90 hover:bg-stone-900 border border-stone-800 text-cyan-400 hover:text-white flex items-center justify-center transition-all shadow-xl cursor-pointer"
+          className="w-12 h-12 rounded-[16px] bg-stone-950/95 hover:bg-stone-900 border border-stone-800 hover:border-cyan-400/40 text-cyan-400 hover:text-cyan-300 flex items-center justify-center transition-all duration-150 ease-out hover:scale-[1.08] active:scale-[0.92] shadow-xl hover:shadow-[0_0_15px_rgba(6,182,212,0.25)] cursor-pointer select-none"
           title="Zoom In"
         >
-          <ZoomIn className="w-4.5 h-4.5" />
+          <ZoomIn className="w-5 h-5" />
         </button>
 
         {/* Zoom Out */}
         <button
           onClick={handleZoomOut}
-          className="w-10 h-10 rounded-xl bg-black/90 hover:bg-stone-900 border border-stone-800 text-cyan-400 hover:text-white flex items-center justify-center transition-all shadow-xl cursor-pointer"
+          className="w-12 h-12 rounded-[16px] bg-stone-950/95 hover:bg-stone-900 border border-stone-800 hover:border-cyan-400/40 text-cyan-400 hover:text-cyan-300 flex items-center justify-center transition-all duration-150 ease-out hover:scale-[1.08] active:scale-[0.92] shadow-xl hover:shadow-[0_0_15px_rgba(6,182,212,0.25)] cursor-pointer select-none"
           title="Zoom Out"
         >
-          <ZoomOut className="w-4.5 h-4.5" />
+          <ZoomOut className="w-5 h-5" />
         </button>
       </div>
     </>
@@ -423,4 +424,18 @@ function ActiveCustomMarker({
       </div>
     </AdvancedMarker>
   );
+}
+
+// CameraSyncEngine to handle smooth panning and zooming to the active location smoothly
+function CameraSyncEngine({ activeLocation }: { activeLocation: any }) {
+  const map = useMap();
+  useEffect(() => {
+    if (map && activeLocation) {
+      map.panTo({ lat: activeLocation.lat, lng: activeLocation.lng });
+      if (activeLocation.zoom) {
+        map.setZoom(activeLocation.zoom);
+      }
+    }
+  }, [map, activeLocation.lat, activeLocation.lng, activeLocation.zoom]);
+  return null;
 }

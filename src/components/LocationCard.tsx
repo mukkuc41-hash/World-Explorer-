@@ -1,9 +1,9 @@
 import { LocationData } from './LocationList.tsx';
 import { motion } from 'motion/react';
-import { MapPin, User, Calendar, Heart, Star, Award, Clock, Trash2 } from 'lucide-react';
+import { MapPin, User, Calendar, Heart, Star, Award, Clock, Trash2, RefreshCw } from 'lucide-react';
 import { auth, db, handleFirestoreError, OperationType } from '../lib/firebase.ts';
 import { safelyConvertToDate } from '../lib/dateUtils.ts';
-import { doc, setDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, setDoc, deleteDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 
 interface LocationCardProps {
   location: LocationData;
@@ -23,12 +23,37 @@ export default function LocationCard({ location, index, isFavorite, onSelect }: 
 
   const handleDelete = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!window.confirm("Are you sure you want to delete this discovery? This action cannot be undone.")) return;
+    
+    if (location.isDeleted) {
+      if (!window.confirm("Are you sure you want to permanently delete this discovery? This action cannot be undone.")) return;
+      try {
+        await deleteDoc(doc(db, 'locations', location.id));
+      } catch (error) {
+        handleFirestoreError(error, OperationType.DELETE, `locations/${location.id}`);
+      }
+    } else {
+      if (!window.confirm("Are you sure you want to delete this discovery? It will be moved to the Trash for 30 days.")) return;
+      try {
+        await updateDoc(doc(db, 'locations', location.id), {
+          isDeleted: true,
+          deletedAt: serverTimestamp(),
+          updatedAt: serverTimestamp()
+        });
+      } catch (error) {
+        handleFirestoreError(error, OperationType.WRITE, `locations/${location.id}`);
+      }
+    }
+  };
 
+  const handleRestore = async (e: React.MouseEvent) => {
+    e.stopPropagation();
     try {
-      await deleteDoc(doc(db, 'locations', location.id));
+      await updateDoc(doc(db, 'locations', location.id), {
+        isDeleted: false,
+        updatedAt: serverTimestamp()
+      });
     } catch (error) {
-      handleFirestoreError(error, OperationType.DELETE, `locations/${location.id}`);
+      handleFirestoreError(error, OperationType.WRITE, `locations/${location.id}`);
     }
   };
 
@@ -98,18 +123,29 @@ export default function LocationCard({ location, index, isFavorite, onSelect }: 
 
         <div className="absolute top-4 right-4 flex gap-2">
           {(isOwner || isAdmin) && (
-            <button 
-              onClick={handleDelete}
-              className="p-3 rounded-full backdrop-blur-md bg-white/90 text-[#141414]/40 hover:bg-[#ef4444] hover:text-white transition-all shadow-sm group/delete"
-              title="Delete Discovery"
-            >
-              <Trash2 className="w-4 h-4" />
-            </button>
+            <>
+              {location.isDeleted && (
+                <button 
+                  onClick={handleRestore}
+                  className="p-3 rounded-full backdrop-blur-md bg-[#00af87] text-white hover:bg-[#009472] hover:scale-110 transition-all shadow-sm cursor-pointer"
+                  title="Restore Discovery"
+                >
+                  <RefreshCw className="w-4 h-4" />
+                </button>
+              )}
+              <button 
+                onClick={handleDelete}
+                className="p-3 rounded-full backdrop-blur-md bg-white/90 text-[#141414]/40 hover:bg-[#ef4444] hover:text-white transition-all shadow-sm group/delete cursor-pointer"
+                title={location.isDeleted ? "Permanently Delete Discovery" : "Delete Discovery"}
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            </>
           )}
           {user && (
             <button 
               onClick={toggleFavorite}
-              className={`p-3 rounded-full backdrop-blur-md transition-all shadow-sm ${isFavorite ? 'bg-[#ef4444] text-white' : 'bg-white/90 text-[#141414]/40 hover:text-[#ef4444] hover:scale-110'}`}
+              className={`p-3 rounded-full backdrop-blur-md transition-all shadow-sm cursor-pointer ${isFavorite ? 'bg-[#ef4444] text-white' : 'bg-white/90 text-[#141414]/40 hover:text-[#ef4444] hover:scale-110'}`}
             >
               <Heart className={`w-4 h-4 ${isFavorite ? 'fill-current' : ''}`} />
             </button>

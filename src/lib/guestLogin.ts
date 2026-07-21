@@ -57,8 +57,8 @@ export async function loginAsGuest(): Promise<string> {
     // 5. Generate a secure, 10-digit random number to guarantee high entropy and prevent collisions
     const random10DigitNumber = Math.floor(1000000000 + Math.random() * 9000000000).toString();
 
-    // 6. Construct the final guestId format: ${index}_guest${random10DigitNumber}
-    const guestId = `${index}_guest${random10DigitNumber}`;
+    // 6. Construct the final guestId format: guest_${index}_${random10DigitNumber}
+    const guestId = `guest_${index}_${random10DigitNumber}`;
 
     // 7. Persist the guest session to localStorage immediately so the user remains logged in
     localStorage.setItem('world_explorer_guest_id', guestId);

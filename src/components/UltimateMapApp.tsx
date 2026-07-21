@@ -32,51 +32,6 @@ import { Clock, ExternalLink } from 'lucide-react';
 // Robust, fallback center when validation triggers
 const fallbackCenter = { lat: 26.9258, lng: 75.8237 };
 
-// -----------------------------------------------------------------------------
-// SCRIPT CORS MONKEYPATCH:
-// Dynamically intercepts script creations and enforces crossorigin="anonymous"
-// for Google Maps scripts. This unmasks generic "Script error" blocks.
-// -----------------------------------------------------------------------------
-if (typeof window !== 'undefined' && typeof document !== 'undefined') {
-  const originalCreateElement = document.createElement;
-  document.createElement = function (this: Document, tagName: string, options?: ElementCreationOptions) {
-    const element = originalCreateElement.call(this, tagName, options);
-    if (tagName.toLowerCase() === 'script') {
-      const scriptEl = element as HTMLScriptElement;
-      const originalSetAttribute = scriptEl.setAttribute;
-      scriptEl.setAttribute = function(name: string, value: string) {
-        if (name === 'src' && value) {
-          const valStr = String(value);
-          if (valStr.includes('maps.googleapis.com') || valStr.includes('google')) {
-            scriptEl.crossOrigin = 'anonymous';
-          }
-        }
-        return originalSetAttribute.call(this, name, value);
-      };
-      
-      Object.defineProperty(scriptEl, 'src', {
-        configurable: true,
-        enumerable: true,
-        get() {
-          return this.getAttribute('src') || '';
-        },
-        set(val: string) {
-          if (val) {
-            const valStr = String(val);
-            if (valStr.includes('maps.googleapis.com') || valStr.includes('google')) {
-              this.crossOrigin = 'anonymous';
-            }
-            this.setAttribute('src', valStr);
-          } else {
-            this.setAttribute('src', val);
-          }
-        }
-      });
-    }
-    return element;
-  };
-}
-
 // Comprehensive dark night-mode visual themes for high-contrast neon styling
 const ULTRA_DARK_MAP_STYLE = [
   { "elementType": "geometry", "stylers": [{ "color": "#090d16" }] },
@@ -109,7 +64,11 @@ interface UltimateMapAppProps {
   landmarks: Array<GlobeLocation & { imageUrl?: string }>;
 }
 
-const API_KEY = process.env.GOOGLE_MAPS_PLATFORM_KEY || '';
+const API_KEY = 
+  (import.meta as any).env?.VITE_GOOGLE_MAPS_PL ||
+  (import.meta as any).env?.VITE_GOOGLE_MAPS_PLATFORM_KEY ||
+  process.env.GOOGLE_MAPS_PLATFORM_KEY ||
+  '';
 const hasMapsKey = Boolean(API_KEY) && API_KEY !== 'YOUR_API_KEY';
 
 // --- ROBUST ERROR BOUNDARY FOR MAP WRAPPER ---
@@ -294,8 +253,6 @@ function UltimateMapAppContent({
                 <Map
                   defaultCenter={safeCoordinates}
                   defaultZoom={explorerState.zoom}
-                  center={safeCoordinates}
-                  zoom={zoomLevel}
                   onZoomChanged={(e) => {
                     try {
                       setZoomLevel(e.detail.zoom);
@@ -807,46 +764,46 @@ function FloatingOverlays({
       </div>
 
       {/* Floating control trigger cluster */}
-      <div className="absolute bottom-6 left-6 z-20 flex flex-col gap-2">
+      <div className="absolute bottom-6 left-6 z-20 flex flex-col gap-2.5">
         
         {/* Recenter Lock */}
         <button
           onClick={handleRecenter}
-          className="w-10 h-10 rounded-xl bg-black/95 hover:bg-stone-900 border border-stone-800 text-cyan-400 hover:text-white flex items-center justify-center transition-all shadow-xl cursor-pointer"
+          className="w-12 h-12 rounded-[16px] bg-stone-950/95 hover:bg-stone-900 border border-stone-800 hover:border-cyan-400/40 text-cyan-400 hover:text-cyan-300 flex items-center justify-center transition-all duration-150 ease-out hover:scale-[1.08] active:scale-[0.92] shadow-xl hover:shadow-[0_0_15px_rgba(6,182,212,0.25)] cursor-pointer select-none"
           title="Recenter Camera on Pinned Coordinates"
         >
-          <Compass className="w-4.5 h-4.5" />
+          <Compass className="w-5 h-5" />
         </button>
 
         {/* Satellite Map Toggle */}
         <button
           onClick={toggleSatellite}
-          className={`w-10 h-10 rounded-xl border flex items-center justify-center transition-all shadow-xl cursor-pointer ${
+          className={`w-12 h-12 rounded-[16px] border flex items-center justify-center transition-all duration-150 ease-out hover:scale-[1.08] active:scale-[0.92] cursor-pointer select-none ${
             mapType === 'hybrid'
-              ? 'bg-cyan-500/20 text-cyan-300 border-cyan-400/40 shadow-[0_0_12px_rgba(6,182,212,0.25)]'
-              : 'bg-black/95 hover:bg-stone-900 border-stone-800 text-cyan-400 hover:text-white'
+              ? 'bg-cyan-950/80 text-cyan-300 border-cyan-400/60 shadow-[0_0_15px_rgba(6,182,212,0.3)]'
+              : 'bg-stone-950/95 hover:bg-stone-900 border-stone-800 hover:border-cyan-400/40 text-cyan-400 hover:text-cyan-300 shadow-xl hover:shadow-[0_0_15px_rgba(6,182,212,0.25)]'
           }`}
           title="Toggle Satellite Viewport"
         >
-          <Layers className="w-4.5 h-4.5" />
+          <Layers className="w-5 h-5" />
         </button>
 
         {/* Zoom In */}
         <button
           onClick={handleZoomIn}
-          className="w-10 h-10 rounded-xl bg-black/95 hover:bg-stone-900 border border-stone-800 text-cyan-400 hover:text-white flex items-center justify-center transition-all shadow-xl cursor-pointer"
+          className="w-12 h-12 rounded-[16px] bg-stone-950/95 hover:bg-stone-900 border border-stone-800 hover:border-cyan-400/40 text-cyan-400 hover:text-cyan-300 flex items-center justify-center transition-all duration-150 ease-out hover:scale-[1.08] active:scale-[0.92] shadow-xl hover:shadow-[0_0_15px_rgba(6,182,212,0.25)] cursor-pointer select-none"
           title="Zoom In"
         >
-          <ZoomIn className="w-4.5 h-4.5" />
+          <ZoomIn className="w-5 h-5" />
         </button>
 
         {/* Zoom Out */}
         <button
           onClick={handleZoomOut}
-          className="w-10 h-10 rounded-xl bg-black/95 hover:bg-stone-900 border border-stone-800 text-cyan-400 hover:text-white flex items-center justify-center transition-all shadow-xl cursor-pointer"
+          className="w-12 h-12 rounded-[16px] bg-stone-950/95 hover:bg-stone-900 border border-stone-800 hover:border-cyan-400/40 text-cyan-400 hover:text-cyan-300 flex items-center justify-center transition-all duration-150 ease-out hover:scale-[1.08] active:scale-[0.92] shadow-xl hover:shadow-[0_0_15px_rgba(6,182,212,0.25)] cursor-pointer select-none"
           title="Zoom Out"
         >
-          <ZoomOut className="w-4.5 h-4.5" />
+          <ZoomOut className="w-5 h-5" />
         </button>
 
         {/* Immediate Street View Toggle */}
@@ -858,10 +815,10 @@ function FloatingOverlays({
               console.error("[Map Guard] ViewMode change trigger failed:", viewErr);
             }
           }}
-          className="w-10 h-10 rounded-xl bg-black/95 hover:bg-stone-900 border border-stone-800 text-cyan-400 hover:text-white flex items-center justify-center transition-all shadow-xl cursor-pointer"
+          className="w-12 h-12 rounded-[16px] bg-stone-950/95 hover:bg-stone-900 border border-stone-800 hover:border-cyan-400/40 text-cyan-400 hover:text-cyan-300 flex items-center justify-center transition-all duration-150 ease-out hover:scale-[1.08] active:scale-[0.92] shadow-xl hover:shadow-[0_0_15px_rgba(6,182,212,0.25)] cursor-pointer select-none"
           title="Quick Street View Mode"
         >
-          <Eye className="w-4.5 h-4.5" />
+          <Eye className="w-5 h-5" />
         </button>
       </div>
     </>

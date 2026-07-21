@@ -89,14 +89,24 @@ export default function StreetViewScavengerHunt({ onBack }: StreetViewScavengerH
 
       const existingScript = document.getElementById('google-maps-scavenger-script');
       if (existingScript) {
-        setApiLoaded(true);
+        // Script already added, attach load/error event listeners to be safe of race conditions
+        existingScript.addEventListener('load', () => {
+          setApiLoaded(true);
+        });
+        existingScript.addEventListener('error', () => {
+          setApiError("Failed to load Google Maps script. Check your API key or network connection.");
+        });
+        // Check again immediately in case it loaded since the query
+        if ((window as any).google && (window as any).google.maps) {
+          setApiLoaded(true);
+        }
         return;
       }
 
       const script = document.createElement('script');
       script.id = 'google-maps-scavenger-script';
-      // Ensure the &libraries=streetView parameter is included in the script source as requested
-      script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=streetView`;
+      // Loading Google Maps script without invalid libraries
+      script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}`;
       script.async = true;
       script.defer = true;
       script.onload = () => {
@@ -205,8 +215,8 @@ export default function StreetViewScavengerHunt({ onBack }: StreetViewScavengerH
     return R * c; // in meters
   };
 
-  // Dynamic Teleportation Engine: Get valid Street View Coordinates
-  const getValidLocation = async (): Promise<Point> => {
+  // Dynamic Teleportation Engine: Get valid Street View Coordinates near a specific hub
+  const getValidLocation = async (hub: { name: string; lat: number; lng: number }, isTarget = false): Promise<Point> => {
     const google = (window as any).google;
     if (!google || !google.maps) {
       throw new Error("Google Maps API is not loaded.");
@@ -214,25 +224,27 @@ export default function StreetViewScavengerHunt({ onBack }: StreetViewScavengerH
 
     const svService = new google.maps.StreetViewService();
     let attempts = 0;
-    const maxAttempts = 20;
+    const maxAttempts = 10;
 
     while (attempts < maxAttempts) {
       attempts++;
-      // Choose a random location hub
-      const hub = LOCATION_HUBS[Math.floor(Math.random() * LOCATION_HUBS.length)];
       
-      // Generate a small random offset within ~500m to 3km (0.005 to 0.03 degrees)
-      const latOffset = (Math.random() - 0.5) * 0.012;
-      const lngOffset = (Math.random() - 0.5) * 0.012;
+      // Generate random offset within city limits (shorter offset for start, slightly larger for target to have walking distance)
+      const range = isTarget ? 0.016 : 0.008;
+      const latOffset = (Math.random() - 0.5) * range;
+      const lngOffset = (Math.random() - 0.5) * range;
       const searchLat = hub.lat + latOffset;
       const searchLng = hub.lng + lngOffset;
+
+      // Use a robust radius of 3000m on the first attempt up to 12000m on retries to find valid public outdoor roads instantly
+      const radius = attempts <= 2 ? 3000 : (attempts <= 5 ? 6000 : 12000);
 
       try {
         const result = await new Promise<any>((resolve, reject) => {
           svService.getPanorama(
             {
               location: { lat: searchLat, lng: searchLng },
-              radius: 1000, // Search within 1000m radius
+              radius: radius,
               preference: google.maps.StreetViewPreference.NEAREST,
               sources: [google.maps.StreetViewSource.OUTDOOR]
             },
@@ -255,14 +267,38 @@ export default function StreetViewScavengerHunt({ onBack }: StreetViewScavengerH
           name: hub.name
         };
       } catch (err) {
-        // Retry next iteration
         console.log(`Street view search retry ${attempts}/${maxAttempts}`);
       }
     }
 
-    // Bumper fallback if loop fails to resolve
-    const defaultHub = LOCATION_HUBS[Math.floor(Math.random() * LOCATION_HUBS.length)];
-    return { lat: defaultHub.lat, lng: defaultHub.lng, name: defaultHub.name };
+    // Direct hub-coordinate fallback using 5000m radius if offsets fail
+    try {
+      const result = await new Promise<any>((resolve, reject) => {
+        svService.getPanorama(
+          {
+            location: { lat: hub.lat, lng: hub.lng },
+            radius: 5000,
+            preference: google.maps.StreetViewPreference.NEAREST,
+            sources: [google.maps.StreetViewSource.OUTDOOR]
+          },
+          (data: any, status: any) => {
+            if (status === google.maps.StreetViewStatus.OK && data && data.location && data.location.latLng) {
+              resolve(data);
+            } else {
+              reject(status);
+            }
+          }
+        );
+      });
+      return {
+        lat: result.location.latLng.lat(),
+        lng: result.location.latLng.lng(),
+        name: hub.name
+      };
+    } catch (e) {
+      // Fallback to exact hub location coordinates
+      return { lat: hub.lat, lng: hub.lng, name: hub.name };
+    }
   };
 
   // Trigger loading the Scavenger game
@@ -280,15 +316,18 @@ export default function StreetViewScavengerHunt({ onBack }: StreetViewScavengerH
     setShowHint(false);
 
     try {
-      // 1. Trigger getValidLocation() twice to acquire a random 'start' point and a random 'target' point
-      const start = await getValidLocation();
-      let target = await getValidLocation();
+      // Choose one random hub for the round so that start and target are in the same geographical region/city
+      const hub = LOCATION_HUBS[Math.floor(Math.random() * LOCATION_HUBS.length)];
 
-      // Ensure start and target are not exactly the same
+      // 1. Trigger getValidLocation() twice near the selected hub to acquire a random 'start' point and a random 'target' point
+      const start = await getValidLocation(hub, false);
+      let target = await getValidLocation(hub, true);
+
+      // Ensure start and target are not exactly the same (at least 300 meters apart)
       let distanceCheck = calculateHaversineDistance(start.lat, start.lng, target.lat, target.lng);
       let limitAttempts = 0;
       while (distanceCheck < 300 && limitAttempts < 5) {
-        target = await getValidLocation();
+        target = await getValidLocation(hub, true);
         distanceCheck = calculateHaversineDistance(start.lat, start.lng, target.lat, target.lng);
         limitAttempts++;
       }

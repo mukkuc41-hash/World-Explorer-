@@ -114,6 +114,10 @@ const CATEGORIES = [
 ];
 
 export default function GameHub() {
+  const [apiKey] = useState<string>(process.env.GOOGLE_MAPS_PLATFORM_KEY || '');
+  const [apiLoaded, setApiLoaded] = useState(false);
+  const [apiError, setApiError] = useState<string | null>(null);
+
   const [activeGame, setActiveGame] = useState<'menu' | 'quiz' | 'scavenger'>('menu');
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [currentTarget, setCurrentTarget] = useState<GameLocation | null>(null);
@@ -126,11 +130,20 @@ export default function GameHub() {
   const [roundStatus, setRoundStatus] = useState<'playing' | 'guessed'>('playing');
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [categoryStats, setCategoryStats] = useState<Record<string, { high: number, played: number }>>({});
+  const [mapType, setMapType] = useState<'google' | 'leaflet' | 'loading'>('loading');
+
+  // Auto-switch countdown state
+  const [countdown, setCountdown] = useState<number | null>(null);
 
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<L.Map | null>(null);
   const markersRef = useRef<L.LayerGroup | null>(null);
   const lineRef = useRef<L.Polyline | null>(null);
+  
+  // Google Maps references
+  const googleMapRef = useRef<any>(null);
+  const googleMarkersRef = useRef<any[]>([]);
+  const googlePolylineRef = useRef<any>(null);
 
   // Load persistent stats
   useEffect(() => {
@@ -152,6 +165,53 @@ export default function GameHub() {
       }
     }
   }, []);
+
+  // Load Google Maps Script
+  useEffect(() => {
+    if (!apiKey) {
+      setApiError("Google Maps API Key is missing. Please set your GOOGLE_MAPS_PLATFORM_KEY in your env/secrets settings.");
+      setApiLoaded(false);
+      return;
+    }
+
+    const loadScript = () => {
+      if ((window as any).google && (window as any).google.maps) {
+        setApiLoaded(true);
+        return;
+      }
+
+      const existingScript = document.getElementById('google-maps-scavenger-script');
+      if (existingScript) {
+        // Script already added, attach load/error event listeners to be safe of race conditions
+        existingScript.addEventListener('load', () => {
+          setApiLoaded(true);
+        });
+        existingScript.addEventListener('error', () => {
+          setApiError("Failed to load Google Maps script. Check your API key or network connection.");
+        });
+        // Check again immediately in case it loaded since the query
+        if ((window as any).google && (window as any).google.maps) {
+          setApiLoaded(true);
+        }
+        return;
+      }
+
+      const script = document.createElement('script');
+      script.id = 'google-maps-scavenger-script';
+      script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}`;
+      script.async = true;
+      script.defer = true;
+      script.onload = () => {
+        setApiLoaded(true);
+      };
+      script.onerror = () => {
+        setApiError("Failed to load Google Maps script. Check your API key or network connection.");
+      };
+      document.head.appendChild(script);
+    };
+
+    loadScript();
+  }, [apiKey]);
 
   // Sync state to local storage
   const saveStats = (newScore: number, newStreak: number, newHighScore: number, updatedStats?: any) => {
@@ -264,104 +324,280 @@ export default function GameHub() {
     }
   };
 
-  // Setup/tear-down Leaflet Map on category activation
+  // Setup/tear-down Map on category activation
   useEffect(() => {
     if (!activeCategory || !mapContainerRef.current) return;
 
-    // Destroy existing map
-    if (mapRef.current) {
-      mapRef.current.remove();
-      mapRef.current = null;
+    const google = (window as any).google;
+    const canUseGoogle = apiLoaded && google && google.maps;
+
+    if (canUseGoogle) {
+      setMapType('google');
+      // Destroy existing Leaflet map if active
+      if (mapRef.current) {
+        try {
+          mapRef.current.remove();
+        } catch (err) {
+          console.warn("Leaflet cleanup warning:", err);
+        }
+        mapRef.current = null;
+        markersRef.current = null;
+        lineRef.current = null;
+      }
+
+      // Initialize Google Map
+      const map = new google.maps.Map(mapContainerRef.current, {
+        center: { lat: 25, lng: 10 },
+        zoom: 2,
+        minZoom: 1,
+        maxZoom: 15,
+        mapTypeId: 'roadmap',
+        disableDefaultUI: false,
+        zoomControl: true,
+        styles: document.documentElement.classList.contains('dark') || document.body.classList.contains('dark') ? [
+          { elementType: "geometry", stylers: [{ color: "#242f3e" }] },
+          { elementType: "labels.text.stroke", stylers: [{ color: "#242f3e" }] },
+          { elementType: "labels.text.fill", stylers: [{ color: "#746855" }] },
+          {
+            featureType: "administrative.locality",
+            elementType: "labels.text.fill",
+            stylers: [{ color: "#d59563" }],
+          },
+          {
+            featureType: "poi",
+            elementType: "labels.text.fill",
+            stylers: [{ color: "#d59563" }],
+          },
+          {
+            featureType: "road",
+            elementType: "geometry",
+            stylers: [{ color: "#38414e" }],
+          },
+          {
+            featureType: "road",
+            elementType: "geometry.stroke",
+            stylers: [{ color: "#212a37" }],
+          },
+          {
+            featureType: "road.highway",
+            elementType: "geometry",
+            stylers: [{ color: "#746855" }],
+          },
+          {
+            featureType: "water",
+            elementType: "geometry",
+            stylers: [{ color: "#17263c" }],
+          },
+        ] : []
+      });
+
+      googleMapRef.current = map;
+
+      // Register click handler
+      map.addListener('click', (e: any) => {
+        if (e.latLng) {
+          handleMapClick(e.latLng.lat(), e.latLng.lng());
+        }
+      });
+    } else {
+      // Initialize Leaflet
+      setMapType('leaflet');
+      
+      // Cleanup google map if any
+      if (googleMarkersRef.current) {
+        googleMarkersRef.current.forEach(m => m.setMap(null));
+        googleMarkersRef.current = [];
+      }
+      if (googlePolylineRef.current) {
+        googlePolylineRef.current.setMap(null);
+        googlePolylineRef.current = null;
+      }
+      googleMapRef.current = null;
+
+      if (mapRef.current) {
+        try {
+          mapRef.current.remove();
+        } catch (err) {
+          console.warn("Leaflet cleanup warning:", err);
+        }
+        mapRef.current = null;
+      }
+
+      const isDark = document.documentElement.classList.contains('dark') || document.body.classList.contains('dark');
+      const tileUrl = isDark 
+        ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
+        : 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
+
+      const map = L.map(mapContainerRef.current, {
+        center: [25, 10],
+        zoom: 2.2,
+        minZoom: 1.5,
+        maxZoom: 10,
+        zoomControl: false,
+        attributionControl: false
+      });
+
+      L.tileLayer(tileUrl).addTo(map);
+      L.control.zoom({ position: 'bottomright' }).addTo(map);
+
+      const markers = L.layerGroup().addTo(map);
+      markersRef.current = markers;
+      mapRef.current = map;
+
+      // Listen to map clicks
+      map.on('click', (e: L.LeafletMouseEvent) => {
+        handleMapClick(e.latlng.lat, e.latlng.lng);
+      });
     }
 
-    // Initialize Leaflet
-    const isDark = document.documentElement.classList.contains('dark') || document.body.classList.contains('dark');
-    const tileUrl = isDark 
-      ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
-      : 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
-
-    const map = L.map(mapContainerRef.current, {
-      center: [25, 10],
-      zoom: 2.2,
-      minZoom: 1.5,
-      maxZoom: 10,
-      zoomControl: false,
-      attributionControl: false
-    });
-
-    L.tileLayer(tileUrl).addTo(map);
-    L.control.zoom({ position: 'bottomright' }).addTo(map);
-
-    const markers = L.layerGroup().addTo(map);
-    markersRef.current = markers;
-    mapRef.current = map;
-
-    // Listen to map clicks
-    map.on('click', (e: L.LeafletMouseEvent) => {
-      handleMapClick(e.latlng.lat, e.latlng.lng);
-    });
-
+    // Cleanup markers and polyline
     return () => {
+      if (googleMarkersRef.current) {
+        googleMarkersRef.current.forEach(m => m.setMap(null));
+        googleMarkersRef.current = [];
+      }
+      if (googlePolylineRef.current) {
+        googlePolylineRef.current.setMap(null);
+        googlePolylineRef.current = null;
+      }
+      googleMapRef.current = null;
+
       if (mapRef.current) {
-        mapRef.current.remove();
+        try {
+          mapRef.current.remove();
+        } catch (err) {
+          console.warn("Leaflet cleanup warning:", err);
+        }
         mapRef.current = null;
       }
     };
-  }, [activeCategory]);
+  }, [activeCategory, apiLoaded]);
 
   // Handle a user's guess click on the map
   const handleMapClick = (lat: number, lng: number) => {
-    if (roundStatus !== 'playing' || !currentTarget || !mapRef.current || !markersRef.current) return;
+    if (roundStatus !== 'playing' || !currentTarget) return;
+
+    const google = (window as any).google;
+    const isGoogleActive = mapType === 'google' && google && google.maps && googleMapRef.current;
 
     const dist = getDistance(lat, lng, currentTarget.lat, currentTarget.lng);
     setLastGuessDistance(dist);
     setLastGuessCoords([lat, lng]);
     setRoundStatus('guessed');
 
-    // Add Markers to Map: Clicked Guess & Actual Target Location
-    markersRef.current.clearLayers();
+    if (isGoogleActive) {
+      // Clear previous markers & polyline
+      if (googleMarkersRef.current) {
+        googleMarkersRef.current.forEach(m => m.setMap(null));
+        googleMarkersRef.current = [];
+      }
+      if (googlePolylineRef.current) {
+        googlePolylineRef.current.setMap(null);
+        googlePolylineRef.current = null;
+      }
 
-    // Red/Orange Guess Icon
-    const guessIcon = L.divIcon({
-      className: 'custom-div-icon',
-      html: `<div class="w-6 h-6 bg-rose-500 border-2 border-white rounded-full flex items-center justify-center shadow-lg transform -translate-x-1/2 -translate-y-1/2 animate-ping" style="animation-duration: 2s;"></div>
-             <div class="w-5 h-5 bg-rose-500 border-2 border-white rounded-full flex items-center justify-center shadow-md absolute top-0.5 left-0.5">
-               <span class="text-[8px] font-black text-white">?</span>
-             </div>`
-    });
+      // Add guess marker (Red Pin)
+      const guessMarker = new google.maps.Marker({
+        position: { lat, lng },
+        map: googleMapRef.current,
+        title: "Your Guess",
+        icon: {
+          url: "https://maps.google.com/mapfiles/ms/icons/red-dot.png"
+        }
+      });
+      googleMarkersRef.current.push(guessMarker);
 
-    // Emerald Target Icon
-    const targetIcon = L.divIcon({
-      className: 'custom-div-icon',
-      html: `<div class="w-8 h-8 bg-emerald-500 border-2 border-white rounded-2xl flex items-center justify-center shadow-xl transform -translate-x-1/2 -translate-y-1/2 animate-bounce">
-               <span class="text-xs">🎯</span>
-             </div>`
-    });
+      // Add actual target marker (Green Pin with precise Google Maps coordinates)
+      const targetMarker = new google.maps.Marker({
+        position: { lat: currentTarget.lat, lng: currentTarget.lng },
+        map: googleMapRef.current,
+        title: currentTarget.name,
+        icon: {
+          url: "https://maps.google.com/mapfiles/ms/icons/green-dot.png"
+        }
+      });
+      googleMarkersRef.current.push(targetMarker);
 
-    L.marker([lat, lng], { icon: guessIcon }).addTo(markersRef.current);
-    L.marker([currentTarget.lat, currentTarget.lng], { icon: targetIcon })
-      .addTo(markersRef.current)
-      .bindPopup(`
-        <div class="p-3 text-center">
-          <p class="font-bold text-sm text-[#141414]">${currentTarget.name}</p>
-          <p class="text-[10px] text-emerald-600 font-bold uppercase tracking-wider mt-1">Found target here!</p>
-        </div>
-      `, { className: 'custom-leaflet-popup' })
-      .openPopup();
+      // Draw connecting polyline
+      const polyline = new google.maps.Polyline({
+        path: [
+          { lat, lng },
+          { lat: currentTarget.lat, lng: currentTarget.lng }
+        ],
+        geodesic: true,
+        strokeColor: dist < 250 ? '#10b981' : dist < 1000 ? '#f59e0b' : '#ef4444',
+        strokeOpacity: 0.8,
+        strokeWeight: 3,
+        map: googleMapRef.current
+      });
+      googlePolylineRef.current = polyline;
 
-    // Draw connecting polyline
-    const line = L.polyline([[lat, lng], [currentTarget.lat, currentTarget.lng]], {
-      color: dist < 250 ? '#10b981' : dist < 1000 ? '#f59e0b' : '#ef4444',
-      weight: 3,
-      dashArray: '6, 8',
-      opacity: 0.8
-    }).addTo(markersRef.current);
-    
-    lineRef.current = line;
+      // Show custom InfoWindow on target
+      const infoWindow = new google.maps.InfoWindow({
+        content: `
+          <div style="padding: 6px; color: #111; font-family: system-ui, sans-serif; max-width: 180px;">
+            <h4 style="font-weight: bold; margin: 0 0 4px 0; font-size: 13px;">${currentTarget.name}</h4>
+            <p style="font-size: 11px; margin: 0; color: #059669; font-weight: bold;">🎯 Correct Location!</p>
+            <p style="font-size: 11px; margin: 2px 0 0 0; color: #4b5563;">Distance: ${dist.toLocaleString()} km</p>
+          </div>
+        `
+      });
+      infoWindow.open(googleMapRef.current, targetMarker);
 
-    // Zoom out slightly to frame both markers beautifully
-    const bounds = L.latLngBounds([[lat, lng], [currentTarget.lat, currentTarget.lng]]);
-    mapRef.current.fitBounds(bounds, { padding: [50, 50], maxZoom: 5 });
+      // Zoom out to frame both markers beautifully
+      const bounds = new google.maps.LatLngBounds();
+      bounds.extend({ lat, lng });
+      bounds.extend({ lat: currentTarget.lat, lng: currentTarget.lng });
+      googleMapRef.current.fitBounds(bounds);
+    } else {
+      // Leaflet fallback behavior
+      if (markersRef.current) {
+        markersRef.current.clearLayers();
+
+        // Red/Orange Guess Icon
+        const guessIcon = L.divIcon({
+          className: 'custom-div-icon',
+          html: `<div class="w-6 h-6 bg-rose-500 border-2 border-white rounded-full flex items-center justify-center shadow-lg transform -translate-x-1/2 -translate-y-1/2 animate-ping" style="animation-duration: 2s;"></div>
+                 <div class="w-5 h-5 bg-rose-500 border-2 border-white rounded-full flex items-center justify-center shadow-md absolute top-0.5 left-0.5">
+                   <span class="text-[8px] font-black text-white">?</span>
+                 </div>`
+        });
+
+        // Emerald Target Icon
+        const targetIcon = L.divIcon({
+          className: 'custom-div-icon',
+          html: `<div class="w-8 h-8 bg-emerald-500 border-2 border-white rounded-2xl flex items-center justify-center shadow-xl transform -translate-x-1/2 -translate-y-1/2 animate-bounce">
+                   <span class="text-xs">🎯</span>
+                 </div>`
+        });
+
+        L.marker([lat, lng], { icon: guessIcon }).addTo(markersRef.current);
+        L.marker([currentTarget.lat, currentTarget.lng], { icon: targetIcon })
+          .addTo(markersRef.current)
+          .bindPopup(`
+            <div class="p-3 text-center">
+              <p class="font-bold text-sm text-[#141414]">${currentTarget.name}</p>
+              <p class="text-[10px] text-emerald-600 font-bold uppercase tracking-wider mt-1">Found target here!</p>
+            </div>
+          `, { className: 'custom-leaflet-popup' })
+          .openPopup();
+
+        // Draw connecting polyline
+        const line = L.polyline([[lat, lng], [currentTarget.lat, currentTarget.lng]], {
+          color: dist < 250 ? '#10b981' : dist < 1000 ? '#f59e0b' : '#ef4444',
+          weight: 3,
+          dashArray: '6, 8',
+          opacity: 0.8
+        }).addTo(markersRef.current);
+        
+        lineRef.current = line;
+
+        if (mapRef.current) {
+          const bounds = L.latLngBounds([[lat, lng], [currentTarget.lat, currentTarget.lng]]);
+          mapRef.current.fitBounds(bounds, { padding: [50, 50], maxZoom: 5 });
+        }
+      }
+    }
 
     // Calculate Scores & Streak multipliers
     let pointsEarned = 0;
@@ -369,7 +605,6 @@ export default function GameHub() {
 
     if (isCorrect) {
       pointsEarned = 100;
-      // Add bonus for very close guesses
       if (dist < 100) pointsEarned += 50; 
       if (dist < 30) pointsEarned += 50; 
 
@@ -416,6 +651,9 @@ export default function GameHub() {
       };
       setCategoryStats(updatedCatStats);
       saveStats(score, 0, highScore, updatedCatStats);
+
+      // Wrong guess auto-switch countdown trigger
+      setCountdown(4);
     }
   };
 
@@ -426,7 +664,19 @@ export default function GameHub() {
     setLastGuessDistance(null);
     setLastGuessCoords(null);
     setShowHint(false);
+    setCountdown(null);
 
+    // Clear Google maps items
+    if (googleMarkersRef.current) {
+      googleMarkersRef.current.forEach(m => m.setMap(null));
+      googleMarkersRef.current = [];
+    }
+    if (googlePolylineRef.current) {
+      googlePolylineRef.current.setMap(null);
+      googlePolylineRef.current = null;
+    }
+
+    // Clear Leaflet markers
     if (markersRef.current) {
       markersRef.current.clearLayers();
     }
@@ -443,10 +693,30 @@ export default function GameHub() {
       setCurrentTarget(randomTarget);
     }
 
-    if (mapRef.current) {
+    if (mapType === 'google' && googleMapRef.current) {
+      googleMapRef.current.setZoom(2);
+      googleMapRef.current.setCenter({ lat: 25, lng: 10 });
+    } else if (mapType === 'leaflet' && mapRef.current) {
       mapRef.current.setView([25, 10], 2.2);
     }
   };
+
+  // Handle auto-switch countdown effect
+  useEffect(() => {
+    if (countdown === null) return;
+
+    if (countdown <= 0) {
+      setCountdown(null);
+      nextRound();
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      setCountdown(prev => (prev !== null ? prev - 1 : null));
+    }, 1000);
+
+    return () => clearTimeout(timer);
+  }, [countdown]);
 
   // Quit and return to Category menu
   const quitToMenu = () => {
@@ -457,6 +727,20 @@ export default function GameHub() {
     setLastGuessDistance(null);
     setLastGuessCoords(null);
     setShowHint(false);
+    setCountdown(null);
+
+    if (googleMarkersRef.current) {
+      googleMarkersRef.current.forEach(m => m.setMap(null));
+      googleMarkersRef.current = [];
+    }
+    if (googlePolylineRef.current) {
+      googlePolylineRef.current.setMap(null);
+      googlePolylineRef.current = null;
+    }
+
+    if (markersRef.current) {
+      markersRef.current.clearLayers();
+    }
   };
 
   // Reset all game data
@@ -837,7 +1121,7 @@ export default function GameHub() {
                         <p className="text-xs opacity-80 mt-1">
                           {lastGuessDistance !== null && lastGuessDistance < 250 
                             ? `Fantastic job! You were extremely precise. (+100 XP awarded)`
-                            : `The actual coordinate was ${lastGuessDistance?.toLocaleString()} km away. Study the target and try again!`
+                            : `The actual coordinate was ${lastGuessDistance?.toLocaleString()} km away. Switching to next place in ${countdown ?? 4}s...`
                           }
                         </p>
                       </div>
@@ -846,7 +1130,7 @@ export default function GameHub() {
                         onClick={nextRound}
                         className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold p-4 rounded-2xl transition-all shadow-lg shadow-emerald-600/20 flex items-center justify-center gap-2"
                       >
-                        <span>Next Target</span>
+                        <span>Next Target {countdown !== null ? `(${countdown}s)` : ''}</span>
                         <ArrowRight className="w-4 h-4" />
                       </button>
                     </motion.div>
@@ -869,15 +1153,33 @@ export default function GameHub() {
             {/* MAP STAGE (RIGHT PANEL) */}
             <div className="lg:col-span-8 flex flex-col">
               <div className="bg-white dark:bg-zinc-900 border border-black/5 dark:border-white/5 rounded-[32px] p-4 shadow-xl flex-grow flex flex-col">
-                <div className="flex items-center justify-between mb-3 px-2">
+                <div className="flex items-center justify-between mb-3 px-2 flex-wrap gap-2">
                   <div className="flex items-center gap-2">
                     <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></div>
                     <span className="text-xs font-bold text-[#141414] dark:text-zinc-300">Global Satellite Target Radar</span>
+                    <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider ${
+                      mapType === 'google' 
+                        ? 'bg-emerald-500/10 text-emerald-600 border border-emerald-500/20' 
+                        : mapType === 'leaflet'
+                          ? 'bg-amber-500/10 text-amber-600 border border-amber-500/20'
+                          : 'bg-zinc-500/10 text-zinc-500'
+                    }`}>
+                      {mapType === 'google' ? 'Google Maps' : mapType === 'leaflet' ? 'Leaflet Fallback' : 'Loading Map...'}
+                    </span>
                   </div>
                   <div className="text-xs text-slate-400">
                     Use scroll or pinch to zoom. Tap to mark your guess coordinates.
                   </div>
                 </div>
+
+                {apiError && (
+                  <div className="mb-2 p-2 bg-rose-500/10 border border-rose-500/25 rounded-xl flex items-start gap-2 text-rose-600 dark:text-rose-400 text-[10px] leading-relaxed">
+                    <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                    <div>
+                      <span className="font-bold">Google Maps Warning:</span> {apiError} Using robust Leaflet fallback.
+                    </div>
+                  </div>
+                )}
 
                 <div className="relative rounded-2xl overflow-hidden border border-black/10 dark:border-white/10" style={{ height: '58vh' }}>
                   <div ref={mapContainerRef} className="w-full h-full" />

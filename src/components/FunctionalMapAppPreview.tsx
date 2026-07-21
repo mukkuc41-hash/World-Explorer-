@@ -26,51 +26,6 @@ import {
 } from 'lucide-react';
 import { GlobeLocation } from './ImmersiveGlobeCanvas.tsx';
 
-// -----------------------------------------------------------------------------
-// SCRIPT CORS MONKEYPATCH:
-// Dynamically intercepts script creations and enforces crossorigin="anonymous"
-// for Google Maps scripts. This unmasks generic "Script error" blocks.
-// -----------------------------------------------------------------------------
-if (typeof window !== 'undefined' && typeof document !== 'undefined') {
-  const originalCreateElement = document.createElement;
-  document.createElement = function (this: Document, tagName: string, options?: ElementCreationOptions) {
-    const element = originalCreateElement.call(this, tagName, options);
-    if (tagName.toLowerCase() === 'script') {
-      const scriptEl = element as HTMLScriptElement;
-      const originalSetAttribute = scriptEl.setAttribute;
-      scriptEl.setAttribute = function(name: string, value: string) {
-        if (name === 'src' && value) {
-          const valStr = String(value);
-          if (valStr.includes('maps.googleapis.com') || valStr.includes('google')) {
-            scriptEl.crossOrigin = 'anonymous';
-          }
-        }
-        return originalSetAttribute.call(this, name, value);
-      };
-      
-      Object.defineProperty(scriptEl, 'src', {
-        configurable: true,
-        enumerable: true,
-        get() {
-          return this.getAttribute('src') || '';
-        },
-        set(val: string) {
-          if (val) {
-            const valStr = String(val);
-            if (valStr.includes('maps.googleapis.com') || valStr.includes('google')) {
-              this.crossOrigin = 'anonymous';
-            }
-            this.setAttribute('src', valStr);
-          } else {
-            this.setAttribute('src', val);
-          }
-        }
-      });
-    }
-    return element;
-  };
-}
-
 // Custom dark night-mode visual themes for high-contrast neon styling
 const PREMIUM_DARK_MAP_STYLE = [
   { "elementType": "geometry", "stylers": [{ "color": "#090d16" }] },
@@ -444,8 +399,6 @@ function MapPreviewContent({
       <Map
         defaultCenter={{ lat: currentLat, lng: currentLng }}
         defaultZoom={zoomLevel}
-        center={{ lat: currentLat, lng: currentLng }}
-        zoom={zoomLevel}
         mapTypeId={mapType}
         styles={mapType === 'roadmap' ? PREMIUM_DARK_MAP_STYLE : undefined}
         disableDefaultUI={true}
@@ -456,6 +409,8 @@ function MapPreviewContent({
         style={{ width: '100%', height: '100%' }}
         internalUsageAttributionIds={['gmp_mcp_codeassist_v1_aistudio']}
       >
+        {/* Camera sync engine to handle smooth panning */}
+        <CameraSyncEngine currentLat={currentLat} currentLng={currentLng} zoomLevel={zoomLevel} />
         {/* Holographic Concentric Pulse Target Marker Pin */}
         <AdvancedMarker
           position={{ lat: currentLat, lng: currentLng }}
@@ -570,11 +525,11 @@ function MapPreviewContent({
       </div>
 
       {/* FLOATING ACTIONS CONTROL PANEL (RECENTER, TOGGLE, GEOLOCATOR, ZOOM) */}
-      <div className="absolute bottom-6 left-6 z-20 flex flex-col gap-2">
+      <div className="absolute bottom-6 left-6 z-20 flex flex-col gap-2.5">
         {/* Recenter Lock */}
         <button
           onClick={handleRecenterCamera}
-          className="w-10 h-10 rounded-xl bg-black/90 hover:bg-stone-900 border border-stone-800 text-cyan-400 hover:text-white flex items-center justify-center transition-all shadow-xl cursor-pointer"
+          className="w-12 h-12 rounded-[16px] bg-stone-950/95 hover:bg-stone-900 border border-stone-800 hover:border-cyan-400/40 text-cyan-400 hover:text-cyan-300 flex items-center justify-center transition-all duration-150 ease-out hover:scale-[1.08] active:scale-[0.92] shadow-xl hover:shadow-[0_0_15px_rgba(6,182,212,0.25)] cursor-pointer select-none"
           title="Recenter Map View"
         >
           <Compass className="w-5 h-5 animate-spin-slow" />
@@ -583,50 +538,50 @@ function MapPreviewContent({
         {/* Locate Me targeting button */}
         <button
           onClick={handleLocateMe}
-          className={`w-10 h-10 rounded-xl border flex items-center justify-center transition-all shadow-xl cursor-pointer ${
+          className={`w-12 h-12 rounded-[16px] border flex items-center justify-center transition-all duration-150 ease-out hover:scale-[1.08] active:scale-[0.92] cursor-pointer select-none ${
             isLocating 
-              ? 'bg-cyan-500/25 border-cyan-400 text-white animate-pulse'
-              : 'bg-black/90 hover:bg-stone-900 border-stone-800 text-cyan-400 hover:text-white'
+              ? 'bg-cyan-950/80 text-white border-cyan-400/60 shadow-[0_0_15px_rgba(6,182,212,0.3)] animate-pulse'
+              : 'bg-stone-950/95 hover:bg-stone-900 border border-stone-800 hover:border-cyan-400/40 text-cyan-400 hover:text-cyan-300 shadow-xl hover:shadow-[0_0_15px_rgba(6,182,212,0.25)]'
           }`}
           title="Locate My Device"
           disabled={isLocating}
         >
           {isLocating ? (
-            <RefreshCw className="w-4.5 h-4.5 animate-spin" />
+            <RefreshCw className="w-5 h-5 animate-spin" />
           ) : (
-            <Locate className="w-4.5 h-4.5" />
+            <Locate className="w-5 h-5" />
           )}
         </button>
 
         {/* Dynamic standard roadmap vs satellite layer toggle */}
         <button
           onClick={toggleSatelliteView}
-          className={`w-10 h-10 rounded-xl border flex items-center justify-center transition-all shadow-xl cursor-pointer ${
+          className={`w-12 h-12 rounded-[16px] border flex items-center justify-center transition-all duration-150 ease-out hover:scale-[1.08] active:scale-[0.92] cursor-pointer select-none ${
             mapType === 'hybrid' || mapType === 'satellite'
-              ? 'bg-cyan-500/20 text-cyan-300 border-cyan-400/40 shadow-[0_0_12px_rgba(6,182,212,0.25)]'
-              : 'bg-black/90 hover:bg-stone-900 border-stone-800 text-cyan-400 hover:text-white'
+              ? 'bg-cyan-950/80 text-cyan-300 border-cyan-400/60 shadow-[0_0_15px_rgba(6,182,212,0.3)]'
+              : 'bg-stone-950/95 hover:bg-stone-900 border border-stone-800 hover:border-cyan-400/40 text-cyan-400 hover:text-cyan-300 shadow-xl hover:shadow-[0_0_15px_rgba(6,182,212,0.25)]'
           }`}
           title="Toggle Satellite View"
         >
-          <Layers className="w-4.5 h-4.5" />
+          <Layers className="w-5 h-5" />
         </button>
 
         {/* Zoom In */}
         <button
           onClick={handleZoomIn}
-          className="w-10 h-10 rounded-xl bg-black/90 hover:bg-stone-900 border border-stone-800 text-cyan-400 hover:text-white flex items-center justify-center transition-all shadow-xl cursor-pointer"
+          className="w-12 h-12 rounded-[16px] bg-stone-950/95 hover:bg-stone-900 border border-stone-800 hover:border-cyan-400/40 text-cyan-400 hover:text-cyan-300 flex items-center justify-center transition-all duration-150 ease-out hover:scale-[1.08] active:scale-[0.92] shadow-xl hover:shadow-[0_0_15px_rgba(6,182,212,0.25)] cursor-pointer select-none"
           title="Zoom In"
         >
-          <ZoomIn className="w-4.5 h-4.5" />
+          <ZoomIn className="w-5 h-5" />
         </button>
 
         {/* Zoom Out */}
         <button
           onClick={handleZoomOut}
-          className="w-10 h-10 rounded-xl bg-black/90 hover:bg-stone-900 border border-stone-800 text-cyan-400 hover:text-white flex items-center justify-center transition-all shadow-xl cursor-pointer"
+          className="w-12 h-12 rounded-[16px] bg-stone-950/95 hover:bg-stone-900 border border-stone-800 hover:border-cyan-400/40 text-cyan-400 hover:text-cyan-300 flex items-center justify-center transition-all duration-150 ease-out hover:scale-[1.08] active:scale-[0.92] shadow-xl hover:shadow-[0_0_15px_rgba(6,182,212,0.25)] cursor-pointer select-none"
           title="Zoom Out"
         >
-          <ZoomOut className="w-4.5 h-4.5" />
+          <ZoomOut className="w-5 h-5" />
         </button>
       </div>
 
@@ -692,6 +647,25 @@ function MapPreviewContent({
       </AnimatePresence>
     </div>
   );
+}
+
+// CameraSyncEngine to handle smooth panning and zooming to the active location smoothly without rubber-banding
+function CameraSyncEngine({ currentLat, currentLng, zoomLevel }: { currentLat: number, currentLng: number, zoomLevel: number }) {
+  const map = useMap();
+  useEffect(() => {
+    if (map) {
+      const center = map.getCenter();
+      if (center) {
+        const dLat = Math.abs(center.lat() - currentLat);
+        const dLng = Math.abs(center.lng() - currentLng);
+        // Significant difference threshold (meaning external programmatic update, not micro-drag)
+        if (dLat > 0.0001 || dLng > 0.0001) {
+          map.panTo({ lat: currentLat, lng: currentLng });
+        }
+      }
+    }
+  }, [map, currentLat, currentLng]);
+  return null;
 }
 
 // SECURE PUBLIC DEFAULT EXPORT WRAPPER
