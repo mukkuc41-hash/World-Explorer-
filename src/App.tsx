@@ -43,7 +43,7 @@ import GameHub from './components/GameHub.tsx';
 
 export type Continent = "Africa" | "Asia" | "Europe" | "North America" | "South America" | "Oceania" | "Antarctica";
 
-const GOOGLE_MAPS_API_KEY = process.env.GOOGLE_MAPS_PLATFORM_KEY || '';
+const GOOGLE_MAPS_API_KEY = process.env.GOOGLE_MAPS_PLATFORM_KEY || process.env.VITE_GOOGLE_MAPS_API_KEY || '';
 const hasMapsKey = Boolean(GOOGLE_MAPS_API_KEY) && GOOGLE_MAPS_API_KEY !== 'YOUR_API_KEY';
 
 const CONTINENT_DATA: { name: Continent; image: string; description: string }[] = [
@@ -137,6 +137,17 @@ export default function App() {
   const [realIsOnline, setRealIsOnline] = useState<boolean>(navigator.onLine);
   const [realConnectionType, setRealConnectionType] = useState<string>('WiFi');
   const [showDeviceDropdown, setShowDeviceDropdown] = useState<boolean>(false);
+  const [isGmpQuotaExceeded, setIsGmpQuotaExceeded] = useState(false);
+
+  useEffect(() => {
+    const handleQuotaExceeded = () => {
+      setIsGmpQuotaExceeded(true);
+    };
+    window.addEventListener('gmp-quota-exceeded', handleQuotaExceeded);
+    return () => {
+      window.removeEventListener('gmp-quota-exceeded', handleQuotaExceeded);
+    };
+  }, []);
 
   // Dynamic Device Detection
   useEffect(() => {
@@ -1694,6 +1705,22 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[#f5f5f0] font-sans text-[#141414] pt-10">
+      {isGmpQuotaExceeded && (
+        <div className="bg-amber-50 border-b border-amber-200 text-amber-900 px-4 py-2.5 text-xs md:text-sm text-center sticky top-10 z-[160] shadow-sm">
+          <span>
+            Google Maps Platform quota reached. If you are the app owner, visit{' '}
+            <a
+              href="https://developers.google.com/maps/ai/ai-studio?utm_campaign=gmp_mcp_codeassist_v1_aistudio#quota_exceeded_errors"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline font-semibold text-amber-950 hover:text-amber-800"
+            >
+              maps developer site
+            </a>{' '}
+            for instructions to update your account.
+          </span>
+        </div>
+      )}
       {/* Real-time Simulated Status Bar (Device-Adaptive Layout) */}
       <div className={`w-full py-2 px-4 md:px-8 flex items-center justify-between text-[11px] font-sans font-bold select-none fixed top-0 left-0 w-full z-[150] shadow-sm h-10 transition-all duration-300 ${
         resolvedDevice === 'ios' ? 'bg-[#090a09] text-white border-b border-[#2d2e2c]/30' :
